@@ -24,6 +24,8 @@ library(ggplot2)
 library(ggpubr)
 library(sf)
 
+fCO2.1995 <- 360.17
+
 ```
 
 # Model fCO2 in Northern Lakes 
@@ -32,6 +34,7 @@ library(sf)
 con <- dbConnect(RPostgreSQL::PostgreSQL(),user = "camille.crapart", password = "camille",host = "vm-srv-wallace.vm.ntnu.no", dbname = "nofa")
 
 ion <- tbl(con, sql("SELECT gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_e_ueq_l,alk_subst,ca_ueq_l,mg_ueq_l,na_ueq_l,k_ueq_l,nh4_ueq_l,cl_ueq_l,so4_ueq_l,no3_ueq_l,f_ueq_l,tot_p_ug_l,tot_n_ug_l,toc_mg_l FROM environmental.north_euro_lake_surv_1995 ")) %>% as.data.frame()
+names(ion) <- c("gid", "ebint","nation","date","temp_c","latitude","longitude","ph","alk_ueq","alk","ca","mg","na","k","nh4","cl","so4","no3","f","tp","tn","toc")
 saveRDS(ion,"ion.rds")
 
 lakes <- st_read(con,query = "SELECT gid, ebint, geom, area, perimtot FROM environmental.ecco_biwa_lakes_v_0_1 WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)")
@@ -41,28 +44,30 @@ saveRDS(lakes,"lakes.rds")
 ```
 
 ## Computes fCO2 in Northern Lakes 
+
+
 ```{r model-fco2-4D, eval = F}
 
-sum(ion$alk_subst < 0) #153 lakes
-sum(ion$alk_subst == 0) #272 lakes
+sum(ion$alk < 0) #153 lakes
+sum(ion$alk == 0) #272 lakes
 sum(ion$ph == 0) #2 lakes
 sum(ion$ph < 0)
 
-ion.alk <- subset(ion, alk_subst > 0)
+ion.alk <- subset(ion, alk > 0)
 ion.alk <- subset(ion.alk, ph > 4.01)
 
 temp <- ion.alk$temp_c
 temp[which(is.na(temp))] <- 4
 pH <- ion.alk$ph
-TA <- ion.alk$alk_subst / 1000000 # mol / L
+TA <- ion.alk$alk / 1000000 # mol / L
 
-fCO2.1995 <- 360.17*10^(-6) # µAtm to atm
+fCO2.1995.atm <- fCO2.1995*10^(-6) # ppm to atm
 
 
 
-ae1 <- aquaenv(S=0, t=4, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995)
+ae1 <- aquaenv(S=0, t=4, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995.atm)
 
-ae2 <- aquaenv(S=0, t=temp, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995)
+ae2 <- aquaenv(S=0, t=temp, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995.atm)
 
 plot(ae1$fCO2,ae2$fCO2)
 
@@ -79,34 +84,72 @@ saveRDS(waterchem,"waterchem.rds")
 ```
 
 ```{r match-catchment, eval = F}
-waterchem - readRDS("waterchem.rds")
-plot(waterchem$toc_mg_l,waterchem$TOC)
+library(colorspace)
 
-p1 <- ggplot(waterchem)+geom_point(aes(x=toc_mg_l, y = TOC, col = nation.x))
-
-g1 <- ggplot(waterchem)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
-  scale_color_viridis_c(end = 0.9, aesthetics = c("fill","col"))+theme_minimal()
-ggsave("map_fco2.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
-
-```
-`r knitr::include_graphics("map_fCO2.png")`
-
-```{r plots, fig.dim = c(20,20)}
 waterchem <- readRDS("waterchem.rds")
 
-corrplot::corrplot.mixed(cor(dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","Slope","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","ca_ueq_l","so4_ueq_l","no3_ueq_l","nh4_ueq_l","tot_p_ug_l","tot_n_ug_l","toc_mg_l"))), tl.cex = 1.2, number.cex = 1.5)
 
+p1 <- ggplot(waterchem)+geom_point(aes(x=toc, y = TOC, col = nation.x))
+ggsave("TOC_compare.png", p1)
+
+g1 <- ggplot(waterchem)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
+    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "fCO2")+
+    theme_minimal()
+ggsave("map_fco2.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
+
+h1 <- ggplot(waterchem)+geom_histogram(aes(group = fCO2, x = log10(fCO2), fill = log10(fCO2), col = log10(fCO2)))+
+  scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
+  geom_vline(xintercept = log10(fCO2.1995), col = "red")+theme_minimal()
+ggsave("hist_fCO2.png",h1, width = 12, height = 8, unit = "cm", dpi = "retina") 
 ```
+
+`r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png"))`
+
+
+```{r plots, fig.dim = c(15,15)}
+waterchem <- readRDS("waterchem.rds")
+
+wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
+  
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","lake.area","perimtot","Slope","Alt","latitude.x","longitude.x"))), tl.cex = 1.5, number.cex = 1.5)
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip"))), tl.cex = 1.5, number.cex = 1.5)
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","ca","mg","na","k","cl","f","so4","no3","nh4","tp","tn","toc"))), tl.cex = 1.5, number.cex = 1.5)
+```
+```{r pca-total, fig.dim = c(12,10)}
+
+library(viridisLite)
+library(factoextra)
+
+pca.rr <- prcomp(formula = ~., data = wtc, center = T, scale. = T)
+
+plot.pca.12 <- fviz_pca_var(pca.rr,
+                              habillage = "none",
+                             label = "var",
+                             col.var = "black",
+                             labelsize = 7,
+                             repel = T,arrowsize=1)+theme_bw(base_size=30)
+
+plot.pca.23 <- fviz_pca_var(pca.rr, axes = c(2,3),
+                              habillage = "none",
+                             label = "var",
+                             labelsize = 7,
+                             col.var = "black",
+                             repel = T,arrowsize=1)+theme_bw(base_size=30)
+par(mfrows = c(1,2))
+plot.pca.12
+plot.pca.23
+
+``` 
+
 
 ## Full model and stepwise selection 
 
 ```{r stepwise-selection-lm}
-wtc <- dplyr::select(waterchem, c("fCO2","area","lake.area","Slope","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","TNdep","ph","ca_ueq_l","so4_ueq_l","no3_ueq_l","nh4_ueq_l","tot_p_ug_l","tot_n_ug_l","toc_mg_l"))
-
 library(MASS)
 # Fit the full model 
 full.model <- lm(log(fCO2) ~., data = st_drop_geometry(wtc))
 summary(full.model)
+
 # Stepwise regression model
 step.model1 <- stepAIC(full.model, direction = "both", trace = FALSE)
 summary(step.model1)
@@ -115,22 +158,23 @@ summary(step.model1)
 
 ## Full model on log-transformed variables
 
-```{r log10-transform, fig.dim = c(12,12)}
-logwtc <- filter(wtc, nh4_ueq_l != 0 & no3_ueq_l != 0 )
+```{r log10-transform, fig.dim = c(12,12), eval = T}
+logwtc <- filter(wtc, nh4 != 0 & no3 != 0 )
 
 logwtc$log10fCO2 <- logwtc$fCO2 %>% log10()
 logwtc$log10Slope <- logwtc$Slope %>% log10()
 logwtc$log10Runoff <- logwtc$Runoff %>% log10()
 logwtc$log10Precip <- logwtc$Precip %>% log10()
-logwtc$log10ca <- logwtc$ca_ueq_l %>% log10()
-logwtc$log10so4 <- logwtc$so4_ueq_l %>% log10()
-logwtc$log10no3 <- logwtc$no3_ueq_l %>% log10()
-logwtc$log10nh4 <- logwtc$nh4_ueq_l %>% log10()
-logwtc$log10tn <- logwtc$tot_n_ug_l %>% log10()
-logwtc$log10tp <- logwtc$tot_p_ug_l %>% log10()
-logwtc$log10toc <- logwtc$toc_mg_l %>% log10()
+logwtc$log10ca <- logwtc$ca %>% log10()
+logwtc$log10so4 <- logwtc$so4 %>% log10()
+logwtc$log10no3 <- logwtc$no3 %>% log10()
+logwtc$log10nh4 <- logwtc$nh4 %>% log10()
+logwtc$log10tn <- logwtc$tn %>% log10()
+logwtc$log10tp <- logwtc$tp %>% log10()
+logwtc$log10toc <- logwtc$toc %>% log10()
+```
 
-
+```{r lm-log-stepwise, eval = F}
 par(mfrow = c(4,4))
 plot(log10fCO2~log10Slope+NDVI+log10Runoff+Forest+Bare+Arable+Temp+log10Precip+ph+log10ca+log10so4+log10no3+log10tn+log10tp+log10toc, data = logwtc)
 
@@ -141,43 +185,100 @@ step.model2 <- stepAIC(lm2, direction = "both", trace = FALSE)
 summary(step.model2)
 ```
 
-## fCO2 modelled with TOC
+## fCO2 modelled with TOC, LM 
 
 Fit fCO2 with only TOC as predictor:
 
 ```{r fCO2-TOC}
-lm3 <- lm(log10fCO2~log10toc, data = logwtc)
+
+lm3 <- lm(I(fCO2-fCO2.1995)~0+toc, data = wtc)
 summary(lm3)
+
+plot(wtc$fCO2, predict(lm3, type = "response") + fCO2.1995)
 ```
 
-Fit TOC with same predictors as in Paper 2:
+```{r fCO2-TOC-log}
 
-```{r TOC-5-pred}
-lm4 <- lm(log10toc~NDVI+log10Runoff+Arable+Bog+TNdep, data = logwtc)
-summary(lm4)
+lm3b <- lm(I(log10fCO2-log10(fCO2.1995))~0+log10toc, data = logwtc)
+summary(lm3b)
+
+plot(logwtc$log10fCO2, predict(lm3b, type = "response") + log10(fCO2.1995))
 ```
 
-Fit fCO2 with the 5 predictors for TOC: 
 
-```{r fCO2-5-predictors}
-lm5 <- lm(log10fCO2~NDVI+log10Runoff+Bog+Arable+TNdep, data = logwtc)
-summary(lm5)
-```
-
-## GAM full model and stepwise selection
+## fCO2 modelled with TOC, GAM
 
 ```{r gam-model}
 library(mgcv)
 
-g1 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(log10Runoff)+s(Forest)+s(Bare)+s(Arable)+s(Bog)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tn)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
-summary(g1)
+#g1 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(log10Runoff)+s(Forest)+s(Bare)+s(Arable)+s(Bog)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tn)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
+#saveRDS(g1,"g1.rds")
+# g1 <- readRDS("g1.rds")
+# summary(g1)
 
 
-g2 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
-summary(g2)
+#g2 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
+#saveRDS(g2,"g2.rds")
+# g2 <- readRDS("g2.rds")
+# summary(g2)
 
-g3 <- mgcv::gam(log10fCO2~s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
-summary(g3)
+#g3 <- mgcv::gam(log10fCO2~s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
+#saveRDS(g3,"g3.rds")
+# g3 <- readRDS("g3.rds")
+# summary(g3)
+
+g4 <- mgcv::gam(fCO2~s(toc), data = wtc, method = "REML")
+summary(g4)
+
+g4b <- mgcv::gam(log10fCO2~s(log10toc), data = logwtc, method = "REML")
+summary(g4b)
+
+
+```
+
+## GAM with Tweedie
+
+Fit fCO2 with only TOC as predictor:
+
+```{r fCO2-TOC-tweedie}
+fCO2.1995 <- 360.17*10^(-6) # µAtm to atm
+t1 <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss())
+summary(t1)
+
+fp <- predict(t1, type = "response")
+plot(wtc$fCO2, fp[,1])
+
+```
+
+```{r logfCO2-logTOC-tweedie}
+fCO2.1995 <- 360.17*10^(-6) # µAtm to atm
+t1b <- gam(list(log10fCO2~log10toc,~1, ~1), data = logwtc, family = twlss())
+summary(t1b)
+
+fp1b <- predict(t1b, type = "response")
+plot(logwtc$log10fCO2, fp1b[,1])
+```
+
+## GLM with gamma
+
+Fit fCO2 with only TOC as predictor:
+
+```{r fCO2-TOC-glm}
+plot(fCO2~toc, data = waterchem)
+
+glm1 <- glm(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
+summary(glm1)
+
+fp <- predict(glm1, type = "response", se.fit = T)
+qplot(wtc$fCO2, fp$fit, col = fp$se.fit)
+```
+
+```{r logfCO2-logTOC-glm}
+glm1b <- glm(log10fCO2~log10toc, data = logwtc, family = Gamma(link = "identity"))
+summary(glm1b)
+
+fp1b <- predict(t1b, type = "response")
+plot(logwtc$log10fCO2, fp1b[,1])
 ```
 
 # Test on CBA data
@@ -208,7 +309,7 @@ cba <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 
 cba.total <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 
-cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","p_CO2","basin_area_km2","lake_area_km2","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","Ca","SO4","NO3","TOTP","TN","TOC","T","geometry"))
+cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","Ca","SO4","NO3","TOTP","TN","TOC","T","geometry"))
 cba.sel <- cba.sel %>% filter(!is.na(Alkalinity))
 
 dim(cba.sel)
@@ -220,21 +321,22 @@ cba.sel[,-which(names(cba.sel) == "geometry")] <- apply(cba.sel[,-which(names(cb
 # conversion from mg/L to ueq/L
 cba.sel$area <- cba.sel$basin_area_km2 * 10^6
 cba.sel$lake.area <- cba.sel$lake_area_km2 * 10^6
-cba.sel$ca_ueq_l <- cba.sel$Ca / 40.078 * 2 * 1000
-cba.sel$so4_ueq_l <- cba.sel$SO4/(32.06+15.999*4) * (2) * 1000 # need positive data
-cba.sel$no3_ueq_l <- cba.sel$NO3/(14.007+15.999*3) * (2) * 1000 # need positive data
-cba.sel$tot_p_ug_l <- cba.sel$TOTP
-cba.sel$tot_n_ug_l <- cba.sel$TN * 1000
-cba.sel$toc_mg_l <- cba.sel$TOC
-cba.sel$alk_ueq_l <- cba.sel$Alkalinity * 10^3
+cba.sel$ca <- cba.sel$Ca / 40.078 * 2 * 1000
+cba.sel$so4 <- cba.sel$SO4/(32.06+15.999*4) * 2 * 1000 
+cba.sel$no3 <- cba.sel$NO3/(14.007+15.999*3) * 2 * 1000
+cba.sel$tp <- cba.sel$TOTP
+cba.sel$tn <- cba.sel$TN * 1000
+cba.sel$toc <- cba.sel$TOC
+cba.sel$alk <- cba.sel$Alkalinity * 10^3
+
 cba.sel$log10Runoff <- cba.sel$era_runoff_1981_2010 %>% log10()
 cba.sel$Forest <- cba.sel$forest
 cba.sel$Bog <- cba.sel$peat
 cba.sel$Arable <- cba.sel$agriculture
 cba.sel$log10Precip <- cba.sel$era_prec_1981_2010 %>% log10()
-cba.sel$log10ca <- cba.sel$ca_ueq_l %>% log10()
-cba.sel$log10so4 <- cba.sel$so4_ueq_l %>% log10()
-cba.sel$log10no3 <- cba.sel$no3_ueq_l %>% log10()
+cba.sel$log10ca <-cba.sel$ca %>% log10()
+cba.sel$log10so4 <- cba.sel$so4 %>% log10()
+cba.sel$log10no3 <- cba.sel$no3 %>% log10()
 cba.sel$log10tp <- cba.sel$TOTP %>% log10()
 cba.sel$log10tn <- cba.sel$TN %>% log10()
 cba.sel$log10toc <- cba.sel$TOC %>% log10()
@@ -283,28 +385,57 @@ write.csv(summer.ndvi.2015,"NDVI/100lakes.summer.ndvi.2015.csv")
 
 ## Compute fCO2 in CBA lakes
 
+fCO2 in 2019: 410 ppm 
+https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
+
 ```{r model-fCO2-CBA}
-fCO2.2019 <- 410.5 * 10^(-6)
+fCO2.2019 <- 410.5 * 10^(-3)
 temp <- cba.sel$T
-TA <- cba.sel$alk_ueq_l / 1000000
+TA <- cba.sel$alk / 1000000
 pH <- cba.sel$pH
-CO2 <- cba.sel$CO2
-ae3 <- aquaenv(S=0, t=temp,pH = pH, TA = TA, CO2 = CO2, SumCO2 = NULL, fCO2atm = fCO2.2019)
-cba.sel$fCO2ae <- ae3$fCO2 * 1000000
+CO2 <- cba.sel$CO2 * 10^(-6)
+ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019)
+cba.sel$fCO2 <- ae3$fCO2 *10^6
+
 ```
 
 
 ## Test and compare LM and GAM 
 
-```{r test-lm}
+```{r test-predict-fCO2-toc}
 summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
 cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
-cba.sf$log10fCO2lm <- predict(step.model2,newdata = cba.sf, type = "response")
-cba.sf$log10fCO2gam <- predict(g3, newdata = cba.sf)
+cba.sf$log10fCO2lm <- predict(lm3b,newdata = cba.sf, type = "response")
+cba.sf$log10fCO2gam <- predict(g4b, newdata = cba.sf, type = "response")
+cba.sf$log10fCO2tweedie <- predict(t1b,newdata = cba.sf, type = "response")[,1]
+cba.sf$log10fCO2glm <- predict(glm1b, newdata = cba.sf, type = "response")
 
-ggplot(cba.sf, aes(x=log10(fCO2ae)))+geom_point(aes(y=log10fCO2lm, col = "LM"))+
-  geom_point(aes(y=log10fCO2gam, col = "GAM"))+
+ggplot(cba.sf, aes(x=log10(fCO2)))+geom_point(aes(y=log10fCO2lm + log10(fCO2.1995), col = "LM", shape = "LM"))+
+  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-log", shape = "GLM-gamma-log"))+
+  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
+  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"))+
   geom_abline(slope = 1, intercept = 0, col = "red")+
+  scale_color_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = as.vector(palette.colors(n=4)))+
+  scale_shape_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = c(1,2,3,4))+
+  labs(y = "Predicted log10fCO2", x = "Aquaenv log10fCO2")+
   theme_minimal()
+  
+  
+cba.sf$fCO2lm <- predict(lm3,newdata = cba.sf, type = "response")
+cba.sf$fCO2gam <- predict(g4, newdata = cba.sf, type = "response")
+cba.sf$fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1]
+cba.sf$fCO2glm <- predict(glm1, newdata = cba.sf, type = "response")
+
+ggplot(cba.sf, aes(x=fCO2))+geom_point(aes(y=fCO2lm + fCO2.1995, col = "LM", shape = "LM"))+
+  geom_point(aes(y=fCO2glm, col = "GLM-gamma", shape = "GLM-gamma"))+
+  geom_point(aes(y =fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
+  geom_point(aes(y=fCO2gam, col = "GAM", shape = "GAM"))+
+  geom_abline(slope = 1, intercept = 0, col = "red")+
+  scale_color_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = as.vector(palette.colors(n=4)))+
+  scale_shape_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = c(1,2,3,4))+
+  labs(y = "Predicted fCO2", x = "Aquaenv fCO2")+ylim(-5000,13000)+
+  theme_minimal()
+
+
 ```
 
