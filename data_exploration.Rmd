@@ -23,6 +23,8 @@ library(dplyr)
 library(ggplot2)
 library(ggpubr)
 library(sf)
+library(mgcv)
+library(MASS)
 
 fCO2.1995 <- 360.17
 
@@ -93,7 +95,7 @@ p1 <- ggplot(waterchem)+geom_point(aes(x=toc, y = TOC, col = nation.x))
 ggsave("TOC_compare.png", p1)
 
 g1 <- ggplot(waterchem)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
-    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "fCO2")+
+    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
     theme_minimal()
 ggsave("map_fco2.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
 
@@ -101,19 +103,66 @@ h1 <- ggplot(waterchem)+geom_histogram(aes(group = fCO2, x = log10(fCO2), fill =
   scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
   geom_vline(xintercept = log10(fCO2.1995), col = "red")+theme_minimal()
 ggsave("hist_fCO2.png",h1, width = 12, height = 8, unit = "cm", dpi = "retina") 
+
+
+
+t1 <- ggplot(waterchem, aes(x = log10(toc)))+
+  geom_ribbon(aes(ymin = -Inf, ymax = log10(fCO2.1995), fill = "undersaturated"), alpha = 0.25)+
+  geom_ribbon(aes(ymax = +Inf, ymin = log10(fCO2.1995),fill = "oversaturated"), alpha = 0.25)+
+  geom_hline(yintercept = log10(fCO2.1995))+
+  scale_fill_manual(values = c("lightgray","darkgray"), name = "Oversaturation")+
+  geom_point(aes(y=log10(fCO2), col = latitude.x))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+ggsave("CO2_oversaturation.png",t1, width = 15, height = 10, unit = "cm", dpi = "retina")
+
+t2 <- ggplot(waterchem, aes(x = toc))+
+  geom_ribbon(aes(ymin = -Inf, ymax = fCO2.1995, fill = "undersaturated"), alpha = 0.25)+
+  geom_ribbon(aes(ymax = +Inf, ymin = fCO2.1995,fill = "oversaturated"), alpha = 0.25)+
+  geom_hline(yintercept = fCO2.1995)+
+  scale_fill_manual(values = c("lightgray","darkgray"), name = "Oversaturation")+
+  geom_point(aes(y=fCO2, col = latitude.x))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
 ```
 
-`r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png"))`
+`r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png","CO2_oversaturation.png"))`
 
+## Convenience df
 
-```{r plots, fig.dim = c(15,15)}
+```{r log10-transform, eval = T}
+
 waterchem <- readRDS("waterchem.rds")
 
 wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
-  
+
+logwtc <- filter(wtc, nh4 != 0 & no3 != 0 )
+
+logwtc$log10fCO2 <- logwtc$fCO2 %>% log10()
+logwtc$log10Slope <- logwtc$Slope %>% log10()
+logwtc$log10Runoff <- logwtc$Runoff %>% log10()
+logwtc$log10Precip <- logwtc$Precip %>% log10()
+logwtc$log10ca <- logwtc$ca %>% log10()
+logwtc$log10so4 <- logwtc$so4 %>% log10()
+logwtc$log10no3 <- logwtc$no3 %>% log10()
+logwtc$log10nh4 <- logwtc$nh4 %>% log10()
+logwtc$log10tn <- logwtc$tn %>% log10()
+logwtc$log10tp <- logwtc$tp %>% log10()
+logwtc$log10toc <- logwtc$toc %>% log10()
+
+oversat <- subset(wtc,fCO2 >= fCO2.1995)
+undersat <- subset(wtc,fCO2 < fCO2.1995)
+```
+
+## Corplot and PCA
+
+```{r plots, fig.dim = c(15,15)}
+
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","lake.area","perimtot","Slope","Alt","latitude.x","longitude.x"))), tl.cex = 1.5, number.cex = 1.5)
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip"))), tl.cex = 1.5, number.cex = 1.5)
-corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","ca","mg","na","k","cl","f","so4","no3","nh4","tp","tn","toc"))), tl.cex = 1.5, number.cex = 1.5)
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc"))), tl.cex = 1.5, number.cex = 1.5)
 ```
 ```{r pca-total, fig.dim = c(12,10)}
 
@@ -142,48 +191,7 @@ plot.pca.23
 ``` 
 
 
-## Full model and stepwise selection 
-
-```{r stepwise-selection-lm}
-library(MASS)
-# Fit the full model 
-full.model <- lm(log(fCO2) ~., data = st_drop_geometry(wtc))
-summary(full.model)
-
-# Stepwise regression model
-step.model1 <- stepAIC(full.model, direction = "both", trace = FALSE)
-summary(step.model1)
-
-```
-
-## Full model on log-transformed variables
-
-```{r log10-transform, fig.dim = c(12,12), eval = T}
-logwtc <- filter(wtc, nh4 != 0 & no3 != 0 )
-
-logwtc$log10fCO2 <- logwtc$fCO2 %>% log10()
-logwtc$log10Slope <- logwtc$Slope %>% log10()
-logwtc$log10Runoff <- logwtc$Runoff %>% log10()
-logwtc$log10Precip <- logwtc$Precip %>% log10()
-logwtc$log10ca <- logwtc$ca %>% log10()
-logwtc$log10so4 <- logwtc$so4 %>% log10()
-logwtc$log10no3 <- logwtc$no3 %>% log10()
-logwtc$log10nh4 <- logwtc$nh4 %>% log10()
-logwtc$log10tn <- logwtc$tn %>% log10()
-logwtc$log10tp <- logwtc$tp %>% log10()
-logwtc$log10toc <- logwtc$toc %>% log10()
-```
-
-```{r lm-log-stepwise, eval = F}
-par(mfrow = c(4,4))
-plot(log10fCO2~log10Slope+NDVI+log10Runoff+Forest+Bare+Arable+Temp+log10Precip+ph+log10ca+log10so4+log10no3+log10tn+log10tp+log10toc, data = logwtc)
-
-lm2 <- lm(log10fCO2~log10Slope+NDVI+log10Runoff+Forest+Bare+Arable+Temp+log10Precip+ph+log10ca+log10so4+log10no3+log10tn+log10tp+log10toc, data = logwtc)
-summary(lm2)
-
-step.model2 <- stepAIC(lm2, direction = "both", trace = FALSE)
-summary(step.model2)
-```
+# fCO2 modelled with TOC
 
 ## fCO2 modelled with TOC, LM 
 
@@ -191,72 +199,119 @@ Fit fCO2 with only TOC as predictor:
 
 ```{r fCO2-TOC}
 
-lm3 <- lm(I(fCO2-fCO2.1995)~0+toc, data = wtc)
-summary(lm3)
+lm1 <- lm(fCO2~toc, data = wtc)
+summary(lm1)
 
-plot(wtc$fCO2, predict(lm3, type = "response") + fCO2.1995)
+wtc$fplm <- predict(lm1, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fplm), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
+
+
 
 ```{r fCO2-TOC-log}
 
-lm3b <- lm(I(log10fCO2-log10(fCO2.1995))~0+log10toc, data = logwtc)
-summary(lm3b)
+lm1b <- lm(log10fCO2~log10toc, data = logwtc)
+summary(lm1b)
 
-plot(logwtc$log10fCO2, predict(lm3b, type = "response") + log10(fCO2.1995))
+
+logwtc$fplm <- predict(lm1b, type = "response")
+ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fplm, col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+```
+
+```{r test-double}
+lmover <- lm(fCO2~toc, data = oversat)
+lmunder <- lm(fCO2~toc, data = undersat)
+summary(lmover)
+summary(lmunder)
+
+oversat$pred <- predict(lmover, type = "response") %>% log10()
+undersat$pred <- predict(lmunder, type = "response") %>% log10()
+
+ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"))+
+  geom_point(data = oversat, aes(x = log10(toc), y = pred, col = "over"))+
+  geom_point(data = undersat, aes(x = log10(toc), y = pred, col = "under"))+
+  scale_color_manual(values = c("lightblue","black","darkgray"))+
+  theme_minimal()
+
+```
+## fCO2-TOC with GAM and Gamma distribution 
+
+```{r gam-fco2-toc}
+g1 <- mgcv::gam(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
+summary(g1)
+
+wtc$fpg <- predict(g1,type = "reponse")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpg), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+
+g1b <- mgcv::gam(log10fCO2~log10toc, data = logwtc, family = Gamma(link = "identity"), method = "REML")
+summary(g1b)
+
+logwtc$fpg <- predict(g1b, type = "response")
+ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpg, col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+
+g1c <- mgcv::gam(fCO2~toc, data = wtc, family = Gamma(link = "log"))
+summary(g1c)
+
+wtc$fpgc <- predict(g1c,type = "reponse")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fpgc, col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
 
-## fCO2 modelled with TOC, GAM
-
-```{r gam-model}
-library(mgcv)
-
-#g1 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(log10Runoff)+s(Forest)+s(Bare)+s(Arable)+s(Bog)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tn)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
-#saveRDS(g1,"g1.rds")
-# g1 <- readRDS("g1.rds")
-# summary(g1)
-
-
-#g2 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
-#saveRDS(g2,"g2.rds")
-# g2 <- readRDS("g2.rds")
-# summary(g2)
-
-#g3 <- mgcv::gam(log10fCO2~s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
-#saveRDS(g3,"g3.rds")
-# g3 <- readRDS("g3.rds")
-# summary(g3)
-
-g4 <- mgcv::gam(fCO2~s(toc), data = wtc, method = "REML")
-summary(g4)
-
-g4b <- mgcv::gam(log10fCO2~s(log10toc), data = logwtc, method = "REML")
-summary(g4b)
-
-
-```
 
 ## GAM with Tweedie
 
-Fit fCO2 with only TOC as predictor:
 
 ```{r fCO2-TOC-tweedie}
-fCO2.1995 <- 360.17*10^(-6) # µAtm to atm
-t1 <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss())
+t1 <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss(link = list("identity","identity","identity")))
 summary(t1)
 
-fp <- predict(t1, type = "response")
-plot(wtc$fCO2, fp[,1])
-
+wtc$fpt <- predict(t1, type = "response")[,1]
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpt), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
 ```{r logfCO2-logTOC-tweedie}
-fCO2.1995 <- 360.17*10^(-6) # µAtm to atm
-t1b <- gam(list(log10fCO2~log10toc,~1, ~1), data = logwtc, family = twlss())
+
+t1b <- gam(list(log10fCO2~log10toc,~1, ~1), data = logwtc, family = twlss(link = list("identity","identity","identity")))
 summary(t1b)
 
-fp1b <- predict(t1b, type = "response")
-plot(logwtc$log10fCO2, fp1b[,1])
+logwtc$fpt <- predict(t1b, type = "response")[,1]
+ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpt, col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+```
+
+```{r fCO2-lTOC-tweedie-loglink}
+
+t1c <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
+summary(t1c)
+
+ 
+wtc$fptc <- predict(t1c, type = "response")[,1]
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fptc), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+```
+
+```{r test-double-tweedie}
+
+twover <- gam(list(fCO2~toc,~1,~1), data = oversat,family = twlss(link = list("identity","identity","identity")))
+twunder <- gam(list(fCO2~toc,~1,~1), data = undersat,family = twlss(link = list("identity","identity","identity")))
+summary(twover)
+summary(twunder)
+
+oversat$pred_tw <- predict(twover, type = "response")[,1] %>% log10()
+undersat$pred_tw <- predict(twunder, type = "response")[,1] %>% log10()
+
+ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"))+
+  geom_point(data = oversat, aes(x = log10(toc), y = pred_tw, col = "over"))+
+  geom_point(data = undersat, aes(x = log10(toc), y = pred_tw, col = "under"))+
+  scale_color_manual(values = c("lightblue","black","darkgray"))+
+  theme_minimal()
+
 ```
 
 ## GLM with gamma
@@ -264,22 +319,32 @@ plot(logwtc$log10fCO2, fp1b[,1])
 Fit fCO2 with only TOC as predictor:
 
 ```{r fCO2-TOC-glm}
-plot(fCO2~toc, data = waterchem)
-
 glm1 <- glm(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
 summary(glm1)
 
-fp <- predict(glm1, type = "response", se.fit = T)
-qplot(wtc$fCO2, fp$fit, col = fp$se.fit)
+wtc$fpg <- predict(glm1, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpg), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
 ```{r logfCO2-logTOC-glm}
 glm1b <- glm(log10fCO2~log10toc, data = logwtc, family = Gamma(link = "identity"))
 summary(glm1b)
 
-fp1b <- predict(t1b, type = "response")
-plot(logwtc$log10fCO2, fp1b[,1])
+logwtc$fpg <- predict(glm1b,  type = "response")
+ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpg, col = "Pred"))+scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+
 ```
+
+```{r glm}
+glm1c <- glm(fCO2~toc, data = wtc, family = Gamma(link = "log"))
+summary(glm1c)
+
+wtc$fpgc <- predict(glm1c, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpgc), col = "Pred"))+scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+
+```
+
 
 # Test on CBA data
 
@@ -309,7 +374,7 @@ cba <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 
 cba.total <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 
-cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","Ca","SO4","NO3","TOTP","TN","TOC","T","geometry"))
+cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","latitude","longitude","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","Ca","SO4","NO3","TOTP","TN","TOC","T","geometry"))
 cba.sel <- cba.sel %>% filter(!is.na(Alkalinity))
 
 dim(cba.sel)
@@ -334,7 +399,7 @@ cba.sel$Forest <- cba.sel$forest
 cba.sel$Bog <- cba.sel$peat
 cba.sel$Arable <- cba.sel$agriculture
 cba.sel$log10Precip <- cba.sel$era_prec_1981_2010 %>% log10()
-cba.sel$log10ca <-cba.sel$ca %>% log10()
+cba.sel$log10ca <-cba.sel$Ca %>% as.numeric() %>% log10()
 cba.sel$log10so4 <- cba.sel$so4 %>% log10()
 cba.sel$log10no3 <- cba.sel$no3 %>% log10()
 cba.sel$log10tp <- cba.sel$TOTP %>% log10()
@@ -389,40 +454,211 @@ fCO2 in 2019: 410 ppm
 https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
 
 ```{r model-fCO2-CBA}
-fCO2.2019 <- 410.5 * 10^(-3)
+fCO2.2019 <- 410.5 
 temp <- cba.sel$T
 TA <- cba.sel$alk / 1000000
 pH <- cba.sel$pH
 CO2 <- cba.sel$CO2 * 10^(-6)
-ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019)
+ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019 * 10^6)
 cba.sel$fCO2 <- ae3$fCO2 *10^6
 
 ```
 
+```{r catchment-cba, eval = F}
+summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
+cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
+
+library(colorspace)
+
+g1 <- ggplot(cba.sf)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
+    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
+    theme_minimal()
+ggsave("map_fco2_cba.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
+
+h1 <- ggplot(cba.sf)+geom_histogram(aes(group = fCO2, x = log10(fCO2), fill = log10(fCO2), col = log10(fCO2)))+
+  scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.2019), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
+  geom_vline(xintercept = log10(fCO2.2019), col = "red")+theme_minimal()
+ggsave("hist_fCO2_cba.png",h1, width = 12, height = 8, unit = "cm", dpi = "retina") 
+
+
+
+t1 <- ggplot(cba.sf, aes(x = log10(toc)))+
+  geom_ribbon(aes(ymin = -Inf, ymax = log10(fCO2.2019), fill = "undersaturated"), alpha = 0.25)+
+  geom_ribbon(aes(ymax = +Inf, ymin = log10(fCO2.2019),fill = "oversaturated"), alpha = 0.25)+
+  geom_hline(yintercept = log10(fCO2.2019))+
+  scale_fill_manual(values = c("lightgray","darkgray"), name = "Oversaturation")+
+  geom_point(aes(y=log10(fCO2), col = latitude))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+ggsave("CO2_oversaturation_cba.png",t1, width = 12, height = 8, unit = "cm", dpi = "retina")
+
+
+```
+
+`r knitr::include_graphics(c("map_fCO2_cba.png", "hist_fCO2_cba.png","CO2_oversaturation_cba.png"))`
 
 ## Test and compare LM and GAM 
 
+Selected  models: lm1, g1b (on log-transformed data), t1, glm1
+
 ```{r test-predict-fCO2-toc}
+
+models <- c("GAM on log transformed data", "GLM with id link","GLM with log link","LM", "Tweedie with id link", "Tweedie with log link")
+
 summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
 cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
-cba.sf$log10fCO2lm <- predict(lm3b,newdata = cba.sf, type = "response")
-cba.sf$log10fCO2gam <- predict(g4b, newdata = cba.sf, type = "response")
-cba.sf$log10fCO2tweedie <- predict(t1b,newdata = cba.sf, type = "response")[,1]
-cba.sf$log10fCO2glm <- predict(glm1b, newdata = cba.sf, type = "response")
+cba.sf$log10fCO2lm <- predict(lm1,newdata = cba.sf, type = "response") %>% log10()
+cba.sf$log10fCO2gam <- predict(g1b, newdata = cba.sf, type = "response")
+cba.sf$log10fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1] %>% log10()
+cba.sf$log10fCO2glm <- predict(glm1, newdata = cba.sf, type = "response") %>% log10()
 
-ggplot(cba.sf, aes(x=log10(fCO2)))+geom_point(aes(y=log10fCO2lm + log10(fCO2.1995), col = "LM", shape = "LM"))+
-  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-log", shape = "GLM-gamma-log"))+
+cba.sf$log10fCO2glm_log <- predict(glm1c, newdata = cba.sf, type = "response") %>% log10()
+cba.sf$log10fCO2tweedie_log <- predict(t1c,newdata = cba.sf, type = "response")[,1] %>% log10()
+
+
+ggplot(cba.sf, aes(x=log10(fCO2)))+
+   geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"))+
+  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"))+
   geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
   geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"))+
+  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"))+
+  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"))+
   geom_abline(slope = 1, intercept = 0, col = "red")+
-  scale_color_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = as.vector(palette.colors(n=4)))+
-  scale_shape_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = c(1,2,3,4))+
+  scale_color_manual(name = "Model", labels = models, values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(15,16,17,18, 25, 8))+
   labs(y = "Predicted log10fCO2", x = "Aquaenv log10fCO2")+
   theme_minimal()
+
+ggplot(cba.sf, aes(x=log10toc))+
+  geom_point(aes(y = log10(fCO2)), col = "gray")+
+  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
+  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
+  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"), size = 2)+
+  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
+  geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"), size = 2)+
+  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"), size = 1)+
+  geom_hline(yintercept = log10(fCO2.2019), col = "red")+
+  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
+  labs(y = "Predicted log10fCO2", x = "log10(TOC)")+
+  theme_minimal()
+
+ggplot(cba.sf, aes(x=toc))+
+  geom_point(aes(y = fCO2), col = "gray")+
+  geom_point(aes(y = 10^(log10fCO2glm_log), col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
+  geom_point(aes(y=10^(log10fCO2tweedie_log), col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
+  geom_point(aes(y=10^(log10fCO2gam), col = "GAM", shape = "GAM"), size = 2)+
+  geom_point(aes(y=10^(log10fCO2glm), col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
+  geom_point(aes(y=10^(log10fCO2lm), col = "LM", shape = "LM"), size = 2)+
+  geom_point(aes(y = 10^(log10fCO2tweedie), col = "Tweedie", shape = "Tweedie"), size = 1)+
+  geom_hline(yintercept = fCO2.2019, col = "red")+
+  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
+  labs(y = "Predicted fCO2", x = "TOC")+
+  ylim(-10,5000)+xlim(0,30)+
+  theme_minimal()
+
+```
+
+The TOC values > 40 mg/L (logTOC > 1,6) are potentially outliers, but removing them doesn't change the test.
+
+GAM: linear pred with intercept. 
+LM = GLM id link = Tweedie id link
+GLM log link = Tweedie log link
+
+# Adding other variables
+
+```{r gam-tweedie-toc-NDVI}
+
+wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
+
+t2 <- gam(list(fCO2~toc+NDVI+so4,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
+summary(t2)
+
+t2b <- glm(fCO2~toc*tn+Alt, data = wtc, family = Gamma(link = "log"))
+summary(t2b)
+
+wtc$fp <- predict(t2b, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fp), col = "Pred"))+
+  scale_color_manual(values = c("lightblue","black"))+theme_minimal()
+
+t2c <- glm(fCO2~., data = wtc, family = Gamma(link = "log"))
+summary(t2c)
+stepglm <- stepAIC(t2c, direction = "both", trace = FALSE)
+summary(stepglm)
+
+
+ 
+
+```
+
+`r knitr::knit_exit()`
+
+# Extra
+
+## Full model and stepwise selection 
+
+```{r stepwise-selection-lm}
+library(MASS)
+# Fit the full model 
+full.model <- lm(log(fCO2) ~., data = st_drop_geometry(wtc))
+summary(full.model)
+
+# Stepwise regression model
+step.model1 <- stepAIC(full.model, direction = "both", trace = FALSE)
+summary(step.model1)
+
+```
+
+## Full model on log-transformed variables
+
+
+
+```{r lm-log-stepwise, eval = T}
+
+lm2 <- lm(log10fCO2~., data = logwtc)
+summary(lm2)
+
+step.model2 <- stepAIC(lm2, direction = "both", trace = FALSE)
+summary(step.model2)
+```
+
+
+
+
+
+
+
+## fCO2 modelled with TOC, GAM
+
+```{r gam-model}
+library(mgcv)
+
+#g1 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(log10Runoff)+s(Forest)+s(Bare)+s(Arable)+s(Bog)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tn)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
+#saveRDS(g1,"g1.rds")
+# g1 <- readRDS("g1.rds")
+# summary(g1)
+
+
+#g2 <- mgcv::gam(log10fCO2~s(log10Slope)+s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10nh4)+s(log10tp)+s(log10toc), data = logwtc, method = "REML", select = T)
+#saveRDS(g2,"g2.rds")
+# g2 <- readRDS("g2.rds")
+# summary(g2)
+
+#g3 <- mgcv::gam(log10fCO2~s(NDVI)+s(Arable)+s(Temp)+s(log10Precip)+s(ph)+s(log10ca)+s(log10so4)+s(log10no3)+s(log10tp)+s(log10toc), data = logwtc, method = "REML")
+#saveRDS(g3,"g3.rds")
+# g3 <- readRDS("g3.rds")
+# summary(g3)
+
+
+
+```
+
+```{r test-no-log}
   
-  
-cba.sf$fCO2lm <- predict(lm3,newdata = cba.sf, type = "response")
-cba.sf$fCO2gam <- predict(g4, newdata = cba.sf, type = "response")
+cba.sf$fCO2lm <- predict(lm1,newdata = cba.sf, type = "response")
+cba.sf$fCO2gam <- predict(g1, newdata = cba.sf, type = "response")
 cba.sf$fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1]
 cba.sf$fCO2glm <- predict(glm1, newdata = cba.sf, type = "response")
 
@@ -433,9 +669,24 @@ ggplot(cba.sf, aes(x=fCO2))+geom_point(aes(y=fCO2lm + fCO2.1995, col = "LM", sha
   geom_abline(slope = 1, intercept = 0, col = "red")+
   scale_color_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = as.vector(palette.colors(n=4)))+
   scale_shape_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = c(1,2,3,4))+
-  labs(y = "Predicted fCO2", x = "Aquaenv fCO2")+ylim(-5000,13000)+
+  labs(y = "Predicted fCO2", x = "Aquaenv fCO2")+
+  ylim(0,10000)+
+  theme_minimal()
+
+ggplot(cba.sf, aes(x=toc))+geom_point(aes(y=fCO2lm + fCO2.1995, col = "LM", shape = "LM"))+
+  geom_point(aes(y = fCO2), col = "black")+
+  geom_point(aes(y=fCO2glm, col = "GLM-gamma", shape = "GLM-gamma"))+
+  geom_point(aes(y =fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
+  geom_point(aes(y=fCO2gam, col = "GAM", shape = "GAM"))+
+  scale_color_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = as.vector(palette.colors(n=4,palette = "ggplot2")))+
+  scale_shape_manual(name = "Model", labels = c("GAM", "GLM-gamma-log","LM","Tweedie"), values = c(1,2,3,4))+
+  labs(y = "Predicted fCO2", x = "TOC (mg/L)")+
   theme_minimal()
 
 
+
 ```
+
+
+
 
