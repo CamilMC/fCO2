@@ -11,7 +11,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T)
+knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache = T, cache.lazy = F)
 options(knitr.kable.NA="", knitr.table.format = "html")
 ```
 
@@ -249,7 +249,7 @@ ggplot()+
 ## Corplot and PCA
 
 ```{r plots, fig.dim = c(15,15)}
-
+png()
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","lake.area","perimtot","Slope","Alt","soil","latitude.x","longitude.x","toc"))), tl.cex = 1.5, number.cex = 1.5)
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","toc"))), tl.cex = 1.5, number.cex = 1.5)
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","is","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc"))), tl.cex = 1.5, number.cex = 1.5)
@@ -699,31 +699,43 @@ waterchem <- readRDS("waterchem.rds")
 wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt","soil","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
 wtc$is <- wtc %>% dplyr::select(c("ca","mg","na","k","so4","no3","nh4","cl","f")) %>% rowSums()
 wtc$cn <- wtc$toc / wtc$tn
+wtc$cp <- wtc$toc / wtc$tp
 
 
-
-
-t2 <- gam(list(fCO2~toc+is+ca+NDVI+Runoff+cn,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
+t2 <- gam(list(fCO2~toc+is+ca+NDVI+Runoff+cn+cp,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
 summary(t2)
 
-g2 <- glm(fCO2~toc+is+ca+NDVI+Runoff+cn, data = wtc, family = Gamma(link = "log"))
+t2b <- gam(list(fCO2~s(toc)+s(is)+s(ca)+s(NDVI)+s(Runoff)+s(cn)+s(cp),~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
+summary(t2b)
+
+
+g2 <- glm(fCO2~toc+is+ca+NDVI+Runoff+cn+cp, data = wtc, family = Gamma(link = "log"))
 summary(g2)
 
 wtc$fpt <- predict(t2, type = "response")[,1]
+wtc$fptb <- predict(t2b, type = "response")[,1]
 wtc$fpg <- predict(g2, type = "response")
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
-  geom_point(aes(y = log10(fpt), col = "Tweedie"))+
-  geom_point(aes(y = log10(fpg), col = "GLM"))+
+  geom_point(aes(y = log10(fpt), col = "Tweedie"), alpha = 0.5)+
+  geom_point(aes(y = log10(fpg), col = "GLM"), alpha = 0.5)+
   annotate(geom = "text",label = paste("AIC tweedie ",round(extractAIC(t2)[2]), sep = "="), x = 0, y = 3.5)+
-    annotate(geom = "text",label = paste("AIC gamma ",round(extractAIC(g2)[2]), sep = "="), x = 0, y = 3.2)+
+    annotate(geom = "text",label = paste("AIC gamma ",round(extractAIC(g2)[2]), sep = "="), x = 0, y = 3.3)+
   scale_color_manual(values = c("lightblue","black","orange"))+theme_minimal()
 
-ggplot(wtc)+geom_point(aes(x=fCO2, y = fpg, col ="gamma"))+
-  geom_point(aes(x=fCO2, y = fpt, col ="tweedie"))+
-  theme_minimal()
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
+  geom_point(aes(y = log10(fpt), col = "Tweedie"), alpha = 0.5)+
+  geom_point(aes(y = log10(fptb), col = " Smoothed Tweedie"), alpha = 0.5)+
+  annotate(geom = "text",label = paste("AIC tweedie ",round(extractAIC(t2)[2]), sep = "="), x = 0, y = 3.5)+
+  annotate(geom = "text",label = paste("AIC s tweedie ",round(extractAIC(t2b)[2]), sep = "="), x = 0, y = 3.7)+
+  scale_color_manual(values = c("lightblue","black","firebrick"))+theme_minimal()
+
+
+ggplot(wtc)+geom_point(aes(x=fCO2, y = fpg, col ="gamma"), size = 2, alpha = 0.5)+
+  geom_point(aes(x=fCO2, y = fpt, col ="tweedie"), size = 1, alpha = 0.5)+
+ theme_minimal()
 ```
 
-The GAM with tweedie distribution avoids predicting extremely high fCO2. But there is no way to predict undersaturated fCO2. 
+Similar results for GAM with tweedie and GLM with gamma. Smoothed tweedie has lower AIC. All models are unable to predict undersaturation at high TOC concentration.   
 
 ```{r predict-sat}
 wtc$sat <- NA
@@ -731,7 +743,7 @@ wtc$sat[which(wtc$fCO2 > fCO2.1995)] <- 1
 wtc$sat[which(wtc$fCO2 < fCO2.1995)] <- 0
 wtc$sat <- as.factor(wtc$sat)
 
-glmsat <- glm(sat~toc+ca+cn+Runoff+NDVI, data = wtc, family = binomial)
+glmsat <- glm(sat~ph+alk+cn, data = wtc, family = binomial)
 summary(glmsat)
 
 wtc$sat.pred <- predict(glmsat, type = "response")
