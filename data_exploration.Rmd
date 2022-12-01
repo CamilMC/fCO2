@@ -3,20 +3,24 @@ title: "fCO2_exploration"
 author: "Camille Crapart"
 date: '2022-11-14'
 output: 
-  html_document:
-    toc: true
-    toc_float: true
-    number_sections: true
-    code_folding: show
+   bookdown::html_document2:
+     code_folding: show
+     toc: true
+     toc_float: true
+     number_sections: true
+     fig_caption: true
+
+bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
+link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache = T, cache.lazy = F)
+knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache.lazy = F)
 options(knitr.kable.NA="", knitr.table.format = "html")
 ```
 
 
-```{r libraries}
+```{r libraries, message = F}
 library(DBI)
 library(AquaEnv)
 library(dplyr)
@@ -25,46 +29,35 @@ library(ggpubr)
 library(sf)
 library(mgcv)
 library(MASS)
+library(colorspace)
 
 fCO2.1995 <- 360.17
 fCO2.2019 <- 410
 
 ```
-## Extract soil 
-
-https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html
 
 
-```{r extract-soil-depth, eval = F}
-soil <- raster::raster("DAAC/average_soil_and_sedimentary-deposit_thickness.tif")
-fennoscandia <- readRDS("fennoscandia.33.rds")
-soil.df <- raster::extract(soil, dplyr::select(fennoscandia, c("ebint","geom"), sp = T, df = T, na.rm = T, fun = mean)
-                           
-# soil.sel <- soil.df %>% st_as_sf %>% dplyr::select(c("ebint","average_soil_and_sedimentary.deposit_thickness"))                         
-# names(soil.sel) <- c("ebint","soil","geometry")
-                          
-names(soil.df) <- c("ebint","soil","geom")
-saveRDS(soil.df, "soil.df.rds")
-
-soil.df <- readRDS("soil.df.rds")
-soil.df$soil[which(soil.df$soil > 50)] <- 50 # maximum value
-
-saveRDS(soil.df, "soil.df.rds")
-```
 
 # Model fCO2 in Northern Lakes 
 
 ```{r load-data, eval = F}
 con <- dbConnect(RPostgreSQL::PostgreSQL(),user = "camille.crapart", password = "camille",host = "vm-srv-wallace.vm.ntnu.no", dbname = "nofa")
 
-ion <- tbl(con, sql("SELECT gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_e_ueq_l,alk_subst,ca_ueq_l,mg_ueq_l,na_ueq_l,k_ueq_l,nh4_ueq_l,cl_ueq_l,so4_ueq_l,no3_ueq_l,f_ueq_l,tot_p_ug_l,tot_n_ug_l,toc_mg_l FROM environmental.north_euro_lake_surv_1995 ")) %>% as.data.frame()
-names(ion) <- c("gid", "ebint","nation","date","temp_c","latitude","longitude","ph","alk_ueq","alk","ca","mg","na","k","nh4","cl","so4","no3","f","tp","tn","toc")
+ion <- tbl(con, sql("SELECT gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_e_ueq_l,alk_subst,k25_ms_m,ca_ueq_l,mg_ueq_l,na_ueq_l,k_ueq_l,nh4_ueq_l,cl_ueq_l,so4_ueq_l,no3_ueq_l,f_ueq_l,tot_p_ug_l,tot_n_ug_l,toc_mg_l,dist_closest_ebint,dist_2nd_closest_ebint FROM environmental.north_euro_lake_surv_1995 ")) %>% as.data.frame()
+names(ion) <- c("gid", "ebint","nation","date","temp_c","latitude","longitude","ph","alk_ueq","alk","cond","ca","mg","na","k","nh4","cl","so4","no3","f","tp","tn","toc","dist_closest_ebint","dist_2nd_closest_ebint")
 saveRDS(ion,"ion.rds")
 
 lakes <- st_read(con,query = "SELECT gid, ebint, geom, area, perimtot FROM environmental.ecco_biwa_lakes_v_0_1 WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)")
 saveRDS(lakes,"lakes.rds")
 
+catchments <- st_read(con,query = "SELECT ebint, geom FROM catchments.lake_catchments WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)") # in UTM33
+saveRDS(catchments,"catchments.rds")
+catchment.poly <- st_transform(catchments, crs = st_crs("EPSG:4326")) # converts in World Geodetic System 1984
+saveRDS(catchment.poly,"catchment.poly.rds")
+catchment.poly.corine <- st_transform(catchment.poly, crs = st_crs("EPSG:3035")) # converts to EU extended referential ETRS89-extended
+saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
 ```
+
 
 ## Computes fCO2 in Northern Lakes 
 
@@ -88,73 +81,365 @@ TA <- ion.alk$alk / 1000000 # mol / L
 
 fCO2.1995.atm <- fCO2.1995*10^(-6) # ppm to atm
 
+ae <- aquaenv(S=0, t=temp, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995.atm)
 
-
-ae1 <- aquaenv(S=0, t=4, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995.atm)
-
-ae2 <- aquaenv(S=0, t=temp, SumCO2=NULL, TA=TA, pH=pH, fCO2atm = fCO2.1995.atm)
-
-plot(ae1$fCO2,ae2$fCO2)
-
-ion.alk$fCO2 <- ae2$fCO2 * 10^6
+ion.alk$fCO2 <- ae$fCO2 * 10^6
 
 saveRDS(ion.alk, "ion.alk.rds")
-saveRDS(ae1,"ae1.rds")
-saveRDS(ae2, "ae2.rds")
+saveRDS(ae, "ae.rds")
+```
 
-fennoscandia <- readRDS("fennoscandia.33.rds")
-soil <- readRDS("soil.df.rds")
-waterchem <- merge(fennoscandia, ion.alk, by = "ebint") %>% merge(st_drop_geometry(lakes), by = "ebint") %>% merge(st_drop_geometry(soil), by = "ebint")
-lakes.waterchem <- merge(lakes, ion.alk, by = "ebint") %>% merge(st_drop_geometry(fennoscandia), by = "ebint") %>% merge(st_drop_geometry(soil), by = "ebint")
+```{r explore-fCO2-results}
+ae <- readRDS("ae.rds") %>% as.data.frame()
 
-names(waterchem)[which(names(waterchem) == "area.x")] <- "area"
-names(waterchem)[which(names(waterchem) == "area.y")] <- "lake.area"
-
-saveRDS(waterchem,"waterchem.rds")
-saveRDS(lakes.waterchem,"lakes.waterchem.rds")
+ggplot(ae)+geom_point(aes(x=pH, y = fCO2, col = TA))+scale_color_viridis_c()+theme_minimal()
+ggplot(ae)+geom_point(aes(x=TA, y = fCO2, col = pH))+scale_color_viridis_c()+theme_minimal()
 
 ```
 
-## Convenience df
 
-```{r log10-transform, eval = T}
+## Catchment characteristics
+
+### Soil 
+
+https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html
+
+
+```{r extract-soil-depth, eval = F}
+
+soil <- raster::raster("DAAC/average_soil_and_sedimentary-deposit_thickness.tif")
+catchment.poly <- readRDS("catchment.poly.rds")
+soil.df <- raster::extract(soil, catchment.poly, sp = F, df = T, na.rm = T, fun = mean, method = "simple")
+                           
+names(soil.df) <- c("ebint","soil")
+soil.df$soil[which(soil.df$soil > 50)] <- 50 # maximum value
+saveRDS(soil.df, "soil.df.rds")
+```
+
+### NDVI
+
+NDVI values are extracted from the GIMMS NDVI3g dataset [@NCAR2018], stored on http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/, in the "ecocast" dataset and accessed via the "gimms" package [@Detsch2021] on Rstudio. 
+
+Data is taken bi-monthly [@Tucker2005]. Raster layers of all slices are downloaded using the downloadGimms function, then monthly composites are calculated using the monthlyComposites function. The maximum NDVI value is taken for each pixel. Afterwards the NDVI values for each catchment polygon are extracted using the extract function from the raster package [@Hijmans2018]. 
+
+The values stored in the ecocast dataset are composed of the NDVI value and a flag value indicating the goodness of the data. All the NDVI values extracted, corresponding to the values for the studied catchments, had a flag of 1, indicating a good value. The NDVI value was retrieved from the stored value using the formula $floor(ndvi3g/10)/1000$ [@Detsch2021], and then the mean of the 3 summer values (June, July and August) was computed for each catchment. 
+
+
+```{r summer-ndvi, eval = F}
+
+# Download Gimms NDVI
+
+ndvi.1994 <- downloadGimms(x= 1994,y=1994,dsn = "NDVI")
+ndvi.max <- monthlyComposite(ndvi.1994,monthlyIndices(ndvi.1994))
+saveRDS(ndvi.max,"ndvi.max.rds")
+
+# Load data
+
+ndvi.max <- readRDS("ndvi.max.rds")
+catchment.poly <- readRDS("catchment.poly.Rdata")
+
+# Computes summer mean
+summer.mean <- raster::stack(ndvi.max[[6]],ndvi.max[[7]],ndvi.max[[8]]) %>% mean()
+
+# Crops raster to Scandinavia
+summer.scandinavia <- raster::crop(summer.mean,c(0,35,55,73))
+
+# Re-introduces NA
+summer.scan <- reclassify(summer.scandinavia, cbind(-Inf, 0, NA), right=FALSE)
+saveRDS(summer.scan, "summer.scan.rds")
+
+# Extract NDVI for each catchment
+summer.ndvi <- raster::extract(summer.scan,catchment.poly, fun = mean, df = T, sp = T)
+names(summer.ndvi) <- c("ebint","ndvi")
+summer.ndvi$ndvi.value <- floor(summer.ndvi$ndvi/10)/1000
+summer.ndvi$flag.value <- summer.ndvi$ndvi - floor(summer.ndvi$ndvi/10)*10 + 1 
+
+# Saves NDVI file
+saveRDS(summer.ndvi, "summer.ndvi.Rdata")
+write.csv(summer.ndvi,"summer.ndvi.csv")
+```
+
+### Runoff
+
+The runoff data was downloaded from the CORDEX database [@CORDEXvERC]. The data is available at https://esg-dn1.nsc.liu.se/projects/esgf-liu/.
+
+The names of the variables in the CORDEX project follow the CF Metadata convention: http://cfconventions.org/. We used here the "mrros" variable, for surface runuff, in kg/m2/s. 
+
+According to Euro-CORDEX guidelines, we used the mean runoff over 30 years. We chose the interval 1970 - 2000 to match the temperature and precipitation data provided by WorldClim (p11 on EURO-CORDEX guidelines https://www.euro-cordex.net/imperia/md/content/csc/cordex/guidance_for_euro-cordex_climate_projections_data_use__2021-02_1_.pdf). This time period matches .
+
+```{r runoff, eval = F}
+runoff.raster <- "CORDEX/mrros_Lmon_CNRM-CM6-1-HR_historical_r1i1p1f2_gr_185001-201412.nc"
+runoff.nc <- nc_open(runoff.raster)
+
+runoff.stack <- raster::stack(runoff.raster, bands = c(1441:1812)) # Correspond to January 1970 to December 2000
+runoff.mean <- runoff.stack %>% mean() 
+
+catchment.poly <- readRDS("catchment.poly.Rdata")
+runoff.fennoscandia <- raster::extract(runoff.mean, catchment.poly, fun = mean, df = T, sp = T, na.rm = T)
+names(runoff.fennoscandia) <- c("ebint","runoff")
+saveRDS(runoff.fennoscandia,"CORDEX/runoff.fennoscandia.rds")
+```
+
+### Temperature, precipitation and slope
+
+Temperature and precipitation are downloaded from the database Worldclim [@WorldClim]. We use the average of the time interval 1970-2000, stored in the "Bioclimatic variable" dataset, available for download at: https://www.worldclim.org/data/worldclim21.html. We used the highest available resolution (30 seconds). Temperature is the mean annual temperature from 1970 to 2000 in °C, or "bio1" in the Bioclimatic dataset. The original data is in C*10 so the data is divided by 10 before use. Precipitation is the mean annual precipitation in mm or bio12 in the Bioclimatic dataset.  
+
+```{r temp-prec, eval = F}
+bio.fennoscandia <- raster::getData(name = "worldclim", var = "bio", res = 2.5)
+
+annual.temp <- raster::extract(bio.fennoscandia[[1]], catchment.poly, fun = mean, df = T, sp = T)
+saveRDS(annual.temp,"annual.temp.Rdata")
+
+annual.prec <- raster::extract(bio.fennoscandia$bio12, catchment.poly, fun = mean, df = T, sp = T)
+saveRDS(annual.prec,"annual.prec.Rdata")
+```
+
+The altitude data was accessed through the "getData" function, and comes from the NASA digital elevation model (SRTM 90 m). The slope was then computed using the "terrain" function from the raster package.  
+
+```{r altitude-slope, eval = F}
+alt.nor <- getData("alt",country = "NOR", mask = T)
+alt.swe <- getData("alt",country = "SWE", mask = T)
+alt.fin <- getData("alt",country = "FIN", mask = T)
+
+alt.list <- list(alt.nor,alt.swe,alt.fin)
+alt <- do.call(raster::merge,alt.list)
+
+alt.fennoscandia <- extract(alt,remote.set[,c("longitude","latitude")])
+alt.df <- data.frame(ebint = remote.set$ebint, alt = alt.fennoscandia )
+saveRDS(alt.df, "alt.df.Rdata")
+
+slope.nor <- terrain(alt.nor, unit = "degrees")
+slope.swe <- terrain(alt.swe, unit = "degrees")
+slope.fin <- terrain(alt.fin, unit = "degrees")
+slope.list <- list(slope.nor,slope.swe,slope.fin)
+slope <- do.call(raster::merge,slope.list)
+
+slope.nona <- reclassify(slope,cbind(NA,100), right = NA) #reintroduces NA
+
+slope.fennoscandia <- raster::extract(slope,catchment.poly, sp = T, df = T, fun = mean)
+saveRDS(slope.df, "slope.df.Rdata")
+```
+
+### Land cover
+
+The Land Cover data was downloaded from https://land.copernicus.eu/pan-european/corine-land-cover/lcc-2000-2006. The previous version (1995-2000) excludes Norway so the 2000 version was preferred. 
+
+
+The land cover data was downloaded as a raster (.tiff file), which included the legend recording the code for each land use. The raster and legend were assembled in QGIS before being imported as a shapefile in R. The codes (corresponding to the line in the extracted dataframe) of the categories of interest were:
+
+Arable land:
+
+* 12: non-irrigated arable land
+* 16: fruit trees and berries plantations
+* 18: pastures
+* 19: annual crops associated with permanent crops
+* 20: Complex cultivation patterns
+
+Bogs:
+
+* 36: peat bogs
+* 35: inland marshes, excluded because all zeros in the studied area.
+
+Forest:
+
+* 23: Broad-leaved forest
+* 24: Coniferous forest
+* 25: Mixed forest
+
+Bare:
+
+* 31: Bare rocks
+* 32: Sparsely vegetated areas
+* 33: Burnt areas
+
+
+```{r extract-land-cover, eval = F}
+corine <- raster::raster("Corine_Land_Cover/U2006_CLC2000_V2020_20u1.tif")
+clc.remote <- raster::extract(corine,catchment.poly.corine)
+
+saveRDS(clc.remote,"clc.remote.Rdata")
+```
+
+The proportion of each land-cover category was computed for each catchment. 
+
+```{r corine-tab-prop, eval = F}
+clc.remote <- readRDS("clc.remote.Rdata")
+clc.tab <- sapply(clc.remote, function(x) tabulate(x,45))
+clc.tab.area <- clc.tab*prod(res(corine))
+catchment.area <- colSums(clc.tab.area)
+clc.tab.prop <- sweep(clc.tab.area,2,catchment.area, FUN = "/")
+names(clc.tab.prop) <- catchment.poly.corine$ebint
+saveRDS(clc.tab.prop,"clc.tab.prop.Rdata")
+```
+
+Then, a dataframe for the category of interest (bogs, arable land, forest, bare land) was created and saved.
+
+```{r corine-select-categories, eval = F}
+clc.tab.prop <- readRDS("clc.tab.prop.Rdata") %>% as.data.frame()
+
+bogs <- clc.tab.prop[36,] %>% t() %>% as.data.frame() %>% setNames("bogs") %>% tibble::rownames_to_column(var = "ebint")
+saveRDS(bogs,"bogs.rds")
+arable <- colSums(clc.tab.prop[c(12,16,18,19,20),]) %>% as.data.frame() %>% setNames("arable") %>% tibble::rownames_to_column(var = "ebint")
+saveRDS(arable,"arable.rds")
+forest <- colSums(clc.tab.prop[c(23,24,25),]) %>% as.data.frame() %>% setNames("forest") %>% tibble::rownames_to_column(var = "ebint")
+saveRDS(forest,"forest.rds")
+bare <- colSums(clc.tab.prop[c(31,32,33),]) %>% as.data.frame() %>% setNames("bare") %>% tibble::rownames_to_column(var = "ebint")
+saveRDS(bare,"bare.rds")
+```
+
+### Nitrogen and sulfur deposition
+
+The nitrogen and sulfur deposition data were extracted from the EMEP database [@EMEP]. The data from 2000 was used as it is the first model available.
+
+N-deposition (NOx and NH3) is the sum of: 
+
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
+* Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2 
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
+* Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
+
+```{r extract-Ndep, eval = F}
+EMEP_file <- "EMEP/EMEP01_rv4.42_year.2000met_2000emis_rep2021.nc"
+catchment_poly <- readRDS("catchment.poly.Rdata")
+
+woxn <- raster(EMEP_file, varname = "WDEP_OXN") 
+doxn <- raster(EMEP_file, varname = "DDEP_OXN_m2Grid")
+wrdn <- raster(EMEP_file, varname = "WDEP_RDN")
+drdn <- raster(EMEP_file, varname = "DDEP_RDN_m2Grid")
+
+woxn_df <- extract(woxn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean) 
+names(woxn_df) <- c("ebint","woxn")
+doxn_df <- extract(doxn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(doxn_df) <- c("ebint","doxn")
+wrdn_df <- extract(wrdn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(wrdn_df) <- c("ebint","wrdn")
+drdn_df <- extract(drdn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(drdn_df) <- c("ebint","drdn")
+
+ndep.df <- merge(woxn_df,doxn_df, by = "ebint") %>% merge(wrdn_df, by = "ebint") %>% merge(drdn_df, by = "ebint")
+ndep.df$tndep <- rowSums(ndep.df@data[,c(2:5)])
+
+saveRDS(ndep.df,"ndep.df.Rdata")
+```
+
+The S-deposition is composed of the sum of:
+
+* Dry deposition of oxidized sulphur per m2 grid DDEP_SOX_m2Grid, in mg/m2
+* Wet deposition of oxidized sulphur WDEP_SOX, in mg/m2
+
+```{r extract-Sdep, eval = F}
+library(ncdf4)
+EMEP_file <- "EMEP/EMEP01_rv4.42_year.2000met_2000emis_rep2021.nc"
+catchment_poly <- readRDS("catchment.poly.Rdata")
+
+wsox <- raster(EMEP_file, varname = "WDEP_SOX") 
+dsox <- raster(EMEP_file, varname = "DDEP_SOX_m2Grid")
+
+wsox_df <- extract(wsox,catchment_poly, sp = T, df = T, na.rm = T, fun = mean) 
+names(wsox_df) <- c("ebint","wsox")
+
+dsox_df <- extract(dsox,catchment_poly, sp = T, df = T, na.rm = T, fun = mean)
+names(dsox_df) <- c("ebint","dsox")
+
+sdep.df <- merge(wsox_df,dsox_df, by = "ebint")
+sdep.df$tsdep <- rowSums(sdep.df@data[,c(2:3)])
+
+saveRDS(sdep.df,"sdep.df.rds")
+```
+
+
+### Merge dfs
+
+```{r gather-data, eval = F}
+ion.alk <- readRDS("ion.alk.rds")
+
+lakes <- readRDS("lakes.rds")
+#soil.df <- readRDS("soil.df.rds")
+
+summer.ndvi <- readRDS("summer.ndvi.Rdata") %>% st_as_sf() %>% st_drop_geometry()
+runoff.fennoscandia <- readRDS("runoff.fennoscandia.rds") %>% st_as_sf() %>% st_drop_geometry()
+
+annual.temp <- readRDS("annual.temp.Rdata") %>% st_as_sf() %>% st_drop_geometry()
+names(annual.temp) <- c("ebint","temp")
+
+annual.prec <- readRDS("annual.prec.Rdata")  %>% st_as_sf() %>% st_drop_geometry()
+names(annual.prec) <- c("ebint","prec")
+
+slope.fennoscandia <- readRDS("slope.fennoscandia.Rdata")  %>% st_as_sf() %>% st_drop_geometry()
+names(slope.fennoscandia) <- c("ebint","slope")
+
+alt.df <- readRDS("alt.df.Rdata")
+
+bogs <- readRDS("bogs.rds")
+arable <- readRDS("arable.rds")
+forest <- readRDS("forest.rds")
+bare <- readRDS("bare.rds")
+
+#ndep <- readRDS("ndep.df.Rdata") %>% st_as_sf() %>% st_drop_geometry()
+#sdep <- readRDS("sdep.df.rds") %>% st_as_sf() %>% st_drop_geometry()
+
+total <- ion.alk %>%
+  merge(lakes, by = "ebint") %>% 
+  merge(summer.ndvi, by = "ebint") %>% 
+  merge(runoff.fennoscandia,by = "ebint") %>% 
+  merge(annual.temp, by ="ebint") %>% 
+  merge(annual.prec, by = "ebint") %>%
+  merge(slope.fennoscandia, by = "ebint") %>%
+  merge(alt.df, by = "ebint") %>%
+  merge(bogs, by = "ebint") %>%
+  merge(arable, by = "ebint")%>%
+  merge(forest,by = "ebint") %>%
+  merge(bare, by = "ebint")# %>%
+#  merge(ndep, by = "ebint") %>% 
+#  merge(sdep, by = "ebint")
+
+total$uncertain <- ifelse(total$dist_closest_ebint/total$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
+total$uncertain[which(is.na(total$uncertain)==TRUE)] <- FALSE
+
+saveRDS(total,file = "total.rds")
+total <- readRDS("total.rds")
+
+total_filter <- total %>% filter(toc >= 0)
+total_filter <- total_filter %>% filter(tp > 0)
+total_filter <- total_filter %>% filter(uncertain == FALSE)
+
+# fennoscandia_raw <- fennoscandia_raw %>% filter(runoff > 0)
+# fennoscandia_raw <- fennoscandia_raw %>% filter(ndvi.value > 0)
+# fennoscandia_raw <- fennoscandia_raw %>% filter(is.na(slope) == F)
+# fennoscandia_raw <- fennoscandia_raw %>% filter(alt != 0)
+# fennoscandia_raw <- fennoscandia_raw %>% filter(uncertain == FALSE)
+# fennoscandia_raw$uncertain <- NULL
+
+saveRDS(total_filter, file = "waterchem.rds")
+
+```
+
+
+
+
+```{r selected-df, eval = F}
 
 waterchem <- readRDS("waterchem.rds")
 
-wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt", "soil","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
+wtc <- dplyr::select(total_filter,c("ebint","fCO2","area","perimtot","slope","alt", "latitude","longitude","ndvi.value","arable","bogs","forest","bare","runoff","temp_c","temp","prec","ph","alk","cond","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
 
-wtc$is <- wtc %>% dplyr::select(c("ca","mg","na","k","so4","no3","nh4","cl","f")) %>% rowSums()
-wtc$dev.sat <- abs(wtc$fCO2 - fCO2.1995)
-# wtc$sat <- NA
-# wtc$sat[which(wtc$fCO2 > fCO2.1995)] <- "over"
-# wtc$sat[which(wtc$fCO2 > fCO2.1995)] <- "under"
+wtc$cp <- wtc$toc / wtc$tp
+wtc$cn <- wtc$toc / wtc$tn
 
+wtc$sat <- NA
+wtc$sat[which(wtc$fCO2 < fCO2.1995)] <- -1 # chose -1 instead of 0 to make it easier to interpret the estimates.  
+wtc$sat[which(wtc$fCO2 > fCO2.1995)] <- 1
 
-logwtc <- filter(wtc, nh4 != 0 & no3 != 0 )
+saveRDS(wtc,"wtc.rds")
 
-logwtc$log10fCO2 <- logwtc$fCO2 %>% log10()
-logwtc$log10Slope <- logwtc$Slope %>% log10()
-logwtc$log10soil <- logwtc$soil %>% log10()
-logwtc$log10Runoff <- logwtc$Runoff %>% log10()
-logwtc$log10Precip <- logwtc$Precip %>% log10()
-logwtc$log10ca <- logwtc$ca %>% log10()
-logwtc$log10so4 <- logwtc$so4 %>% log10()
-logwtc$log10no3 <- logwtc$no3 %>% log10()
-logwtc$log10nh4 <- logwtc$nh4 %>% log10()
-logwtc$log10tn <- logwtc$tn %>% log10()
-logwtc$log10tp <- logwtc$tp %>% log10()
-logwtc$log10toc <- logwtc$toc %>% log10()
-
-oversat <- subset(wtc,fCO2 >= fCO2.1995)
-undersat <- subset(wtc,fCO2 < fCO2.1995)
 ```
 
 
 ```{r match-catchment, eval = F}
-library(colorspace)
-
-waterchem <- readRDS("waterchem.rds")
-
+catchments <- readRDS("catchments.rds")
+wtc <- readRDS("wtc.rds")
+wtc.sf <- merge(catchments, wtc, by = "ebint")
+saveRDS(wtc.sf, "wtc.sf.rds")
 
 p1 <- ggplot(waterchem)+geom_point(aes(x=toc, y = TOC, col = nation.x))
 ggsave("TOC_compare.png", p1)
@@ -248,13 +533,29 @@ ggplot()+
 
 ## Corplot and PCA
 
-```{r plots, fig.dim = c(15,15)}
-png()
-corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","lake.area","perimtot","Slope","Alt","soil","latitude.x","longitude.x","toc"))), tl.cex = 1.5, number.cex = 1.5)
-corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","toc"))), tl.cex = 1.5, number.cex = 1.5)
-corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","is","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc"))), tl.cex = 1.5, number.cex = 1.5)
+```{r compare-over-under, fig.dim = c(5,10)}
+library(reshape2)
+wtc <- readRDS("wtc.rds")
+wtc.long <- melt(wtc,id.vars= c("ebint","sat"))
+
+wtc.long$sat[which(wtc.long$sat == -1)] <- "under"
+wtc.long$sat[which(wtc.long$sat == 1)] <- "over"
+
+ggplot(filter(wtc.long, variable %in% c("alk","cond","toc","tp","tn","area")))+geom_boxplot(aes(y = log10(value), fill = variable))+
+  facet_grid(rows=vars(variable),cols=vars(sat), scales = "free_y")+
+  scale_fill_viridis_d(end = 0.8)+
+  theme_minimal()
+
 ```
-```{r pca-total, fig.dim = c(12,10)}
+
+```{r plots, fig.dim = c(15,15), cache.extra=file.mtime("wtc.rds")}
+
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","perimtot","slope","alt","latitude","longitude","toc")), use = "pairwise.complete"), tl.cex = 1.5, number.cex = 1.5)
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ndvi.value","arable","bogs","forest","bare","runoff","temp","prec","toc")), use = "pairwise.complete"), tl.cex = 1.5, number.cex = 1.5)
+corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","cond","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc","cn","cp"))), tl.cex = 1.5, number.cex = 1.5)
+```
+
+```{r pca-total, fig.dim = c(12,10), cache = T, cache.extra=file.mtime("wtc.rds")}
 
 library(viridisLite)
 library(factoextra)
@@ -283,41 +584,42 @@ plot.pca.23
 
 # fCO2 modelled with TOC
 
+```{r over-under-df}
+oversat <- dplyr::filter(wtc, sat == 1)
+undersat <- dplyr::filter(wtc, sat == -1)
+ 
+``` 
+
 ## fCO2 modelled with TOC, LM 
 
 Fit fCO2 with only TOC as predictor:
 
-```{r fCO2-TOC}
+```{r fCO2-TOC, cache = T, cache.extra=file.mtime("wtc.rds")}
 
 lm1 <- lm(fCO2~toc, data = wtc)
 summary(lm1)
 
 wtc$fplm <- predict(lm1, type = "response")
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fplm), col = "Pred"))+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(lm1)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 
-extractAIC(lm1)
-
-```
-
-
-
-```{r fCO2-TOC-log}
-
-lm1b <- lm(log10fCO2~log10toc, data = logwtc)
+lm1b <- lm(log10(fCO2)~log10(toc), data = wtc)
 summary(lm1b)
 
 
-logwtc$fplm <- predict(lm1b, type = "response")
-ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fplm, col = "Pred"))+
+wtc$fplmlog <- predict(lm1b, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fplmlog, col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(lm1b)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
-```{r test-double}
+```{r test-double, cache = T, cache.extra=file.mtime("wtc.rds")}
 lmover <- lm(fCO2~toc, data = oversat)
 lmunder <- lm(fCO2~toc, data = undersat)
+
 summary(lmover)
 summary(lmunder)
 
@@ -327,35 +629,40 @@ undersat$pred <- predict(lmunder, type = "response") %>% log10()
 ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"))+
   geom_point(data = oversat, aes(x = log10(toc), y = pred, col = "over"))+
   geom_point(data = undersat, aes(x = log10(toc), y = pred, col = "under"))+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   scale_color_manual(values = c("lightblue","black","darkgray"))+
   theme_minimal()
 
 ```
+
 ## fCO2-TOC with GAM and Gamma distribution 
 
-```{r gam-fco2-toc}
+```{r gam-fco2-toc, cache = T, cache.extra=file.mtime("wtc.rds")}
 g1 <- mgcv::gam(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
 summary(g1)
 
-wtc$fpg <- predict(g1,type = "reponse")
+wtc$fpg <- predict(g1,type = "response")
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpg), col = "Pred"))+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(g1)[2]), sep = "="), x = 0, y = 3.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 
-g1b <- mgcv::gam(log10fCO2~log10toc, data = logwtc, family = Gamma(link = "identity"), method = "REML")
+g1b <- mgcv::gam(log10(fCO2)~log10(toc), data = wtc, family = Gamma(link = "identity"), method = "REML")
 summary(g1b)
 
-logwtc$fpg <- predict(g1b, type = "response")
-ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpg, col = "Pred"))+
+wtc$fpglog <- predict(g1b, type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fpglog, col = "Pred"))+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(g1b)[2]), sep = "="), x = 0, y = 3.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 
 g1c <- mgcv::gam(fCO2~toc, data = wtc, family = Gamma(link = "log"))
 summary(g1c)
 
-wtc$fpgc <- predict(g1c,type = "reponse")
-ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fpgc, col = "Pred"))+
+wtc$fpgc <- predict(g1c,type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpgc), col = "Pred"))+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(g1c)[2]), sep = "="), x = 0, y = 3.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
@@ -364,28 +671,25 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_p
 ## GAM with Tweedie
 
 
-```{r fCO2-TOC-tweedie}
+```{r fCO2-TOC-tweedie, cache = T, cache.extra=file.mtime("wtc.rds")}
 t1 <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss(link = list("identity","identity","identity")))
 summary(t1)
 
 wtc$fpt <- predict(t1, type = "response")[,1]
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpt), col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(t1)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
-```
 
-```{r logfCO2-logTOC-tweedie}
-
-t1b <- gam(list(log10fCO2~log10toc,~1, ~1), data = logwtc, family = twlss(link = list("identity","identity","identity")))
+t1b <- gam(list(log10(fCO2)~log10(toc),~1, ~1), data = wtc, family = twlss(link = list("identity","identity","identity")))
 summary(t1b)
 
-logwtc$fpt <- predict(t1b, type = "response")[,1]
-ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpt, col = "Pred"))+
+wtc$fptlog <- predict(t1b, type = "response")[,1]
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fptlog, col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(t1b)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
-```
 
-```{r fCO2-lTOC-tweedie-loglink}
 
 t1c <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
 summary(t1c)
@@ -393,14 +697,15 @@ summary(t1c)
  
 wtc$fptc <- predict(t1c, type = "response")[,1]
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fptc), col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(t1c)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
-```{r test-double-tweedie}
+```{r test-double-tweedie, cache = T, cache.extra=file.mtime("wtc.rds")}
 
-twover <- gam(list(fCO2~toc,~1,~1), data = oversat,family = twlss(link = list("identity","identity","identity")))
-twunder <- gam(list(fCO2~toc,~1,~1), data = undersat,family = twlss(link = list("identity","identity","identity")))
+twover <- gam(list(fCO2~toc,~1,~1), data = oversat,family = twlss(link = list("log","identity","identity")))
+twunder <- gam(list(fCO2~toc,~1,~1), data = undersat,family = twlss(link = list("log","identity","identity")))
 summary(twover)
 summary(twunder)
 
@@ -411,6 +716,7 @@ ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"
   geom_point(data = oversat, aes(x = log10(toc), y = pred_tw, col = "over"))+
   geom_point(data = undersat, aes(x = log10(toc), y = pred_tw, col = "under"))+
   scale_color_manual(values = c("lightblue","black","darkgray"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   theme_minimal()
 
 ```
@@ -419,39 +725,56 @@ ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"
 
 Fit fCO2 with only TOC as predictor:
 
-```{r fCO2-TOC-glm}
+```{r fCO2-TOC-glm, cache = T, cache.extra=file.mtime("wtc.rds")}
 glm1 <- glm(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
 summary(glm1)
 
 wtc$fpg <- predict(glm1, type = "response")
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = log10(fpg), col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(glm1)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
-```
 
-```{r logfCO2-logTOC-glm}
-glm1b <- glm(log10fCO2~log10toc, data = logwtc, family = Gamma(link = "identity"))
+glm1b <- glm(log10(fCO2)~log10(toc), data = wtc, family = Gamma(link = "identity"))
 summary(glm1b)
 
-logwtc$fpg <- predict(glm1b,  type = "response")
-ggplot(logwtc,aes(x=log10toc))+geom_point(aes(y=log10fCO2, col = "Obs"))+geom_point(aes(y = fpg, col = "Pred"))+
+wtc$fpglog <- predict(glm1b,  type = "response")
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_point(aes(y = fpglog, col = "Pred"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(glm1b)[2]), sep = "="), x = 0, y = 3.5)+
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 
-```
 
-```{r glm}
 glm1c <- glm(fCO2~toc, data = wtc, family = Gamma(link = "log"))
 summary(glm1c)
 
 wtc$fpgc <- predict(glm1c, type = "response")
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
   geom_point(aes(y = log10(fpgc), col = "Pred"))+scale_color_manual(values = c("lightblue","black"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
   annotate(geom = "text",label = paste("AIC",round(extractAIC(glm1c)[2]), sep = "="), x = 0, y = 3.5)+
   theme_minimal()
 
 ```
 
+```{r test-double-glm, cache = T, cache.extra=file.mtime("wtc.rds")}
+
+glmover <- glm(fCO2~toc, data = oversat, family = Gamma(link = "identity"))
+glmunder <- glm(fCO2~toc, data = undersat, family = Gamma(link = "identity"))
+summary(glmover)
+summary(glmunder)
+
+oversat$pred_glm <- predict(glmover, type = "response") %>% log10()
+undersat$pred_glm <- predict(glmunder, type = "response") %>% log10()
+
+ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"))+
+  geom_point(data = oversat, aes(x = log10(toc), y = pred_glm, col = "over"))+
+  geom_point(data = undersat, aes(x = log10(toc), y = pred_glm, col = "under"))+
+  scale_color_manual(values = c("lightblue","black","darkgray"))+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
+  theme_minimal()
+
+```
 
 # Test on CBA data
 
@@ -474,14 +797,14 @@ missing.bdg <- id.niva %>% filter(!STATION_ID %in% bdg.niva$STATION_ID)
 saveRDS(bdg.niva, "bdg.niva.rds")
 ```
 
-```{r load-73-lakes}
+```{r load-73-lakes, eval = F}
 bdg.niva <- readRDS("bdg.niva.rds")
 
 cba <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 
 cba.total <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 
-cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","latitude","longitude","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","Ca","SO4","NO3","TOTP","TN","TOC","T","geometry"))
+cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","latitude","longitude","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","EC","Ca","Mg","K","Na","Cl","F","SO4","NO3","TOTP","TN","TOC","T","geometry"))
 cba.sel <- cba.sel %>% filter(!is.na(Alkalinity))
 
 dim(cba.sel)
@@ -494,27 +817,21 @@ cba.sel[,-which(names(cba.sel) == "geometry")] <- apply(cba.sel[,-which(names(cb
 cba.sel$area <- cba.sel$basin_area_km2 * 10^6
 cba.sel$lake.area <- cba.sel$lake_area_km2 * 10^6
 cba.sel$ca <- cba.sel$Ca / 40.078 * 2 * 1000
+cba.sel$mg <- cba.sel$Mg / 23.305 * 2 * 1000
+cba.sel$k <- cba.sel$K / 39.098 * 1000
+cba.sel$na <- cba.sel$Na / 29.990 * 1000
+cba.sel$cl <- cba.sel$Cl / 35.45 * 1000
+cba.sel$f <- cba.sel$F / 18.998 * 1000
 cba.sel$so4 <- cba.sel$SO4/(32.06+15.999*4) * 2 * 1000 
 cba.sel$no3 <- cba.sel$NO3/(14.007+15.999*3) * 2 * 1000
 cba.sel$tp <- cba.sel$TOTP
 cba.sel$tn <- cba.sel$TN * 1000
 cba.sel$toc <- cba.sel$TOC
 cba.sel$alk <- cba.sel$Alkalinity * 10^3
+cba.sel$cond <- cba.sel$EC
 
-cba.sel$log10Runoff <- cba.sel$era_runoff_1981_2010 %>% log10()
-cba.sel$Forest <- cba.sel$forest
-cba.sel$Bog <- cba.sel$peat
-cba.sel$Arable <- cba.sel$agriculture
-cba.sel$log10Precip <- cba.sel$era_prec_1981_2010 %>% log10()
-cba.sel$log10ca <-cba.sel$Ca %>% as.numeric() %>% log10()
-cba.sel$log10so4 <- cba.sel$so4 %>% log10()
-cba.sel$log10no3 <- cba.sel$no3 %>% log10()
-cba.sel$log10tp <- cba.sel$TOTP %>% log10()
-cba.sel$log10tn <- cba.sel$TN %>% log10()
-cba.sel$log10toc <- cba.sel$TOC %>% log10()
-cba.sel$Temp <- cba.sel$T
+cba.sel$temp <- cba.sel$T
 cba.sel$ph <- cba.sel$pH
-cba.sel$TNdep <- cba.sel$nilu_ndep_2012_2016
 
 saveRDS(cba.sel,"cba.sel.rds")
 
@@ -560,7 +877,8 @@ write.csv(summer.ndvi.2015,"NDVI/100lakes.summer.ndvi.2015.csv")
 fCO2 in 2019: 410 ppm 
 https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
 
-```{r model-fCO2-CBA}
+```{r model-fCO2-CBA, cache = T, cache.extra=file.mtime("cba.sel.rds")}
+cba.sel <- readRDS("cba.sel.rds")
 fCO2.2019 <- 410.5 
 temp <- cba.sel$T
 TA <- cba.sel$alk / 1000000
@@ -568,14 +886,34 @@ pH <- cba.sel$pH
 CO2 <- cba.sel$CO2 * 10^(-6)
 ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019 * 10^6)
 cba.sel$fCO2 <- ae3$fCO2 *10^6
+cba.sel$SumCO2 <- ae3$SumCO2 * 10^6 # conversion to uM
+cba.sel$CO2_ae <- ae3$CO2 * 10^6 # conversion to uM
 
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=SumCO2))+theme_minimal()
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=CO2_ae))+theme_minimal()
+
+
+ggplot(cba.sel)+geom_point(aes(x=alk, y = fCO2))+theme_minimal()
+ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2))+theme_minimal()
+
+ggplot(filter(cba.sel, ph > 5))+geom_point(aes(x=CO2,y = fCO2, col = log10(alk)))+
+  scale_color_viridis_c()+theme_minimal()
+
+saveRDS(cba.sel, "cba.fco2.rds")
 ```
 
+
+
 ```{r catchment-cba, eval = F}
+cba.sel <- readRDS("cba.fCO2.rds")
 summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
 cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
+saveRDS(cba.sf, "cba.sf.rds")
+```
 
-library(colorspace)
+
+```{r plot-cba, eval = F}
+cba.sf <- readRDS("cba.sf.rds")
 
 g1 <- ggplot(cba.sf)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
     scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
@@ -609,12 +947,11 @@ ggsave("CO2_oversaturation_cba.png",t1, width = 12, height = 8, unit = "cm", dpi
 
 Selected  models: lm1, g1b (on log-transformed data), t1, glm1
 
-```{r test-predict-fCO2-toc}
+```{r test-predict-fCO2-toc, eval = T, cache = T, cache.extra=file.mtime("cba.sf.rds")}
+cba.sf <- readRDS("cba.sf.rds")
 
 models <- c("GAM on log transformed data", "GLM with id link","GLM with log link","LM", "Tweedie with id link", "Tweedie with log link")
 
-summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
-cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
 cba.sf$log10fCO2lm <- predict(lm1,newdata = cba.sf, type = "response") %>% log10()
 cba.sf$log10fCO2gam <- predict(g1b, newdata = cba.sf, type = "response")
 cba.sf$log10fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1] %>% log10()
@@ -637,7 +974,7 @@ ggplot(cba.sf, aes(x=log10(fCO2)))+
   labs(y = "Predicted log10fCO2", x = "Aquaenv log10fCO2")+
   theme_minimal()
 
-ggplot(cba.sf, aes(x=log10toc))+
+ggplot(cba.sf, aes(x=log10(toc)))+
   geom_point(aes(y = log10(fCO2)), col = "gray")+
   geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
   geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
@@ -675,32 +1012,192 @@ GAM: linear pred with intercept. The model does not have the "asymptot" at fCO2 
 
 LM = GLM id link = Tweedie id link. Both models are similar but underestimate fCO2 for high fCO2
 
-GLM log link = Tweedie log link. Seem to work best. 
+GLM log link = Tweedie log link. 
+
+From AIC: GAM/GLM with id link slightly better, but the best is LM. 
 
 
 
 # Adding other variables
 
-fCO2 
+Goal: predict fCO2 in lakes // part of TIC pool. 
+
+Processes involved: 
+
+`r knitr::include_graphics(c("C-cycle.png","C-cycle-legend.png"))`
+
+@Maberly2012 CO2 imported is from SOC respiration
+
+@Allesson2022 conductivity is linked to groundwater influx -> TIC import
+ 
+ 
 
 Choosen variables: 
 
-* NDVI as proxy for soil TOC
-* Ca as proxy for soil TIC
-* Runoff as proxy for transport
-* TOC (freshwater OC )
-* C:N as proxy for bacterioplankton respiration
-* tp as proxy for photosynthesis?
-* photomineralization is neglected (Lina's estimation of contribution to CO2 production = 3%)
-* sedimentation : ???
 
-```{r gam-tweedie-toc-NDVI}
-waterchem <- readRDS("waterchem.rds")
-wtc <- dplyr::select(st_drop_geometry(waterchem),c("fCO2","area","lake.area","perimtot","Slope","Alt","soil","latitude.x","longitude.x","NDVI","Arable","Bog","Forest","Bare","Runoff","Temp","Precip","ph","alk","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
-wtc$is <- wtc %>% dplyr::select(c("ca","mg","na","k","so4","no3","nh4","cl","f")) %>% rowSums()
-wtc$cn <- wtc$toc / wtc$tn
-wtc$cp <- wtc$toc / wtc$tp
+* TOC is freshwater OC pool
 
+* Temp as proxy for bacterioplankton respiration. ** not significant in models below. I suggest a DOC quality proxy ex. C/N
+
+* IS ("ionic strenght"; though incomplete,as a "proxy" itself for conductivity) for TIC imported (we don't use Ca because Ca is too correlated to alkalinity, which we already use to compute fCO2)
+
+
+Neglected processes:
+
+* transport: we consider the water pool only
+
+* photomineralization is neglected (Lina's estimation of contribution to CO2 production = 3%) [@Allesson2021] 
+
+* sedimentation : ??? assume that sedimentation rate and respiration balance each other. 
+
+* methanogenesis: left out at the moment
+
+
+**IF THE INTERACTION BETWEEN TOC and SAT IS NOT INCLUDED, GLM OBTAINS THE SAME RESULTS AS LM (RESULTS FOR LM ARE THE SAME WITH AND WITHOUT INTERACTION)**
+
+
+```{r glm-variables-id, cache = T, cache.extra=file.mtime("wtc.rds")}
+wtc <- readRDS("wtc.rds")
+
+wtc$temp <- wtc$temp + 273
+
+glm2 <- glm(fCO2~toc+cond+temp+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+summary(glm2)
+
+glm3 <- glm(fCO2~toc*sat+cond+temp+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
+summary(glm3)
+
+glm4 <- glm(fCO2~toc+cond+temp+tp*sat, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
+summary(glm4)
+
+lm3 <- lm(fCO2~toc*sat+cond+temp+tp, data = wtc)
+summary(lm3)
+
+wtc$fp <- predict(glm2, type = "response")
+wtc$fp3 <- predict(glm3, type = "response")
+wtc$fp4 <- predict(glm4, type = "response")
+wtc$fplm3 <- predict(glm3, type = "response")
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
+  geom_point(aes(y = log10(fp), col = "GLM with toc+sat"), size = 2, alpha = 0.5)+
+   geom_point(aes(y = log10(fp3), col = "GLM with toc*sat"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp4), col = "GLM with tp*sat"), size = 1, alpha = 0.5)+
+  geom_point(aes(y = log10(fplm3), col = "LM with toc*sat"), size = 1, alpha = 0.5)+
+     scale_color_manual(values = c("orange","darkolivegreen","firebrick","lightblue","black")) +
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  theme_minimal()
+
+```
+
+
+
+```{r cba-test-glm, cache = T, cache.extra=file.mtime("wtc.rds")}
+cba.sf <- readRDS("cba.sf.rds")
+cba.sf$sat <- NA
+cba.sf$sat[which(cba.sf$fCO2 < fCO2.2019)] <- -1
+cba.sf$sat[which(cba.sf$fCO2 > fCO2.2019)] <- 1
+
+cba.sf$temp <- cba.sf$temp + 273
+
+cba.sf$fp3 <- predict(glm3,newdata= cba.sf, type = "response")
+cba.sf$fplm3 <- predict(lm3, newdata = cba.sf, type = "response")
+
+ggplot(cba.sf, aes(x=log10(toc)))+
+  geom_point(aes(y=log10(fCO2), col = "Obs"), size = 2)+
+  geom_point(aes(y=log10(fp3), col = "Pred GLM"), size = 2, alpha = 0.5)+
+  geom_point(aes(y=log10(fplm3), col = "Pred LM"), size = 2, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.2019), col = "darkblue")+             
+scale_color_manual(values = c("black","lightblue","firebrick","orange")) +
+    theme_minimal()
+
+```
+
+
+temp is not significant in above model. 
+
++ The only way to get the "cloud" of points for oversaturated lakes is to include pH in the model -> how to do without?
+
+```{r glm-variables-ind, cache = T, cache.extra=file.mtime("wtc.rds"), fig.dim = c(15,10)}
+wtc$temp <- wtc$temp + 273
+
+glm5 <- glm(fCO2~toc*sat+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+summary(glm5)
+
+glm6 <- glm(fCO2~toc*sat+cond, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+summary(glm6)
+
+glm7 <- glm(fCO2~toc*sat+temp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+summary(glm7)
+
+wtc$fp5 <- predict(glm5, type = "response")
+wtc$fp6 <- predict(glm6, type = "response")
+wtc$fp7 <- predict(glm7, type = "response")
+
+p3 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+is+Temp+tp"), size = 2, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue")) +
+  theme_minimal()
+
+p5 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp5), col = "GLM with tp"), size = 2, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+ scale_color_manual(values = c("darkolivegreen")) +
+  theme_minimal()
+
+p6 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp6), col = "GLM with is"), size = 1.5, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+     scale_color_manual(values = c("orange")) +
+  theme_minimal()
+
+p7 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp7), col = "GLM with Temp"), size = 1.5, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick")) +
+  theme_minimal()
+
+ggarrange(p3,p5,p6,p7,nrow=2, ncol = 2)
+```
+
+```{r test-ph}
+
+glm8 <- glm(fCO2~toc*sat+cond+tp+ph, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
+summary(glm8)
+
+wtc$fp8 <- predict(glm8, type = "response")
+
+p1 <-ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+is+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp8), col = "GLM with toc*sat+is+tp+ph"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm9 <- glm(fCO2~toc*tp+cond+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+summary(glm9)
+
+wtc$fp9 <- predict(glm9, type = "response")
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+is+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp9), col = "GLM with toc*tp+is+tp"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+```
+
+
+# Bibliographie
+
+`r knitr::knit_exit()`
+
+
+## Tests with tweedie
+
+```{r gam-tweedie-toc-NDVI, cache = T}
+wtc <-readRDS("wtc.rds")
 
 t2 <- gam(list(fCO2~toc+is+ca+NDVI+Runoff+cn+cp,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
 summary(t2)
@@ -708,42 +1205,58 @@ summary(t2)
 t2b <- gam(list(fCO2~s(toc)+s(is)+s(ca)+s(NDVI)+s(Runoff)+s(cn)+s(cp),~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
 summary(t2b)
 
+t2c <- gam(list(fCO2~s(toc)+s(is)+s(ca)+s(cn)+s(cp),~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
+summary(t2c)
+
 
 g2 <- glm(fCO2~toc+is+ca+NDVI+Runoff+cn+cp, data = wtc, family = Gamma(link = "log"))
 summary(g2)
 
+g2b <- glm(fCO2~toc+is+ca+NDVI+Runoff+cn+cp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1,1))
+summary(g2b)
+
+
 wtc$fpt <- predict(t2, type = "response")[,1]
 wtc$fptb <- predict(t2b, type = "response")[,1]
+wtc$fptc <- predict(t2c, type = "response")[,1]
 wtc$fpg <- predict(g2, type = "response")
-ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
-  geom_point(aes(y = log10(fpt), col = "Tweedie"), alpha = 0.5)+
-  geom_point(aes(y = log10(fpg), col = "GLM"), alpha = 0.5)+
-  annotate(geom = "text",label = paste("AIC tweedie ",round(extractAIC(t2)[2]), sep = "="), x = 0, y = 3.5)+
-    annotate(geom = "text",label = paste("AIC gamma ",round(extractAIC(g2)[2]), sep = "="), x = 0, y = 3.3)+
-  scale_color_manual(values = c("lightblue","black","orange"))+theme_minimal()
+wtc$fpgb <- predict(g2b, type = "response")
 
 ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
-  geom_point(aes(y = log10(fpt), col = "Tweedie"), alpha = 0.5)+
-  geom_point(aes(y = log10(fptb), col = " Smoothed Tweedie"), alpha = 0.5)+
+  geom_point(aes(y = log10(fpg), col = "GLM"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fpt), col = "Tweedie"), size = 1, alpha = 0.5)+
+    annotate(geom = "text",label = paste("AIC tweedie ",round(extractAIC(t2)[2]), sep = "="), x = 0, y = 3.5)+
+    annotate(geom = "text",label = paste("AIC gamma ",round(extractAIC(g2)[2]), sep = "="), x = 0, y = 3.3)+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
+  scale_color_manual(values = c("orange","black","lightblue"))+theme_minimal()
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
+  geom_point(aes(y = log10(fpt), col = "Tweedie"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fptb), col = " Smoothed Tweedie"), size = 1, alpha = 0.5)+
   annotate(geom = "text",label = paste("AIC tweedie ",round(extractAIC(t2)[2]), sep = "="), x = 0, y = 3.5)+
   annotate(geom = "text",label = paste("AIC s tweedie ",round(extractAIC(t2b)[2]), sep = "="), x = 0, y = 3.7)+
-  scale_color_manual(values = c("lightblue","black","firebrick"))+theme_minimal()
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
+  scale_color_manual(values = c("firebrick","black","lightblue"))+theme_minimal()
 
-
-ggplot(wtc)+geom_point(aes(x=fCO2, y = fpg, col ="gamma"), size = 2, alpha = 0.5)+
-  geom_point(aes(x=fCO2, y = fpt, col ="tweedie"), size = 1, alpha = 0.5)+
- theme_minimal()
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
+  geom_point(aes(y = log10(fpg), col = "GLM-log"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fpgb), col = "GLM-id"), size = 1, alpha = 0.5)+
+  annotate(geom = "text",label = paste("AIC GLM-log ",round(extractAIC(g2)[2]), sep = "="), x = 0, y = 3.5)+
+  annotate(geom = "text",label = paste("AIC GLM-id ",round(extractAIC(g2b)[2]), sep = "="), x = 0, y = 3.7)+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
+  scale_color_manual(values = c("firebrick","lightblue","black"))+theme_minimal()
 ```
 
 Similar results for GAM with tweedie and GLM with gamma. Smoothed tweedie has lower AIC. All models are unable to predict undersaturation at high TOC concentration.   
 
-```{r predict-sat}
+```{r predict-sat, cache = T}
+
 wtc$sat <- NA
 wtc$sat[which(wtc$fCO2 > fCO2.1995)] <- 1
 wtc$sat[which(wtc$fCO2 < fCO2.1995)] <- 0
 wtc$sat <- as.factor(wtc$sat)
 
-glmsat <- glm(sat~ph+alk+cn, data = wtc, family = binomial)
+glmsat <- glm(sat~is+ca+NDVI+Runoff+cn+cp+ph, data = wtc, family = binomial)
 summary(glmsat)
 
 wtc$sat.pred <- predict(glmsat, type = "response")
@@ -755,14 +1268,14 @@ ggplot(wtc)+geom_point(aes(x=log10(toc),y=log10(fCO2), col = sat.pred))+
 ```
 
 
-```{r gam-over-under}
-oversat <- subset(wtc,fCO2 >= fCO2.1995)
+```{r gam-over-under, cache = T}
+oversat <- subset(wtc,fCO2 > fCO2.1995)
 undersat <- subset(wtc,fCO2 < fCO2.1995)
 
 
-t2o <- gam(list(fCO2~toc+is+ca+NDVI+Runoff+cn,~1, ~1), data = oversat, family = twlss(link = list("log","identity","identity")))
+t2o <- gam(list(fCO2~s(toc)+s(is)+s(ca)+s(NDVI)+s(Runoff)+s(cn)+s(cp),~1, ~1), data = oversat, family = twlss(link = list("log","identity","identity")))
 summary(t2o)
-t2u <- gam(list(fCO2~toc+is+ca+NDVI+Runoff+cn,~1, ~1), data = undersat, family = twlss(link = list("log","identity","identity")))
+t2u <- gam(list(fCO2~s(toc)+s(is)+s(ca)+s(NDVI)+s(Runoff)+s(cn)+s(cp),~1, ~1), data = undersat, family = twlss(link = list("log","identity","identity")))
 summary(t2u)
 
 oversat$fp2 <- predict(t2o, type = "response")[,1]
@@ -771,36 +1284,18 @@ undersat$fp2 <- predict(t2u, type = "response")[,1]
 ggplot()+geom_point(data = wtc, aes(x=log10(toc), y=log10(fCO2)))+
   geom_point(data = oversat, aes(x=log10(toc), y = log10(fp2), col = "oversat"))+
   geom_point(data = undersat, aes(x=log10(toc), y = log10(fp2), col = "undersat"))+
-  geom_point(data = wtc, aes(x=log10(toc), y = log10(fpg), col = "total"))+
+  geom_point(data = wtc, aes(x=log10(toc), y = log10(fpg), col = "total"), size = 1, alpha = 0.5)+
+   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue")+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+   annotate(geom = "text",label = paste("AIC over ",round(extractAIC(t2o)[2]), sep = "= "), x = 0, y = 3.5)+
+  annotate(geom = "text",label = paste("AIC under ",round(extractAIC(t2u)[2]), sep = "= "), x = 0, y = 3.3)+
   theme_minimal()
 
 ```
 
-```{r variable-sel}
 
-t3 <- gam(list(fCO2~toc*cn*NDVI*Runoff + ca,~1, ~1), data = wtc, family = twlss(link = list("log","identity","identity")))
-summary(t3)
 
-t3o <- gam(list(fCO2~toc*Runoff*cn+ca,~1, ~1), data = oversat, family = twlss(link = list("log","identity","identity")))
-summary(t3o)
-t3u <- gam(list(fCO2~toc*cn+ca,~1, ~1), data = undersat, family = twlss(link = list("log","identity","identity")))
-summary(t3u)
 
-wtc$fp3 <- predict(t3, type = "response")[,1]
-oversat$fp3 <- predict(t3o, type = "response")[,1]
-undersat$fp3 <- predict(t3u, type = "response")[,1]
-
-ggplot()+geom_point(data = wtc, aes(x=log10(toc), y=log10(fCO2)))+
-    geom_point(data = wtc, aes(x=log10(toc), y = log10(fp3), col = "total"),alpha = 0.5)+
-  geom_point(data = oversat, aes(x=log10(toc), y = log10(fp3), col = "oversat"),alpha = 0.5)+
-  geom_point(data = undersat, aes(x=log10(toc), y = log10(fp3), col = "undersat"),alpha = 0.5)+
-  scale_color_manual(values = c("goldenrod","lightblue","darkolivegreen3"))+
-  theme_minimal()
- 
-
-```
-
-`r knitr::knit_exit()`
 
 # Extra
 
