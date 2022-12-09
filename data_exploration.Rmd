@@ -4,7 +4,7 @@ author: "Camille Crapart"
 date: '2022-11-14'
 output: 
    bookdown::html_document2:
-     code_folding: show
+     code_folding: hide
      toc: true
      toc_float: true
      number_sections: true
@@ -21,6 +21,8 @@ options(knitr.kable.NA="", knitr.table.format = "html")
 
 
 ```{r libraries, message = F}
+library(readxl)
+
 library(DBI)
 library(AquaEnv)
 library(dplyr)
@@ -36,9 +38,554 @@ fCO2.2019 <- 410
 
 ```
 
+# Test on CBA data
+
+## Load and merge biochemistry data (CBA) and catchment data (NIVA)
+
+```{r load-data-niva, eval = F}
+id.niva <- read_xlsx("id_niva.xlsx")
+
+catchment.poly <- st_read("catchments_poly/lakes1000cat.shp")
+niva.stations <- st_read("catchments_poly/lakes1000stations.shp")
+niva.data <- read_xlsx("niva_selection.xlsx", sheet = "niva")
+
+all.niva <- st_drop_geometry(niva.stations) %>% merge(niva.data, by.x = "sttn_cd", by.y = "station_code") %>% merge(catchment.poly, by.x = "statn_d", by.y= "station_id")
+
+#bdg.stations <- id.niva %>% merge(niva.stations, by.x = "STATION_ID", by.y = "sttn_cd") %>% merge(niva.data, by.x = "STATION_ID", by.y = "station_code")
+bdg.niva <- id.niva %>% merge(all.niva, by.x = "STATION_ID", by.y = "sttn_cd") %>% st_as_sf()
+
+missing.bdg <- id.niva %>% filter(!STATION_ID %in% bdg.niva$STATION_ID)
+
+saveRDS(bdg.niva, "bdg.niva.rds")
+```
+
+```{r load-73-lakes, eval = F}
+bdg.niva <- readRDS("bdg.niva.rds")
+
+cba <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
+
+ggplot(cba)+geom_point(aes(x=pH,y=pH_Kje, col = log(TOC)))+geom_abline(slope = 1, intercept = 0)+scale_color_viridis_c()+theme_minimal()
+ggplot(cba)+geom_point(aes(x=EC,y=EC_Kje, col = log(TOC)))+geom_abline(slope = 1, intercept = 0)+scale_color_viridis_c()+theme_minimal()
+ggplot(cba)+geom_point(aes(x=pH,y=EC, col = log(TOC)))+scale_color_viridis_c()+theme_minimal()
+ggplot(cba)+geom_point(aes(x=pH_Kje,y=EC_Kje, col = log(TOC)))+scale_color_viridis_c()+theme_minimal()
+
+cba.total <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
+
+c1 <- ggplot(cba.total, aes(x=pH_Kje))+geom_point(aes(y = ph_2019, col = "NIVA"))+
+  geom_point(aes(y = pH, col = "IBV"))+geom_smooth(aes(y=ph_2019, col = "NIVA"), formula = y~x, se = F, method = "lm")+
+  geom_smooth(aes(y=pH, col = "IBV"), formula = y~x, se = F, method = "lm")+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+c2 <- ggplot(cba.total, aes(x=EC_Kje))+geom_point(aes(y = kond_2019*10, col = "NIVA"))+
+  geom_point(aes(y = EC, col = "IBV"))+geom_smooth(aes(y=kond_2019*10, col = "NIVA"), formula = y~x, se = F, method = "lm")+
+  geom_smooth(aes(y=EC, col = "IBV"), formula = y~x, se = F, method = "lm")+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(cba.total)+geom_point(aes(x=Ca, y = ca_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=Mg, y = mg_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=K, y = k_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=Na, y = na_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=as.numeric(F), y = f_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=Cl, y = cl_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=SO4, y = so4_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=as.numeric(NO3), y = no3_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=Cl, y = cl_2019))+theme_minimal()
+ggplot(cba.total)+geom_point(aes(x=SO4, y = so4_2019))+theme_minimal()
 
 
-# Model fCO2 in Northern Lakes 
+cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","latitude","longitude","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH_Kje","Alkalinity","EC_Kje","Ca","Mg","K","Na","Cl","F","SO4","NO3","TOTP","TN","TOC","T","geometry"))
+cba.sel <- cba.sel %>% filter(!is.na(Alkalinity))
+
+dim(cba.sel)
+
+cba.sel[,-which(names(cba.sel) == "geometry")] <- apply(cba.sel[,-which(names(cba.sel) == "geometry")], 2, as.numeric)
+
+#names(cba.sel) <- c("Lake_ID","fCO2","area","lake.area","Arable","Bog","Forest","Runoff","Temp","Precip","ph","Ca","SO4","NO3","TOTP","TN","TOC","geometry")
+
+# conversion from mg/L to ueq/L
+cba.sel$area <- cba.sel$basin_area_km2 * 10^6
+cba.sel$lake.area <- cba.sel$lake_area_km2 * 10^6
+cba.sel$ca <- cba.sel$Ca / 40.078 * 2 * 1000
+cba.sel$mg <- cba.sel$Mg / 23.305 * 2 * 1000
+cba.sel$k <- cba.sel$K / 39.098 * 1000
+cba.sel$na <- cba.sel$Na / 29.990 * 1000
+cba.sel$cl <- cba.sel$Cl / 35.45 * 1000
+cba.sel$f <- cba.sel$F / 18.998 * 1000
+cba.sel$so4 <- cba.sel$SO4/(32.06+15.999*4) * 2 * 1000 
+cba.sel$no3 <- cba.sel$NO3/(14.007+15.999*3) * 2 * 1000
+cba.sel$tp <- cba.sel$TOTP
+cba.sel$tn <- cba.sel$TN * 1000
+cba.sel$toc <- cba.sel$TOC
+cba.sel$alk <- cba.sel$Alkalinity * 10^3 #en ueq/L
+cba.sel$cond <- cba.sel$EC_Kje
+
+cba.sel$temp <- cba.sel$T + 273.15
+cba.sel$ph <- cba.sel$pH_Kje
+
+saveRDS(cba.sel,"cba.sel.rds")
+
+```
+
+
+## NDVI
+
+```{r download-NDVI-raster-2015, eval = F}
+# http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/
+library(gimms)
+ndvi.2015 <- downloadGimms(x= 2015,y=2015,dsn = "NDVI")
+ 
+ndvi.max.2015 <- monthlyComposite(ndvi.2015,monthlyIndices(ndvi.2015), overwrite = T, filename = "ndvi.max.2015.nc")
+saveRDS(ndvi.max.2015,"NDVI/ndvi.max.2015.rds")
+```
+
+```{r NDVI, eval = F}
+ndvi.max.2015 <- readRDS("NDVI/ndvi.max.2015.rds")
+cba.poly <- readRDS("cba.sel.rds") %>% dplyr::select(c("Lake_ID","geometry")) %>% st_as_sf()
+
+# Makes the raster smaller, ensuring faster processing of the data
+scandinavia <- as(extent(0,35,55,73),"SpatialPolygons")
+summer.scandinavia.2015 <- raster::crop(ndvi.max.2015,scandinavia)
+
+# Re-introduces NA
+summer.scan <- reclassify(summer.scandinavia.2015, cbind(-Inf, 0, NA), right=FALSE)
+
+# Stack bands for summer
+summer.mean.2015 <- raster::stack(summer.scan[[6]],summer.scan[[7]],summer.scan[[8]]) %>% mean()
+
+# extract data
+summer.ndvi.2015 <- raster::extract(summer.mean.2015,cba.poly, fun = mean, df = T, sp = T, na.rm = T)
+names(summer.ndvi.2015) <- c("Lake_ID","ndvi")
+summer.ndvi.2015$NDVI <- floor(summer.ndvi.2015$ndvi/10)/1000
+
+# save df
+saveRDS(summer.ndvi.2015, "NDVI/100lakes.summer.ndvi.2015.rds")
+write.csv(summer.ndvi.2015,"NDVI/100lakes.summer.ndvi.2015.csv")
+```
+
+## Compute fCO2 in CBA lakes
+
+fCO2 in 2019: 410 ppm 
+https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
+
+```{r model-fCO2-CBA, cache = T, cache.extra=file.mtime("cba.sel.rds")}
+cba.sel <- readRDS("cba.sel.rds")
+fCO2.2019.atm <- 410.5  * 10^6
+temp <- cba.sel$T
+TA <- cba.sel$alk * 10^(-6) # convert from ueq/L to mol/L
+pH <- cba.sel$pH
+CO2 <- cba.sel$CO2 * 10^(-6)
+ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+cba.sel$fCO2 <- ae3$fCO2 *10^6
+cba.sel$SumCO2 <- ae3$SumCO2 * 10^6 # conversion to uM
+cba.sel$CO2_ae <- ae3$CO2 * 10^6 # conversion to uM
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=SumCO2, col= pH))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=CO2_ae, col = pH))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(filter(cba.sel, ph > 5))+geom_point(aes(x=CO2,y = fCO2, col = log10(alk)))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2))+theme_minimal()
+
+
+saveRDS(cba.sel, "cba.fco2.rds")
+
+```
+
+## Correction with Organic Alkalinity
+
+@Liu2020
+
+```{r orgalk}
+cba.sel <- readRDS("cba.sel.rds")
+
+cba.sel$orgalk <- cba.sel$TOC / 12.011 * 10^3 * 0.08 # TOC in mg/L converted to umol/L
+
+ggplot(cba.sel, aes(x = alk, y = orgalk, col = toc))+geom_point()+scale_color_viridis_c()+
+ geom_abline(slope =1, intercept = 0)+theme_minimal()
+
+ggplot(cba.sel, aes(x = alk, y = toc, col = orgalk))+geom_point()+scale_color_viridis_c()+
+ geom_abline(slope =1, intercept = 0)+theme_minimal()
+
+fCO2.2019.atm <- 410.5  * 10^6
+temp <- cba.sel$T
+IS <- cba.sel$cond * 1.3e-5
+pH <- cba.sel$pH - 0.03+0.05*log10(IS)
+
+TA <- (cba.sel$alk - cba.sel$orgalk) * 10^(-6) # ueq/L to mol/L
+
+ae4 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+cba.sel$fCO2_oa <- ae4$fCO2 *10^6
+cba.sel$SumCO2_oa <- ae4$SumCO2 * 10^6 # conversion to uM
+cba.sel$CO2_oa <- ae4$CO2 * 10^6 # conversion to uM
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=SumCO2_oa, col= toc))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=CO2_oa, col = toc))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(filter(cba.sel, ph > 6))+geom_point(aes(x=CO2,y=CO2_oa, col = toc))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y = fCO2_oa, col = log10(alk)))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2_oa, col = toc))+scale_color_viridis_c()+theme_minimal()
+
+
+```
+
+## Correction excess cations
+
+### Compute xs 
+
+```{r tom-xs-cation}
+
+cations <- with(cba.sel, na + k + ca + mg + (10^(6 - ph))) # don't have nh4 + converstion ph to [H+] in ueq/L
+anions <- with(cba.sel, so4 + cl + f + no3 + alk)
+
+qplot(y = cations, x = anions, col = cba.sel$tn)+scale_color_viridis_c()+
+  geom_abline(slope = 1, intercept = 0, col = "red")+theme_minimal() # doesn't look like nh4 is the cause for too little cations
+
+cba.sel$cat.xs <- cations - anions
+cba.sel$cat.xs[cba.sel$cat.xs < -10000] <- NA 
+
+library(MASS)
+
+summary(m <- rlm(cat.xs ~ toc, data=cba.sel, method="MM")) # Robust linear model
+#summary(m <- lm(cat.xs ~ toc, data=cba.sel)) # With LM, 0.016 ueq/mmol
+
+ggplot(cba.sel)+geom_point(aes(x=toc, y = cat.xs))+geom_abline(slope = coef(m)[2], intercept = coef(m)[1], col = "red")+
+  annotate(geom = "label", label = round(coef(m)[2] * 12.011 / 1000, 3), x = 60, y = -250)+
+  theme_minimal()
+
+coef(m)[2] * 12.011 / 1000 # 0.10 µeq org-TA / µmol TOC for NLS, here 0.03
+
+
+```
+
+### excess cation, removing high TOC
+
+```{r tom-xs-cation-rm-high-toc}
+cba.2 <- cba.sel %>% filter(toc < 40)
+
+cations <- with(cba.2, na + k + ca + mg) # don't have nh4 + converstion ph to [H+] in ueq/L
+anions <- with(cba.2, so4 + cl + f + no3)
+
+qplot(y = cations, x = anions, col = cba.2$tn)+scale_color_viridis_c()+
+  geom_abline(slope = 1, intercept = 0, col = "red")+theme_minimal() # doesn't look like nh4 is the cause for too little cations
+
+cba.2$cat.xs <- cations - anions
+cba.2$cat.xs[cba.2$cat.xs < -10000] <- NA 
+
+library(MASS)
+
+summary(m2 <- rlm(cat.xs ~ toc, data=cba.2, method="MM")) # Robust linear model
+#summary(m2 <- lm(cat.xs ~ toc, data=cba.2)) # using LM with find a slope of 0.086 ueq/umol
+
+ggplot(cba.2)+geom_point(aes(x=toc, y = cat.xs))+geom_abline(slope = coef(m2)[2], intercept = coef(m2)[1], col = "red")+
+  annotate(geom = "label", label = round(coef(m2)[2] * 12.011 / 1000, 3), x = 20, y = -500)+
+  theme_minimal()
+
+
+coef(m2)[2] * 12.011 / 1000 # 0.10 µeq org-TA / µmol TOC for NLS, here 0.03
+
+
+```
+
+### fcO2 with xs cations
+
+```{r orgalk-cations}
+
+cba.sel$orgalk.xs <- cba.sel$TOC / 12.011 * 10^3 * 0.038 # TOC in mg/L converted to mmol/L
+
+ggplot(cba.sel, aes(x = alk, y = orgalk.xs, col = toc))+geom_point()+scale_color_viridis_c()+
+ geom_abline(slope =1, intercept = 0)+theme_minimal()
+
+fCO2.2019.atm <- 410.5  * 10^6
+temp <- cba.sel$T
+TA <- (cba.sel$alk - cba.sel$orgalk.xs)*10^(-6) # ueq/L to mol/L
+
+IS <- cba.sel$cond * 1.3e-5
+pH <- cba.sel$pH - 0.03+0.05*log10(IS)
+CO2 <- cba.sel$CO2 * 10^(-6)
+ae5 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+cba.sel$fCO2_oaxs <- ae5$fCO2 *10^6
+cba.sel$SumCO2_oaxs <- ae5$SumCO2 * 10^6 # conversion to uM
+cba.sel$CO2_oaxs <- ae5$CO2 * 10^6 # conversion to uM
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=SumCO2_oaxs, col= pH))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y=CO2_oaxs, col = pH))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=CO2,y = fCO2_oaxs, col = log10(toc)))+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2_oaxs))+theme_minimal()
+
+
+```
+
+# Compare adjustements
+
+```{r compare-fCO2}
+ggplot(cba.sel, aes(x = fCO2))+geom_point(aes(y=fCO2_oa, col = "Liu"))+geom_point(aes(y = fCO2_oaxs, col = "xs cations"))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_d(end = 0.8)+theme_minimal()
+
+
+ggplot(cba.sel, aes(x = CO2))+geom_point(aes(y=CO2_oa, col = "Liu"))+
+  geom_point(aes(y = CO2_oaxs, col = "xs cations"))+
+  geom_point(aes(y=CO2_ae, col = "no correction"))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_d(end = 0.8, option = "A")+theme_minimal()
+
+```
+
+
+
+Practical salinity unit: http://www.salinityremotesensing.ifremer.fr/sea-surface-salinity/definition-and-units
+
+```{r CO2-prdict}
+cba.sel <- readRDS("cba.sel.rds")
+
+# Variables
+pH <- cba.sel$pH
+CO2 <- cba.sel$CO2 * 10e-6 # umol/L to mol/kg_solution
+R <- 0.0820578 # L.atm/mol.K
+pCO2 <- CO2 * R * cba.sel$temp # with temp in K
+temp <- cba.sel$T # in celsius
+TA <- cba.sel$alk * 1e-3 # from meq/L to mol/kg solution  HAS TO BE 10-6 TO FIT -> DID I REGISTER THE WRONG UNIT??? CHECKED AND NO, see "200127 chemical analysis table"
+S <- cba.sel$EC_Kje * 1e-3 # from uS/cm to mg/L https://www.landscape.sa.gov.au/mr/publications/measuring-salinity
+OrgAlkLiu <- cba.sel$toc * 1e-3 / 12.011 * 0.08 # toc from mg/L to g/L to mol/L, multiplied by fraction of acids 
+
+# compare with pH correction @Liu2020
+IS <- cba.sel$cond * 1.3e-5
+pHb <- pH - 0.03+0.05*log10(IS)
+plot(pH, pHb) # No difference because very low IS
+
+# Is CBA CO2 "dissolved CO2"...
+a1  <- aquaenv(pH = pH, CO2 = CO2, SumCO2 = NULL, S = 0, t = temp)
+a1b <- aquaenv(pH = pH, CO2 = CO2, SumCO2 = NULL, S = S, t = temp)
+plot(a1$TA, a1b$TA) # Salinity plays no role
+qplot(y = a1b$TA, x = TA)+geom_abline(intercept = 0, slope = 1)
+
+# Or "total DIC"?
+a2 <- aquaenv(pH = pH, SumCO2 = CO2, S = 0, t = temp)
+qplot(TA, a2$TA)+geom_abline(intercept = 0, slope = 1)
+
+# Compare: none is good. Use SumCO2 = CO2
+qplot()+geom_point(aes(x = TA, y= a1$TA, col = "CO2"))+geom_point(aes(x = TA, y=a2$TA, col = "SumCO2"))
+qplot(TA, a1$TA*1e3)+geom_abline(slope = 1, intercept = 0)
+qplot(TA, a2$TA*1e4)+geom_abline(slope = 1, intercept = 0)
+
+
+# determine pH from TA and CO2
+a3 <- aquaenv(TA = TA, SumCO2 = CO2, S = S, t = temp)
+qplot(pH, a3$pH) # pH superior to 13.5 and 15!
+
+# maybe TA has wrong unit
+TAb <- cba.sel$alk *1e-6
+a4 <- aquaenv(TA = TAb, SumCO2 = CO2, S = S, t = temp)
+qplot(pH, a4$pH)+geom_abline(slope = 1, intercept = 0) # pH too low
+
+# maybe CO2 has wrong unit
+CO2b <- cba.sel$CO2 * 1e-3
+a5 <- aquaenv(TA = TA, SumCO2 = CO2b, S = S, t = temp)
+qplot(pH, a5$pH)+geom_abline(slope = 1, intercept = 0) # pH between 7 and 15
+
+# what about pCO2
+a6 <- aquaenv(pH = pH, fCO2 = pCO2, S = 0, t = temp, SumCO2 = NULL)
+qplot(TA, a6$TA)+geom_abline(intercept = 0, slope = 1)
+
+
+```
+
+```{r compute-H2CO3-from-start}
+cba <- subset(cba.sel, toc < 40) %>% subset(CO2 <  200)
+
+OrgAlkLiu <- cba$toc * 1e3 / 12.011 * 0.08 # toc from mg/L to umol/L multiplied by fraction of acids -> gives OrgAlk in ueq/L
+
+# values from https://doi.org/10.5268/IW-4.2.694
+A1 <- -58.0931
+A2 <- 90.5069
+A3 <- 22.2940
+Temp <- cba$temp # in K
+Kh <- exp(A1+A2*100/Temp+A3*log(Temp/100))
+fCO2.2019.atm <- 410 * 1e-6 #ppm to atm
+H2CO3_eq <- fCO2.2019.atm/Kh # if eq with atm
+
+TA <- cba$alk * 1e-3 # in mol/L
+TIC <- cba$CO2 * 1e-3 # in mol/L
+TOC <- cba$toc * 1e-3 / 12.011 # in mol/L
+pH <- cba$pH_Kje
+
+qplot(TA, TIC, col = TOC)+scale_color_viridis_c()+geom_abline(slope = 1, intercept = 0)
+
+# Considering TIC = H2CO3 + HCO3 (CO3 negligible at low pH)
+H2CO3_w <- TIC/(1+(10^(-6.3)/10^(-pH))) # in mol/L
+HCO3_w <- H2CO3_w*(10^(-6.3)/10^(-pH))
+
+qplot()+geom_point(aes(x=pH, y = H2CO3_w, col = "H2CO3"))+geom_point(aes(x=pH, y = HCO3_w, col = "HCO3"))
+
+pCO2 <- H2CO3_w*Kh
+qplot(TOC, pCO2)+geom_hline(yintercept = fCO2.2019.atm, col = "red")
+
+# Considering TA = H2CO3 + HCO3 (CO3 negligible at low pH)
+H2CO3_a <- TA/(1+(10^(-6.3)/10^(-pH))) # in mol/L
+HCO3_a <- H2CO3_a*(10^(-6.3)/10^(-pH))
+
+qplot()+geom_point(aes(x=pH, y = H2CO3_a, col = "H2CO3"))+geom_point(aes(x=pH, y = HCO3_a, col = "HCO3"))
+
+pCO2_a <- H2CO3_a*Kh
+qplot(TOC, pCO2_a)+geom_hline(yintercept = fCO2.2019.atm, col = "red")
+
+# Find OrgAlk from TA and TIC, but really close to TA
+
+OA <- TA-TIC
+qplot(TA,OA)+geom_abline(slope = 1, intercept = 0, col = "red")
+plot(TOC,OA) # no relationship with TOC
+
+#In the end we just need to be able to predict TIC based on TA and pH?
+
+plot(TIC,pH)
+plot(TIC,TA)
+summary(m <- lm(TIC~TA+TOC))
+
+```
+
+```{r catchment-cba, eval = F}
+cba.sel <- readRDS("cba.fCO2.rds")
+summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
+cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
+saveRDS(cba.sf, "cba.sf.rds")
+```
+
+
+```{r plot-cba, eval = F}
+cba.sf <- readRDS("cba.sf.rds")
+
+g1 <- ggplot(cba.sf)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
+    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
+    theme_minimal()
+ggsave("map_fco2_cba.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
+
+h1 <- ggplot(cba.sf)+geom_histogram(aes(group = fCO2, x = log10(fCO2), fill = log10(fCO2), col = log10(fCO2)))+
+  scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.2019), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
+  geom_vline(xintercept = log10(fCO2.2019), col = "red")+theme_minimal()
+ggsave("hist_fCO2_cba.png",h1, width = 12, height = 8, unit = "cm", dpi = "retina") 
+
+
+
+t1 <- ggplot(cba.sf, aes(x = log10(toc)))+
+  geom_ribbon(aes(ymin = -Inf, ymax = log10(fCO2.2019), fill = "undersaturated"), alpha = 0.25)+
+  geom_ribbon(aes(ymax = +Inf, ymin = log10(fCO2.2019),fill = "oversaturated"), alpha = 0.25)+
+  geom_hline(yintercept = log10(fCO2.2019))+
+  scale_fill_manual(values = c("lightgray","darkgray"), name = "Oversaturation")+
+  geom_point(aes(y=log10(fCO2), col = latitude))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+ggsave("CO2_oversaturation_cba.png",t1, width = 12, height = 8, unit = "cm", dpi = "retina")
+
+
+```
+
+`r knitr::include_graphics(c("map_fCO2_cba.png", "hist_fCO2_cba.png","CO2_oversaturation_cba.png"))`
+
+`r knitr::knit_exit()`
+## Test and compare LM and GAM 
+
+Selected  models: lm1, g1b (on log-transformed data), t1, glm1
+
+```{r test-predict-fCO2-toc, eval = T, cache = T, cache.extra=file.mtime("cba.sf.rds")}
+cba.sf <- readRDS("cba.sf.rds")
+
+models <- c("GAM on log transformed data", "GLM with id link","GLM with log link","LM", "Tweedie with id link", "Tweedie with log link")
+
+cba.sf$log10fCO2lm <- predict(lm1,newdata = cba.sf, type = "response") %>% log10()
+cba.sf$log10fCO2gam <- predict(g1b, newdata = cba.sf, type = "response")
+cba.sf$log10fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1] %>% log10()
+cba.sf$log10fCO2glm <- predict(glm1, newdata = cba.sf, type = "response") %>% log10()
+
+cba.sf$log10fCO2glm_log <- predict(glm1c, newdata = cba.sf, type = "response") %>% log10()
+cba.sf$log10fCO2tweedie_log <- predict(t1c,newdata = cba.sf, type = "response")[,1] %>% log10()
+
+
+ggplot(cba.sf, aes(x=log10(fCO2)))+
+   geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"))+
+  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"))+
+  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
+  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"))+
+  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"))+
+  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"))+
+  geom_abline(slope = 1, intercept = 0, col = "red")+
+  scale_color_manual(name = "Model", labels = models, values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(15,16,17,18, 25, 8))+
+  labs(y = "Predicted log10fCO2", x = "Aquaenv log10fCO2")+
+  theme_minimal()
+
+ggplot(cba.sf, aes(x=log10(toc)))+
+  geom_point(aes(y = log10(fCO2)), col = "gray")+
+  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
+  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
+  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"), size = 2)+
+  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
+  geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"), size = 2)+
+  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"), size = 1)+
+  geom_hline(yintercept = log10(fCO2.2019), col = "red")+
+  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
+  labs(y = "Predicted log10fCO2", x = "log10(TOC)")+
+  theme_minimal()
+
+ggplot(cba.sf, aes(x=toc))+
+  geom_point(aes(y = fCO2), col = "gray")+
+  geom_point(aes(y = 10^(log10fCO2glm_log), col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
+  geom_point(aes(y=10^(log10fCO2tweedie_log), col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
+  geom_point(aes(y=10^(log10fCO2gam), col = "GAM", shape = "GAM"), size = 2)+
+  geom_point(aes(y=10^(log10fCO2glm), col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
+  geom_point(aes(y=10^(log10fCO2lm), col = "LM", shape = "LM"), size = 2)+
+  geom_point(aes(y = 10^(log10fCO2tweedie), col = "Tweedie", shape = "Tweedie"), size = 1)+
+  geom_hline(yintercept = fCO2.2019, col = "red")+
+  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
+  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
+  labs(y = "Predicted fCO2", x = "TOC")+
+  ylim(-10,5000)+xlim(0,30)+
+  theme_minimal()
+
+```
+
+The TOC values > 40 mg/L (logTOC > 1,6) are potentially outliers, but removing them doesn't change the test.
+
+
+GAM: linear pred with intercept. The model does not have the "asymptot" at fCO2 = fCO2 atm
+
+LM = GLM id link = Tweedie id link. Both models are similar but underestimate fCO2 for high fCO2
+
+GLM log link = Tweedie log link. 
+
+From AIC: GAM/GLM with id link slightly better, but the best is LM. 
+
+
+
+
+
+# Northern Lakes Survey Database 
+
+## Download from NOFA database
 
 ```{r load-data, eval = F}
 con <- dbConnect(RPostgreSQL::PostgreSQL(),user = "camille.crapart", password = "camille",host = "vm-srv-wallace.vm.ntnu.no", dbname = "nofa")
@@ -375,8 +922,8 @@ arable <- readRDS("arable.rds")
 forest <- readRDS("forest.rds")
 bare <- readRDS("bare.rds")
 
-#ndep <- readRDS("ndep.df.Rdata") %>% st_as_sf() %>% st_drop_geometry()
-#sdep <- readRDS("sdep.df.rds") %>% st_as_sf() %>% st_drop_geometry()
+ndep <- readRDS("ndep.df.Rdata") %>% st_as_sf() %>% st_drop_geometry()
+sdep <- readRDS("sdep.df.rds") %>% st_as_sf() %>% st_drop_geometry()
 
 total <- ion.alk %>%
   merge(lakes, by = "ebint") %>% 
@@ -389,9 +936,9 @@ total <- ion.alk %>%
   merge(bogs, by = "ebint") %>%
   merge(arable, by = "ebint")%>%
   merge(forest,by = "ebint") %>%
-  merge(bare, by = "ebint")# %>%
-#  merge(ndep, by = "ebint") %>% 
-#  merge(sdep, by = "ebint")
+  merge(bare, by = "ebint") %>%
+  merge(ndep, by = "ebint") %>% 
+  merge(sdep, by = "ebint")
 
 total$uncertain <- ifelse(total$dist_closest_ebint/total$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
 total$uncertain[which(is.na(total$uncertain)==TRUE)] <- FALSE
@@ -421,10 +968,12 @@ saveRDS(total_filter, file = "waterchem.rds")
 
 waterchem <- readRDS("waterchem.rds")
 
-wtc <- dplyr::select(total_filter,c("ebint","fCO2","area","perimtot","slope","alt", "latitude","longitude","ndvi.value","arable","bogs","forest","bare","runoff","temp_c","temp","prec","ph","alk","cond","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc"))
+wtc <- dplyr::select(waterchem,c("ebint","fCO2","area","perimtot","slope","alt", "latitude","longitude","ndvi.value","arable","bogs","forest","bare","runoff","temp_c","temp","prec","ph","alk","cond","ca","mg","na","k","so4","no3","nh4","cl","f","tp","tn","toc","tndep","tsdep"))
 
 wtc$cp <- wtc$toc / wtc$tp
 wtc$cn <- wtc$toc / wtc$tn
+
+wtc$temp_k <- wtc$temp + 273.15
 
 wtc$sat <- NA
 wtc$sat[which(wtc$fCO2 < fCO2.1995)] <- -1 # chose -1 instead of 0 to make it easier to interpret the estimates.  
@@ -434,6 +983,15 @@ saveRDS(wtc,"wtc.rds")
 
 ```
 
+```{r over-under-plot}
+wtc <- readRDS("wtc.rds")
+ggplot(wtc)+geom_point(aes(x = longitude, y = latitude, col = as.factor(sat), size = log10(area)))+
+  scale_color_manual(values = c("firebrick","gray"), labels = c("Undersaturated","Supersaturated"), name = "")+
+  scale_size_continuous(range = c(0.1,2))+
+  theme_minimal()
+  
+ 
+```
 
 ```{r match-catchment, eval = F}
 catchments <- readRDS("catchments.rds")
@@ -531,22 +1089,38 @@ ggplot()+
 `r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png","CO2_oversaturation.png"))`
 
 
-## Corplot and PCA
+# Corplot and PCA
 
-```{r compare-over-under, fig.dim = c(5,10)}
+`r wtc <- readRDS("wtc.rds")`
+
+There are `r sum(wtc$sat == 1)` (`r round(sum(wtc$sat == 1)/dim(wtc)[1]*100,1)`%) supersaturated lakes and `r sum(wtc$sat == -1)` (`r round(sum(wtc$sat == -1)/dim(wtc)[1]*100,1)`%)undersaturated lakes.
+
+
+## Super- and undersaturated lakes
+
+```{r compare-over-under}
 library(reshape2)
-wtc <- readRDS("wtc.rds")
 wtc.long <- melt(wtc,id.vars= c("ebint","sat"))
 
 wtc.long$sat[which(wtc.long$sat == -1)] <- "under"
 wtc.long$sat[which(wtc.long$sat == 1)] <- "over"
 
-ggplot(filter(wtc.long, variable %in% c("alk","cond","toc","tp","tn","area")))+geom_boxplot(aes(y = log10(value), fill = variable))+
+bp1 <- ggplot(filter(wtc.long, variable %in% c("alk","cond","toc","tp","tn")))+geom_boxplot(aes(y = log10(value), fill = variable))+
   facet_grid(rows=vars(variable),cols=vars(sat), scales = "free_y")+
   scale_fill_viridis_d(end = 0.8)+
   theme_minimal()
 
+bp2 <- ggplot(filter(wtc.long, variable %in% c("temp","area","alt","slope","latitude")))+geom_boxplot(aes(y = log10(value), fill = variable))+
+  facet_grid(rows=vars(variable),cols=vars(sat), scales = "free_y")+
+  scale_fill_viridis_d(end = 0.8)+
+  theme_minimal()
+
+ggarrange(bp1,bp2, ncol = 2, nrow = 1)
 ```
+
+## Corrplots
+
+ADD P-MAT
 
 ```{r plots, fig.dim = c(15,15), cache.extra=file.mtime("wtc.rds")}
 
@@ -554,6 +1128,9 @@ corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","area","perimtot","slop
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ndvi.value","arable","bogs","forest","bare","runoff","temp","prec","toc")), use = "pairwise.complete"), tl.cex = 1.5, number.cex = 1.5)
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","cond","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc","cn","cp"))), tl.cex = 1.5, number.cex = 1.5)
 ```
+
+
+## PCA
 
 ```{r pca-total, fig.dim = c(12,10), cache = T, cache.extra=file.mtime("wtc.rds")}
 
@@ -759,8 +1336,8 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
 
 ```{r test-double-glm, cache = T, cache.extra=file.mtime("wtc.rds")}
 
-glmover <- glm(fCO2~toc, data = oversat, family = Gamma(link = "identity"))
-glmunder <- glm(fCO2~toc, data = undersat, family = Gamma(link = "identity"))
+glmover <- glm(fCO2~toc, data = oversat, family = Gamma(link = "log"))
+glmunder <- glm(fCO2~toc, data = undersat, family = Gamma(link = "log"))
 summary(glmover)
 summary(glmunder)
 
@@ -775,246 +1352,6 @@ ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"
   theme_minimal()
 
 ```
-
-# Test on CBA data
-
-## Load and merge biochemistry data (CBA) and catchment data (NIVA)
-
-```{r load-data-niva, eval = F}
-id.niva <- read_xlsx("id_niva.xlsx")
-
-catchment.poly <- st_read("catchments_poly/lakes1000cat.shp")
-niva.stations <- st_read("catchments_poly/lakes1000stations.shp")
-niva.data <- read_xlsx("niva_selection.xlsx", sheet = "niva")
-
-all.niva <- st_drop_geometry(niva.stations) %>% merge(niva.data, by.x = "sttn_cd", by.y = "station_code") %>% merge(catchment.poly, by.x = "statn_d", by.y= "station_id")
-
-#bdg.stations <- id.niva %>% merge(niva.stations, by.x = "STATION_ID", by.y = "sttn_cd") %>% merge(niva.data, by.x = "STATION_ID", by.y = "station_code")
-bdg.niva <- id.niva %>% merge(all.niva, by.x = "STATION_ID", by.y = "sttn_cd") %>% st_as_sf()
-
-missing.bdg <- id.niva %>% filter(!STATION_ID %in% bdg.niva$STATION_ID)
-
-saveRDS(bdg.niva, "bdg.niva.rds")
-```
-
-```{r load-73-lakes, eval = F}
-bdg.niva <- readRDS("bdg.niva.rds")
-
-cba <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
-
-cba.total <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
-
-cba.sel <- cba.total %>% dplyr::select(c("Lake_ID","CO2","basin_area_km2","lake_area_km2","latitude","longitude","agriculture","peat","forest","era_runoff_1981_2010","era_temp_1981_2010","era_prec_1981_2010","nilu_ndep_2012_2016","pH","Alkalinity","EC","Ca","Mg","K","Na","Cl","F","SO4","NO3","TOTP","TN","TOC","T","geometry"))
-cba.sel <- cba.sel %>% filter(!is.na(Alkalinity))
-
-dim(cba.sel)
-
-cba.sel[,-which(names(cba.sel) == "geometry")] <- apply(cba.sel[,-which(names(cba.sel) == "geometry")], 2, as.numeric)
-
-#names(cba.sel) <- c("Lake_ID","fCO2","area","lake.area","Arable","Bog","Forest","Runoff","Temp","Precip","ph","Ca","SO4","NO3","TOTP","TN","TOC","geometry")
-
-# conversion from mg/L to ueq/L
-cba.sel$area <- cba.sel$basin_area_km2 * 10^6
-cba.sel$lake.area <- cba.sel$lake_area_km2 * 10^6
-cba.sel$ca <- cba.sel$Ca / 40.078 * 2 * 1000
-cba.sel$mg <- cba.sel$Mg / 23.305 * 2 * 1000
-cba.sel$k <- cba.sel$K / 39.098 * 1000
-cba.sel$na <- cba.sel$Na / 29.990 * 1000
-cba.sel$cl <- cba.sel$Cl / 35.45 * 1000
-cba.sel$f <- cba.sel$F / 18.998 * 1000
-cba.sel$so4 <- cba.sel$SO4/(32.06+15.999*4) * 2 * 1000 
-cba.sel$no3 <- cba.sel$NO3/(14.007+15.999*3) * 2 * 1000
-cba.sel$tp <- cba.sel$TOTP
-cba.sel$tn <- cba.sel$TN * 1000
-cba.sel$toc <- cba.sel$TOC
-cba.sel$alk <- cba.sel$Alkalinity * 10^3
-cba.sel$cond <- cba.sel$EC
-
-cba.sel$temp <- cba.sel$T
-cba.sel$ph <- cba.sel$pH
-
-saveRDS(cba.sel,"cba.sel.rds")
-
-```
-
-## NDVI
-
-```{r download-NDVI-raster-2015, eval = F}
-# http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/
-library(gimms)
-ndvi.2015 <- downloadGimms(x= 2015,y=2015,dsn = "NDVI")
- 
-ndvi.max.2015 <- monthlyComposite(ndvi.2015,monthlyIndices(ndvi.2015), overwrite = T, filename = "ndvi.max.2015.nc")
-saveRDS(ndvi.max.2015,"NDVI/ndvi.max.2015.rds")
-```
-
-```{r NDVI, eval = F}
-ndvi.max.2015 <- readRDS("NDVI/ndvi.max.2015.rds")
-cba.poly <- readRDS("cba.sel.rds") %>% dplyr::select(c("Lake_ID","geometry")) %>% st_as_sf()
-
-# Makes the raster smaller, ensuring faster processing of the data
-scandinavia <- as(extent(0,35,55,73),"SpatialPolygons")
-summer.scandinavia.2015 <- raster::crop(ndvi.max.2015,scandinavia)
-
-# Re-introduces NA
-summer.scan <- reclassify(summer.scandinavia.2015, cbind(-Inf, 0, NA), right=FALSE)
-
-# Stack bands for summer
-summer.mean.2015 <- raster::stack(summer.scan[[6]],summer.scan[[7]],summer.scan[[8]]) %>% mean()
-
-# extract data
-summer.ndvi.2015 <- raster::extract(summer.mean.2015,cba.poly, fun = mean, df = T, sp = T, na.rm = T)
-names(summer.ndvi.2015) <- c("Lake_ID","ndvi")
-summer.ndvi.2015$NDVI <- floor(summer.ndvi.2015$ndvi/10)/1000
-
-# save df
-saveRDS(summer.ndvi.2015, "NDVI/100lakes.summer.ndvi.2015.rds")
-write.csv(summer.ndvi.2015,"NDVI/100lakes.summer.ndvi.2015.csv")
-```
-
-## Compute fCO2 in CBA lakes
-
-fCO2 in 2019: 410 ppm 
-https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
-
-```{r model-fCO2-CBA, cache = T, cache.extra=file.mtime("cba.sel.rds")}
-cba.sel <- readRDS("cba.sel.rds")
-fCO2.2019 <- 410.5 
-temp <- cba.sel$T
-TA <- cba.sel$alk / 1000000
-pH <- cba.sel$pH
-CO2 <- cba.sel$CO2 * 10^(-6)
-ae3 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019 * 10^6)
-cba.sel$fCO2 <- ae3$fCO2 *10^6
-cba.sel$SumCO2 <- ae3$SumCO2 * 10^6 # conversion to uM
-cba.sel$CO2_ae <- ae3$CO2 * 10^6 # conversion to uM
-
-ggplot(cba.sel)+geom_point(aes(x=CO2,y=SumCO2))+theme_minimal()
-ggplot(cba.sel)+geom_point(aes(x=CO2,y=CO2_ae))+theme_minimal()
-
-
-ggplot(cba.sel)+geom_point(aes(x=alk, y = fCO2))+theme_minimal()
-ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2))+theme_minimal()
-
-ggplot(filter(cba.sel, ph > 5))+geom_point(aes(x=CO2,y = fCO2, col = log10(alk)))+
-  scale_color_viridis_c()+theme_minimal()
-
-saveRDS(cba.sel, "cba.fco2.rds")
-```
-
-
-
-```{r catchment-cba, eval = F}
-cba.sel <- readRDS("cba.fCO2.rds")
-summer.ndvi.2015 <- readRDS("NDVI/100lakes.summer.ndvi.2015.rds")
-cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
-saveRDS(cba.sf, "cba.sf.rds")
-```
-
-
-```{r plot-cba, eval = F}
-cba.sf <- readRDS("cba.sf.rds")
-
-g1 <- ggplot(cba.sf)+geom_sf(aes(fill=log10(fCO2), col = log10(fCO2)))+
-    scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.1995), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
-    theme_minimal()
-ggsave("map_fco2_cba.png",g1, width = 12, height = 16, unit = "cm", dpi = "retina")
-
-h1 <- ggplot(cba.sf)+geom_histogram(aes(group = fCO2, x = log10(fCO2), fill = log10(fCO2), col = log10(fCO2)))+
-  scale_colour_continuous_divergingx(palette = "RdYlBu", mid = log10(fCO2.2019), aesthetics = c("fill", "col"), name = "log10(fCO2)")+
-  geom_vline(xintercept = log10(fCO2.2019), col = "red")+theme_minimal()
-ggsave("hist_fCO2_cba.png",h1, width = 12, height = 8, unit = "cm", dpi = "retina") 
-
-
-
-t1 <- ggplot(cba.sf, aes(x = log10(toc)))+
-  geom_ribbon(aes(ymin = -Inf, ymax = log10(fCO2.2019), fill = "undersaturated"), alpha = 0.25)+
-  geom_ribbon(aes(ymax = +Inf, ymin = log10(fCO2.2019),fill = "oversaturated"), alpha = 0.25)+
-  geom_hline(yintercept = log10(fCO2.2019))+
-  scale_fill_manual(values = c("lightgray","darkgray"), name = "Oversaturation")+
-  geom_point(aes(y=log10(fCO2), col = latitude))+
-  scale_color_viridis_c()+
-  theme_minimal()
-
-ggsave("CO2_oversaturation_cba.png",t1, width = 12, height = 8, unit = "cm", dpi = "retina")
-
-
-```
-
-`r knitr::include_graphics(c("map_fCO2_cba.png", "hist_fCO2_cba.png","CO2_oversaturation_cba.png"))`
-
-## Test and compare LM and GAM 
-
-Selected  models: lm1, g1b (on log-transformed data), t1, glm1
-
-```{r test-predict-fCO2-toc, eval = T, cache = T, cache.extra=file.mtime("cba.sf.rds")}
-cba.sf <- readRDS("cba.sf.rds")
-
-models <- c("GAM on log transformed data", "GLM with id link","GLM with log link","LM", "Tweedie with id link", "Tweedie with log link")
-
-cba.sf$log10fCO2lm <- predict(lm1,newdata = cba.sf, type = "response") %>% log10()
-cba.sf$log10fCO2gam <- predict(g1b, newdata = cba.sf, type = "response")
-cba.sf$log10fCO2tweedie <- predict(t1,newdata = cba.sf, type = "response")[,1] %>% log10()
-cba.sf$log10fCO2glm <- predict(glm1, newdata = cba.sf, type = "response") %>% log10()
-
-cba.sf$log10fCO2glm_log <- predict(glm1c, newdata = cba.sf, type = "response") %>% log10()
-cba.sf$log10fCO2tweedie_log <- predict(t1c,newdata = cba.sf, type = "response")[,1] %>% log10()
-
-
-ggplot(cba.sf, aes(x=log10(fCO2)))+
-   geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"))+
-  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"))+
-  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"))+
-  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"))+
-  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"))+
-  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"))+
-  geom_abline(slope = 1, intercept = 0, col = "red")+
-  scale_color_manual(name = "Model", labels = models, values = as.vector(palette.colors(n=6)))+
-  scale_shape_manual(name = "Model", labels = models, values = c(15,16,17,18, 25, 8))+
-  labs(y = "Predicted log10fCO2", x = "Aquaenv log10fCO2")+
-  theme_minimal()
-
-ggplot(cba.sf, aes(x=log10(toc)))+
-  geom_point(aes(y = log10(fCO2)), col = "gray")+
-  geom_point(aes(y = log10fCO2glm_log, col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
-  geom_point(aes(y=log10fCO2tweedie_log, col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
-  geom_point(aes(y=log10fCO2gam, col = "GAM", shape = "GAM"), size = 2)+
-  geom_point(aes(y=log10fCO2glm, col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
-  geom_point(aes(y=log10fCO2lm, col = "LM", shape = "LM"), size = 2)+
-  geom_point(aes(y = log10fCO2tweedie, col = "Tweedie", shape = "Tweedie"), size = 1)+
-  geom_hline(yintercept = log10(fCO2.2019), col = "red")+
-  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
-  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
-  labs(y = "Predicted log10fCO2", x = "log10(TOC)")+
-  theme_minimal()
-
-ggplot(cba.sf, aes(x=toc))+
-  geom_point(aes(y = fCO2), col = "gray")+
-  geom_point(aes(y = 10^(log10fCO2glm_log), col = "GLM-gamma-log", shape = "GLM-gamma-log"),size = 3)+
-  geom_point(aes(y=10^(log10fCO2tweedie_log), col = "Tweedie-log", shape = "Tweedie-log"), size = 2)+
-  geom_point(aes(y=10^(log10fCO2gam), col = "GAM", shape = "GAM"), size = 2)+
-  geom_point(aes(y=10^(log10fCO2glm), col = "GLM-gamma-id", shape = "GLM-gamma-id"),size = 3)+
-  geom_point(aes(y=10^(log10fCO2lm), col = "LM", shape = "LM"), size = 2)+
-  geom_point(aes(y = 10^(log10fCO2tweedie), col = "Tweedie", shape = "Tweedie"), size = 1)+
-  geom_hline(yintercept = fCO2.2019, col = "red")+
-  scale_color_manual(name = "Model", labels = models , values = as.vector(palette.colors(n=6)))+
-  scale_shape_manual(name = "Model", labels = models, values = c(rep(19,6)))+
-  labs(y = "Predicted fCO2", x = "TOC")+
-  ylim(-10,5000)+xlim(0,30)+
-  theme_minimal()
-
-```
-
-The TOC values > 40 mg/L (logTOC > 1,6) are potentially outliers, but removing them doesn't change the test.
-
-
-GAM: linear pred with intercept. The model does not have the "asymptot" at fCO2 = fCO2 atm
-
-LM = GLM id link = Tweedie id link. Both models are similar but underestimate fCO2 for high fCO2
-
-GLM log link = Tweedie log link. 
-
-From AIC: GAM/GLM with id link slightly better, but the best is LM. 
 
 
 
@@ -1059,15 +1396,13 @@ Neglected processes:
 ```{r glm-variables-id, cache = T, cache.extra=file.mtime("wtc.rds")}
 wtc <- readRDS("wtc.rds")
 
-wtc$temp <- wtc$temp + 273
-
-glm2 <- glm(fCO2~toc+cond+temp+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+glm2 <- glm(fCO2~toc+cond+temp+tp, data = wtc, family = Gamma(link = "log"))
 summary(glm2)
 
-glm3 <- glm(fCO2~toc*sat+cond+temp+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
+glm3 <- glm(fCO2~toc*sat+cond+temp+tp, data = wtc, family = Gamma(link = "log"))
 summary(glm3)
 
-glm4 <- glm(fCO2~toc+cond+temp+tp*sat, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
+glm4 <- glm(fCO2~toc+cond+temp+tp*sat, data = wtc, family = Gamma(link = "log"))
 summary(glm4)
 
 lm3 <- lm(fCO2~toc*sat+cond+temp+tp, data = wtc)
@@ -1091,21 +1426,20 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
 
 
 
-```{r cba-test-glm, cache = T, cache.extra=file.mtime("wtc.rds")}
+```{r cba-test-glm, cache = T, cache.extra=file.mtime("cba.sf.rds")}
 cba.sf <- readRDS("cba.sf.rds")
+
 cba.sf$sat <- NA
 cba.sf$sat[which(cba.sf$fCO2 < fCO2.2019)] <- -1
 cba.sf$sat[which(cba.sf$fCO2 > fCO2.2019)] <- 1
-
-cba.sf$temp <- cba.sf$temp + 273
 
 cba.sf$fp3 <- predict(glm3,newdata= cba.sf, type = "response")
 cba.sf$fplm3 <- predict(lm3, newdata = cba.sf, type = "response")
 
 ggplot(cba.sf, aes(x=log10(toc)))+
   geom_point(aes(y=log10(fCO2), col = "Obs"), size = 2)+
-  geom_point(aes(y=log10(fp3), col = "Pred GLM"), size = 2, alpha = 0.5)+
-  geom_point(aes(y=log10(fplm3), col = "Pred LM"), size = 2, alpha = 0.5)+
+  geom_point(aes(y=log10(fp3), col = "Pred GLM + log-link"), size = 2, alpha = 0.5)+
+  geom_point(aes(y=log10(fplm3), col = "Pred LM + id-link"), size = 2, alpha = 0.5)+
   geom_hline(yintercept = log10(fCO2.2019), col = "darkblue")+             
 scale_color_manual(values = c("black","lightblue","firebrick","orange")) +
     theme_minimal()
@@ -1117,16 +1451,136 @@ temp is not significant in above model.
 
 + The only way to get the "cloud" of points for oversaturated lakes is to include pH in the model -> how to do without?
 
-```{r glm-variables-ind, cache = T, cache.extra=file.mtime("wtc.rds"), fig.dim = c(15,10)}
-wtc$temp <- wtc$temp + 273
+```{r test-ph}
 
-glm5 <- glm(fCO2~toc*sat+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+glm8 <- glm(fCO2~toc+cond+tp+ph+temp, data = wtc, family = Gamma(link = "log"))
+summary(glm8)
+
+wtc$fp8 <- predict(glm8, type = "response")
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp8), col = "GLM with toc+Temp+cond+tp+ph"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+```
+
+## Test with TOC predictors
+
+```{r glm-toc-predictors}
+wtc <- readRDS("wtc.rds")
+
+wtc.ndvi <- wtc %>% filter(!is.na(ndvi.value)) %>% filter(!is.na(runoff))
+
+glm10 <- glm(fCO2~ndvi.value+arable+bogs+runoff+tndep, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm10)
+
+wtc.ndvi$fp10 <- predict(glm10, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp10), col = "GLM with ndvi+arable+bogs+runoff"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+```
+
+## Test with Lauerwald predictors
+
+```{r glm-laerwald}
+wtc <- readRDS("wtc.rds")
+
+wtc.lauer <- dplyr::filter(wtc,!is.na(slope))
+
+glmlauer <- glm(fCO2~prec+temp+slope, data = wtc.lauer, family = Gamma(link = "log"))
+summary(glmlauer)
+
+wtc.lauer$fp <- predict(glmlauer, type = "response")
+
+ggplot(wtc.lauer,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp), col = "GLM with prec+temp+slope"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+ggplot(wtc.lauer, aes(x = log10(fCO2), y = log10(fp)))+geom_point(aes(col = log10(area)))+
+  geom_abline(slope = 1, intercept = 0)+
+  geom_smooth(se = F, formula = y~x)+
+  annotate(geom = "label", x = 3.5, y = 2.5, label = paste("r2 = ", round(cor(wtc.lauer$fCO2,wtc.lauer$fp)^2, 2)))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+glmlauer2 <- glm(fCO2~prec+temp+slope+area, data = wtc.lauer, family = Gamma(link = "log"))
+summary(glmlauer2)
+
+wtc.lauer$fp2 <- predict(glmlauer2, type = "response")
+
+ggplot(wtc.lauer,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp2), col = "GLM with prec+temp+slope+area"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+ggplot(wtc.lauer)+geom_point(aes(x = log10(fCO2), y = log10(fp2), col = log10(area)))+
+  geom_abline(slope = 1, intercept = 0)+
+  annotate(geom = "label", x = 3.5, y = 2.5, label = paste("r2 = ", round(cor(wtc.lauer$fCO2,wtc.lauer$fp2)^2, 2)))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+```
+
+```{r test-hastie}
+glm_hastie <- glm(fCO2~area+temp+prec, data = wtc, family = Gamma(link = "log"))
+summary(glm_hastie)
+wtc$fphastie <- predict(glm_hastie, type= "response")
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fphastie), col = "GLM with prec+temp+area"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+ggplot(wtc)+geom_point(aes(x = log10(fCO2), y = log10(fphastie), col = log10(slope)))+
+  geom_abline(slope = 1, intercept = 0)+
+  annotate(geom = "label", x = 3.5, y = 2.5, label = paste("r2 = ", round(cor(wtc$fCO2,wtc$fphastie)^2, 2)))+
+  scale_color_viridis_c()+
+  theme_minimal()
+
+glm_hastie2 <- glm(fCO2~area+temp*log10(tp)+prec, data = wtc, family = Gamma(link = "log"))
+summary(glm_hastie2)
+wtc$fphastie2 <- predict(glm_hastie2, type= "response")
+
+ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fphastie2), col = "GLM with prec+temp+area+log10(tp)"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("lightblue"))+
+  theme_minimal()
+
+ggplot(wtc)+geom_point(aes(x = log10(fCO2), y = log10(fphastie2), col = log10(slope)))+
+  geom_abline(slope = 1, intercept = 0)+
+  annotate(geom = "label", x = 3.5, y = 2.5, label = paste("r2 = ", round(cor(wtc$fCO2,wtc$fphastie2)^2, 2)))+
+  scale_color_viridis_c()+
+  theme_minimal()
+```
+
+# Bibliographie
+
+`r knitr::knit_exit()`
+
+
+# More 
+
+```{r glm-variables-ind, cache = T, cache.extra=file.mtime("wtc.rds"), fig.dim = c(15,10)}
+
+
+glm5 <- glm(fCO2~toc*sat+tp, data = wtc, family = Gamma(link = "log"))
 summary(glm5)
 
-glm6 <- glm(fCO2~toc*sat+cond, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+glm6 <- glm(fCO2~toc*sat+cond, data = wtc, family = Gamma(link = "log"))
 summary(glm6)
 
-glm7 <- glm(fCO2~toc*sat+temp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
+glm7 <- glm(fCO2~toc*sat+temp, data = wtc, family = Gamma(link = "log"))
 summary(glm7)
 
 wtc$fp5 <- predict(glm5, type = "response")
@@ -1160,28 +1614,111 @@ p7 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black"
 ggarrange(p3,p5,p6,p7,nrow=2, ncol = 2)
 ```
 
-```{r test-ph}
 
-glm8 <- glm(fCO2~toc*sat+cond+tp+ph, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1,1,1))
-summary(glm8)
 
-wtc$fp8 <- predict(glm8, type = "response")
+```{r glm-ndvi}
+wtc <- readRDS("wtc.rds")
 
-p1 <-ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
-  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+is+tp+Temp"), size = 2, alpha = 0.5)+
-  geom_point(aes(y = log10(fp8), col = "GLM with toc*sat+is+tp+ph"), size = 1, alpha = 0.5)+
+wtc.ndvi <- wtc %>% filter(!is.na(ndvi.value)) %>% filter(!is.na(runoff))
+
+glm3 <- glm(fCO2~toc*sat+cond+temp+tp, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm3)
+
+wtc.ndvi$fp3 <- predict(glm3, type = "response")
+
+
+glm10 <- glm(fCO2~ndvi.value+arable+bogs+runoff+tndep, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm10)
+
+wtc.ndvi$fp10 <- predict(glm10, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp10), col = "GLM with ndvi+arable+bogs+runoff"), size = 1, alpha = 0.5)+
   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
   scale_color_manual(values = c("firebrick","lightblue"))+
   theme_minimal()
 
-glm9 <- glm(fCO2~toc*tp+cond+tp, data = wtc, family = Gamma(link = "identity"), start = c(1,1,1,1,1))
-summary(glm9)
+glm11 <- glm(fCO2~toc*ndvi.value+cond+tp, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm11)
 
-wtc$fp9 <- predict(glm9, type = "response")
+wtc.ndvi$fp11 <- predict(glm11, type = "response")
 
-ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
-  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+is+tp+Temp"), size = 2, alpha = 0.5)+
-  geom_point(aes(y = log10(fp9), col = "GLM with toc*tp+is+tp"), size = 1, alpha = 0.5)+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp11), col = "GLM with toc*ndvi+cond+tp"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm12 <- glm(fCO2~ndvi.value, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm12)
+
+wtc.ndvi$fp12 <- predict(glm12, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp12), col = "GLM with ndvi"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm15 <- glm(fCO2~runoff, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm15)
+
+wtc.ndvi$fp15 <- predict(glm15, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp15), col = "GLM with runoff"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm16 <- glm(fCO2~bogs, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm16)
+
+wtc.ndvi$fp16 <- predict(glm16, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp16), col = "GLM with bogs"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm17 <- glm(fCO2~forest, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm17)
+
+wtc.ndvi$fp17 <- predict(glm17, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp17), col = "GLM with forest"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm18 <- glm(fCO2~arable, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm18)
+
+wtc.ndvi$fp18 <- predict(glm18, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp18), col = "GLM with arable"), size = 1, alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
+  scale_color_manual(values = c("firebrick","lightblue"))+
+  theme_minimal()
+
+glm19 <- glm(fCO2~prec, data = wtc.ndvi, family = Gamma(link = "log"))
+summary(glm19)
+
+wtc.ndvi$fp19 <- predict(glm19, type = "response")
+
+ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
+  geom_point(aes(y = log10(fp3), col = "GLM with toc*sat+cond+tp+Temp"), size = 2, alpha = 0.5)+
+  geom_point(aes(y = log10(fp19), col = "GLM with precipitation"), size = 1, alpha = 0.5)+
   geom_hline(yintercept = log10(fCO2.1995), col = "darkblue") +
   scale_color_manual(values = c("firebrick","lightblue"))+
   theme_minimal()
@@ -1189,9 +1726,7 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")+
 ```
 
 
-# Bibliographie
 
-`r knitr::knit_exit()`
 
 
 ## Tests with tweedie
