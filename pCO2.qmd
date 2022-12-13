@@ -1,0 +1,157 @@
+---
+title: "pCO2"
+format: html
+editor: visual
+---
+
+```{r dataset}
+library(AquaEnv)
+library(dplyr)
+library(ggplot2)
+
+cba.sel <- readRDS("cba.sel.rds")
+boxplot(cba.sel$TOC)
+cba <- cba.sel %>% subset(TOC < 40)
+
+```
+
+Problems with dataset:
+
+-   In the CBA dataset, alkalinity is supposed to be in meq/L (and I double-checked) but I have a doubt about it, since I only get the right order of magnitude in the results if I consider it to be in ueq/L.
+
+-   After talking to Nico, i confirm that CO2 is the sum of all carbonates (so SumCO2 in aquaenv)
+
+Reference for Kh, K1, K2: Jan Åberg & B. Wallin, 2014
+
+Reference for Organic Alkalinity correction: Liu et al 2020
+
+Carbonate equilibrium: Appelo et Postma 2005
+
+```{r variables}
+
+# Equilibrium constants
+Temp <- cba$temp # in K
+A1 <- -58.0931
+A2 <- 90.5069
+A3 <- 22.2940
+Kh <- exp(A1+A2*100/Temp+A3*log(Temp/100))
+
+K1 <- 10^((-3404.71/Temp)+14.844-0.033*Temp)
+K2 <- 10^((-2902.39/Temp)+6.498-0.0238*Temp)
+
+# CO2 partial pressure in atmosphere
+fCO2.2019 <- 410.5 # in ppm
+fCO2.2019.atm <- fCO2.2019 * 1e-6 # in atm
+
+# Total inorganic carbon
+DIC <- cba$CO2 * 1e-6 # from umol/L to mol/L
+
+# Total organic carbon
+TOC <- cba$TOC/12.011 * 1e-3 # mg/L to mol/L
+
+# Temperature, pH, Alkalinity
+temp <- cba$T
+TA <- cba$alk * 1e-6 # convert from ueq/L to mol/L
+pH <- cba$pH_Kje
+Hplus <- 10^(-pH) 
+
+# Organic alkalinity
+OA_Liu <- cba$toc * 1e3 / 12.011 * 0.08 * 1e-6 # toc from mg/L to umol/L multiplied by fraction of acids -> gives OrgAlk in ueq/L --> converted in mol/L
+
+```
+
+```{r distribution}
+hist(DIC)
+hist(TOC)
+hist(OA_Liu)
+hist(TA)
+
+plot(TA, OA_Liu)
+abline(a=0, b = 1)
+
+```
+
+# Using aquaenv
+
+## aquaenv without correction
+
+```{r aquaenv-no-correction}
+
+ae1 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+
+plot(DIC, ae1$SumCO2)
+abline(a=0, b=1)
+
+plot(TOC, ae1$fCO2*1e6)
+abline(a = fCO2.2019 , b = 0)
+
+plot(ae1$fCO2*1e-6, ae1$CO2 * Kh)
+
+```
+
+Aquaenv overstimate DIC concentration
+
+## aquaenv with correction
+
+```{r aquaenv-no-correction}
+
+ae2 <- aquaenv(S=0, t=temp,pH = pH, TA=(TA-OA_Liu), SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+
+plot(DIC, ae1$SumCO2)
+abline(a=0, b=1)
+
+plot(TOC, ae1$fCO2*1e6)
+abline(a = fCO2.2019 , b = 0)
+```
+
+No change
+
+# Compute fCO2 from CO2
+
+$TIC = [H_2CO_3] + [HCO_3^-]+[CO_3^{2-}]$
+
+$[HCO_3^-] = K_1 \times [H_2CO_3] / [H^+]$
+
+$[CO_3^{2-}] = K_2 \times [HCO_3^-] /[H^+] = K_2 / [H^+] \times K_1 \times [H_2CO_3] / [H^+]$
+
+$TIC = [H_2CO_3] + K_1 \times [H_2CO_3]/[H^+] + K_2 /[H^+] \times K_1 \times [H_2CO_3] / [H^+]$
+
+$TIC = [H_2CO_3] \times (1 + K_1 / [H^+] + K_1 \times K_2 / [H^+]^2 )$
+
+$[H_2CO_3] = TIC \times 1/(1 + K_1/[H^+] + K_1 \times K_2 / [H^+]^2)$
+
+Could also take Ca in consideration: https://link.springer.com/content/pdf/10.1007/s002160050832.pdf
+
+```{r Manually-find-pCO2}
+#  DIC = H2CO3 + HCO3 +CO3 
+H2CO3 <- DIC*1/(1+(K1/Hplus)+(K1*K2/Hplus^2)) # in mol/L
+HCO3 <- H2CO3 * K1 / Hplus
+CO3 <- K2 * HCO3 / Hplus
+
+# Check
+C <- H2CO3 + HCO3 + CO3
+plot(DIC,C)
+
+# Check with pH
+
+qplot()+geom_point(aes(pH, H2CO3, col = "H2CO3"))+
+  geom_point(aes(x = pH, y = HCO3, col = "HCO3"))+
+  geom_point(aes(x=pH, CO3, col = "CO3"))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
+
+fCO2 <- H2CO3/Kh
+plot(TOC, fCO2*1e6)
+abline(a = fCO2.2019, b = 0)
+```
+
+# Find OrgAlk
+
+```{r OA}
+Ca <- cba$ca / 2 * 1e-6 #ueq/L to mol/L
+A <- HCO3+2*CO3+2*Ca
+plot(TA, A)
+abline(a = 0, b = 1)
+
+plot(OA_Liu, A)
+```
