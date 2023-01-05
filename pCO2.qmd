@@ -6,13 +6,18 @@ editor: visual
 
 ```{r dataset}
 library(AquaEnv)
+library(MASS)
 library(dplyr)
 library(ggplot2)
 
-cba.sel <- readRDS("cba.sel.rds")
-boxplot(cba.sel$TOC)
-cba <- cba.sel %>% subset(TOC < 40)
+cba.all <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
+boxplot(cba.all$TOC)
+boxplot(cba.all$Alkalinity)
+cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 1)
 
+bdg.niva <- readRDS("bdg.niva.rds") %>% select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+
+cba <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 ```
 
 Problems with dataset:
@@ -25,16 +30,16 @@ Reference for headspace method: Jan Åberg & B. Wallin, 2014
 
 Reference for K0, K1, K2 and Kw: Harned et Davis, 1943
 
-Reference for Organic Alkalinity correction: Liu et al 2020
+Reference for Organic Alkalinity correction: Liu et al 2020. ! "\~47% of the 4635 records were from tropical areas, tropical freshwaters were comparatively more represented". Maybe not so adapted to boreal freshwater. \~80% from rivers. TA measured on filtered water.
 
-Carbonate equilibrium: Appelo et Postma 2005
+Carbonate equilibrium: Appelo et Postma 2005 / Cole and Praire 2009
 
 Temperature: here we use in-situ temperature but since pH and Alk were measured in the lab, we should maybe use storage temperature (4 degrees)
 
 ```{r variables}
 
 # Equilibrium constants
-Temp <- cba$temp # in K
+Temp <- cba$T + 273.15 # in K
 
 Kw = exp(148.9802 - 13847.26/Temp - 23.6521*log(Temp)) # Dickson and Riley, 1979
 
@@ -47,34 +52,55 @@ fCO2.2019 <- 410.5 # in ppm
 fCO2.2019.atm <- fCO2.2019 * 1e-6 # in atm
 
 # Total inorganic carbon
-DIC <- cba$CO2 * 1e-6 # from umol/L to mol/L
+DIC <- as.numeric(cba$CO2) * 1e-6 # from umol/L to mol/L
 
 # Total organic carbon
 TOC <- cba$TOC/12.011 * 1e-3 # mg/L to mol/L
 
-# Temperature, pH, Alkalinity
-temp <- cba$T
-TA <- cba$alk * 1e-6 # convert from ueq/L to mol/L
-pH <- cba$pH_Kje
-Hplus <- 10^(-pH)
-
 # Conductivity
 EC <- cba$EC_Kje # uS/cm
+I <- 1.3e-5 * EC #@Liu
+TP <- as.numeric(cba$TOTP) / 30.974 * 1e-6 # from ug/L to mol/L
+CP <- TOC/TP
+
+# Temperature, pH, Alkalinity
+temp <- cba$T
+TA <- cba$Alkalinity * 1e-3 # convert from meq/L to mol/L
+pH <- cba$pH_Kje
+Hplus <- 10^(-pH)
+pH_Liu <- pH - (0.03+0.05*log10(I))
 
 # Organic alkalinity
-OA_Liu <- cba$toc * 1e3 / 12.011 * 0.08 * 1e-6 # toc from mg/L to umol/L multiplied by fraction of acids -> gives OrgAlk in ueq/L --> converted in mol/L
+OA_Liu <- cba$TOC * 1e3 / 12.011 * 0.08 * 1e-6 # toc from mg/L to umol/L multiplied by fraction of acids -> gives OrgAlk in ueq/L --> converted in mol/L
+
+# Coordinates
+Lt <- cba$Lat
+Lg <- cba$Long
+A <- cba$lake_area_km2 * 1e3 # converts to m2
+
+rC <- DIC/TOC
 
 ```
 
 ```{r distribution}
-hist(DIC)
-hist(TOC)
-hist(OA_Liu)
-hist(TA)
+boxplot(DIC)
+boxplot(TOC)
+boxplot(OA_Liu)
+boxplot(TA)
 
 plot(TA, OA_Liu)
 abline(a=0, b = 1)
 
+qplot()+geom_boxplot(aes(x = "pH measured", y = pH))+geom_boxplot(aes(x = "pH Liu", y = pH_Liu))+
+  theme_minimal()
+```
+
+TA has very high outliers. Should I remove them? TA \> 0.001 mol/L
+
+```{r ratio-DIC-TOC}
+qplot(Lg,Lt,col = rC, size = log10(A))+scale_color_viridis_c()+
+  theme_minimal()
+plot(log10(A), rC)
 ```
 
 # Using aquaenv
@@ -89,38 +115,42 @@ plot(DIC, ae1$SumCO2)
 abline(a=0, b=1)
 
 plot(TOC, ae1$fCO2)
+text(x = 0.0025, y = 0.012, label = paste("super = ",sum(ae1$fCO2 > fCO2.2019.atm)))
+text(x = 0.0025, y = 0.010, label = paste("under = ", sum(ae1$fCO2 < fCO2.2019.atm)))
 abline(a = fCO2.2019.atm , b = 0)
 
-plot(ae1$fCO2, ae1$CO2 / K0)
-abline(a = 0, b = 1)
 ```
 
-Aquaenv overstimate DIC concentration
+Aquaenv overstimate DIC concentration. All lakes are supersaturated.
 
-## aquaenv with correction
+## Aquaenv with OA correction from Liu
 
 ```{r aquaenv-Liu-correction}
 
 ae2 <- aquaenv(S=0, t=temp,pH = pH, TA=(TA-OA_Liu), SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
 
-plot(DIC, ae1$SumCO2)
+plot(DIC, ae2$SumCO2)
 abline(a=0, b=1)
 
-plot(TOC, ae1$fCO2)
+plot(TOC, ae2$fCO2)
+text(x = 0.0025, y = -0.010, label = paste("super = ",sum(ae2$fCO2 > fCO2.2019.atm)))
+text(x = 0.0025, y = -0.015, label = paste("under = ", sum(ae2$fCO2 < fCO2.2019.atm)))
 abline(a = fCO2.2019.atm , b = 0)
 ```
 
-No change
+Better correlation between SumCO2 and DIC. Most lakes become undersaturated
 
 ## Aquaenv using pH and CO2, to find TA
 
 ```{r aquaenv-TA}
 
-ae3 <- aquaenv(S=0, t=temp,pH = pH, SumCO2 = DIC, fCO2atm = fCO2.2019.atm)
+ae2 <- aquaenv(S=0, t=temp,pH = pH, SumCO2 = DIC, fCO2atm = fCO2.2019.atm)
 
-plot(TA, ae3$TA)
+plot(TA, ae2$TA)
 abline(a=0, b=1)
 ```
+
+Calculated carbonate alkalinity is much lower than TA.
 
 # Compute fCO2 from CO2 manually
 
@@ -164,39 +194,121 @@ qplot()+geom_point(aes(pH, H2CO3, col = "H2CO3"))+
 
 fCO2 <- H2CO3/K0
 plot(TOC, fCO2)
+text(x = 0.0025, y = 0.004, label = paste("super = ",sum(fCO2 > fCO2.2019.atm)))
+text(x = 0.0025, y = 0.003, label = paste("under = ", sum(fCO2 < fCO2.2019.atm)))
 abline(a = fCO2.2019.atm, b = 0)
 ```
 
-Less lakes are supersaturated compared to the aquaenv model. Less high fCO2 values
+```{r manually-find-pCO2-pH-Liu}
+HpLiu <- 10^(-pH_Liu) 
+  
+#  DIC = H2CO3 + HCO3 +CO3 
+H2CO3_Liu <- DIC*1/(1+(K1/HpLiu)+(K1*K2/HpLiu^2)) # in mol/L
+HCO3_Liu <- H2CO3_Liu * K1 / HpLiu
+CO3_Liu <- K2 * HCO3_Liu / HpLiu
 
-## Find Carbonate and Organic Alkalinity
+# Check
+C_Liu <- H2CO3_Liu + HCO3_Liu + CO3_Liu
+plot(DIC,C_Liu)
 
-$TA = [HCO_3^-] + 2[CO_3^{2-}] + [OH^-] - [H^+] + [other weak anions]$
+# Check with pH
 
-Here, "other weak anions" come from organic matter // organic alkalnity.
+qplot()+geom_point(aes(pH, H2CO3_Liu, col = "H2CO3"))+
+  geom_point(aes(x = pH, y = HCO3_Liu, col = "HCO3"))+
+  geom_point(aes(x=pH, CO3_Liu, col = "CO3"))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
 
-```{r OA}
-OH <- Kw/Hplus
+fCO2_Liu <- H2CO3_Liu/K0
 
-#carbonate alkalinity
-CA <- HCO3+2*CO3+OH-Hplus
-plot(TA, CA)
+plot(TOC, fCO2_Liu)
+text(x = 0.0025, y = 0.004, label = paste("super = ",sum(fCO2_Liu > fCO2.2019.atm)))
+text(x = 0.0025, y = 0.003, label = paste("under = ", sum(fCO2_Liu < fCO2.2019.atm)))
+abline(a = fCO2.2019.atm, b = 0)
 
-abline(a = 0, b = 1)
+qplot(fCO2,fCO2_Liu,col = pH)+scale_color_viridis_c()+geom_abline(slope = 1, intercept = 0, col = "gray")+
 
-#organic alkalnity
-OA <- TA - CA
-plot(TA, OA)
-abline(a = 0, b = 1)
+  theme_minimal()
 ```
 
-Organic alkalinity contributes a lot to total alkalinity.
+No big difference with pH correction. Some lakes are very supersaturated, but half are not.
+
+Less lakes are supersaturated compared to the aquaenv model. Less high fCO2 values
+
+## Carbonate, Inorganic and Organic Alkalinity
+
+\@Hruska method
+
+$CA = [HCO_3^-] + 2[CO_3^{2-}]$
+
+$IA = [OH- + 2[SO_4{2-}] + [NO_3^-] + [CL^-] + [F^-] - [H^+] - 2[Ca^{2+}] - 2[Mg^{2+}] - [K^+] + [Na^+]$
+
+$OA = [organic \; bases] - [organic \; acids]$
+
+$TA = CA + IA + OA <=> OA = TA - CA - IA$
+
+```{r OA-from-ions}
+
+# Inorganic alkalinity
+Ca <- cba$Ca / 40.78 * 1e-3 #mg/L to mol/L
+Mg <- cba$Mg / 24.305 * 1e-3
+Kplus <- cba$K / 39.098 * 1e-3
+Na <- cba$Na / 22.990 * 1e-3
+Al <- cba$Al / 26.982 * 1e-3
+
+SO4 <- cba$SO4 / (32.06+4*15.999) * 1e-3
+NO3 <- as.numeric(cba$NO3) / (14.007 + 3*15.999) * 1e-3
+NO3[which(is.na(NO3) == T)] <- 0
+Cl <- cba$Cl / 35.35 * 1e-3
+Fmin <- as.numeric(cba$F) / 18.998 *1e-3
+Fmin[which(is.na(Fmin) == T)] <- 0
+OH <- Kw/HpLiu
+
+IA <- 2*SO4+NO3+Cl+Fmin+HpLiu-2*Ca-2*Mg-Kplus-Na-OH  #Al doesn't change the results
+plot(TA,IA/TA)
+
+#carbonate alkalinity
+CA <- HCO3+2*CO3
+plot(TA, CA)
+abline(a = 0, b = 1, col = "red")
+plot(TA, CA/TA)
+
+# Organic alkalinity
+OA <- TA - IA - CA
+plot(TA, OA/TA)
+
+# Non-carbonate alkalinity
+NCA <- IA + OA # = TA - CA
+plot(TA, NCA/TA)
+```
+
+```{r OA}
+alk_df <- data.frame(TA = TA, OA = OA, OA_Liu = OA_Liu, NCA = IA + OA, CA = CA, CA_Liu = TA - OA_Liu)
+
+ggplot(alk_df,aes(x = TA)) + geom_point(aes(y = OA, col = "calculated OA"))+
+  geom_point(aes(y = OA_Liu, col = "OA according to Liu"))+
+  geom_point(aes(y = NCA, col = "calculated\n non carbonate alk"))+
+  scale_color_manual(values= c("firebrick", "lightblue","orange"))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(alk_df,aes(x = TA)) + geom_point(aes(y = CA, col = "calculated CA"))+
+  geom_point(aes(y = CA_Liu, col = "CA according to Liu"))+
+  geom_point(aes(y = NCA, col = "calculated\n non carbonate alk"))+
+  scale_color_manual(values= c("firebrick", "lightblue","orange"))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+```
+
+Looks like the CA we calculate is equal to the OA calculated according to Liu.
 
 From @Kerr2021: \* There are more errors in carbonate alkalinity in low salinity waters because the equilibrium constants have not been rigorously evaluated @Woosley2021 \* Alkalinity on filtered water \<- no microbial alkalinity. Contribution expected to be low @Kim2996, @Ko2006
 
-## Compare aquaenv with manual
+## Compare TA from aquaenv with CA manual
 
 ```{r compare-CA-aquaenv-manual}
+ae3 <- aquaenv(t = temp, S = 0, pH = pH_Liu, SumCO2 = DIC)
 qplot()+geom_point(aes(x=TA, y = ae3$TA, col = "AquaEnv"))+geom_point(aes(x = TA, y = CA, col = "Manual"))+
   scale_color_manual(values = c("firebrick","lightblue"))+labs(x = "TA, mol/L", y = "CA, mol/L")+
   theme_minimal()
@@ -204,199 +316,266 @@ qplot()+geom_point(aes(x=TA, y = ae3$TA, col = "AquaEnv"))+geom_point(aes(x = TA
 
 Good correspondance between CA calculated with aquaenv and CA calculated manually!
 
+# Model CA
+
+```{r lm-CA-TA}
+summary(m1 <- rlm(CA~TA, method = "MM"))
+plot(TA, CA)
+abline(a=coef(m1)[1], b = coef(m1)[2])
+```
+
+CA is \~33% of TA for low TA.
+
+```{r lm-CA-TOC}
+summary(m2 <- lm(CA~TOC, method = "MM"))
+plot(TOC, CA)
+abline(a=coef(m2)[1], b = coef(m2)[2])
+```
+
+```{r lm-CA-EC}
+summary(m3 <- lm(CA~EC))
+plot(EC, CA)
+abline(a=coef(m3)[1], b = coef(m3)[2])
+```
+
+```{r lm-CA-TOC-EC}
+summary(m <- lm(CA~EC+TOC))
+summary(m2 <- step(m))
+saveRDS(m2, "m2.rds")
+        
+CAp <- predict(m, type = "response")
+plot(TOC, CA)
+points(TOC, CAp, col = "red")
+text(labels = paste("r2 = ",round((cor(CA,CAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 3e-4)
+```
+
+However these variables are skewed. Test with log-transformation
+
+```{r lm-log-CA-EC-TOC}
+summary(m <- lm(log10(CA)~log10(EC)+log10(TOC)))
+saveRDS(m, "m3.rds")
+        
+CAp <- 10^predict(m3, type = "response")
+plot(TOC, CA)
+points(TOC, CAp, col = "red")
+text(labels = paste("r2 = ",round((cor(CA,CAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 3e-4)
+```
+
+```{r glm-log-CA-EC-TOC}
+summary(m4 <- glm(CA~TA*EC*TOC), family = Gamma(link = "log"))
+saveRDS(m4, "m4.rds")
+        
+CAp <- predict(m4, type = "response")
+plot(TOC, CA)
+points(TOC, CAp, col = "red")
+text(labels = paste("r2 = ",round((cor(CA,CAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 3e-4)
+```
+
+```{r test-CA-aquaenv}
+ae6 <- aquaenv(pH = pH, TA = CAp, SumCO2 = NULL, t = temp, S = 0)
+plot(fCO2, ae6$fCO2)
+abline(a = 0, b = 1)
+
+which.max(ae6$fCO2) 
+which.min(temp)
+```
+
+Works well for pH \> 5.5
+
+# Model IA
+
+```{r model-ia}
+summary(m5 <- lm(IA~EC))
+
+plot(EC, IA)
+abline(a = coef(m5)[1], b = coef(m5)[2], col = "red")
+```
+
 # Model OA
 
-```{r robust-model-OA}
-library(MASS)
-summary(m <- rlm(OA~TOC, method = "MM")) 
+OA is defined as OA = TA - IA - CA: it strongly depends on the above calculated variables and reflect some of it.
+
+```{r lm-OA-TOC}
+summary(m <- lm(OA~TOC)) 
 plot(TOC, OA)
 abline(a = coef(m)[1], b = coef(m)[2], col = "red")
 ```
 
+```{r lm-OA-logTOC}
+
+summary(m <- lm(log10(OA)~log10(TOC))) 
+plot(log10(TOC), log10(OA))
+abline(a = coef(m)[1], b = coef(m)[2], col = "red")
+```
+
 ```{r lm-OA}
-summary(m2 <- lm(OA~TOC))
-plot(TOC, OA)
+summary(m2 <- lm(OA~EC))
+plot(EC, OA)
 abline(a = coef(m2)[1], b = coef(m2)[2], col = "red")
-
-summary(m2b <- lm(OA~EC))
-plot(EC,OA)
-abline(a = coef(m2b)[1], b = coef(m2b)[2], col = "red")
-
-summary(m2c <- lm(OA~TOC+EC))
-summary(m2d <- lm(OA~TOC*EC))
-summary(m2e <- lm(OA~TOC:EC))
-summary(m2f <- lm(OA~TOC*EC+TA))
-
-OA_pred <- predict(m2f, data.frame(EC=EC, TOC = TOC, TA = TA), type = "response")
-plot(OA,OA_pred)
-abline(a = 0, b = 1, col = "red")
-plot(TA,OA_pred)
-abline(a = 0, b = 1, col = "red")
 ```
 
-```{r test-pred-OA}
-ae4 <- aquaenv(pH = pH, TA = (TA-OA_pred), t = temp, S = 0, SumCO2 = NULL)
-plot(fCO2, ae4$fCO2)
+most dependant on EC, but mainly because is calculated from IA
 
+```{r compare-OA-OALiu}
+
+plot(OA, OA_Liu)
+abline(a = 0, b = 1)
+plot(NCA, OA_Liu)
+abline(a = 0, b = 1)
 ```
 
-```{r lm-OA-TA}
-summary(m3 <- lm(OA~TA))
-plot(TA,OA)
-abline(a = coef(m3)[1], b = coef(m3)[2], col = "red")
+## KDOM?
 
-OA_p <- predict(m3, data.frame(TA = TA))
-plot(OA,OA_p)
-plot(TA,OA_p)
-abline(a = 0, b = 1, col = "red")
-```
-
-Predicts that OA is \~85% of TA
-
-```{r aquaenv-OA_p}
-ae5 <- aquaenv(pH = pH, TA = (TA-OA_p), t = temp, S=0, SumCO2 = NULL)
-
-plot(fCO2, ae5$fCO2)
-abline(a = 0, b = 1, col = "red")
-```
-
-# model logOA
-
-from @Kulinski2012
-
-$OA = \frac{K_{DOM} \times f.DOC}{[H^+]+K_{DOM}}$
+From @Kulinski2012
 
 OA depends on a dissociation constant $K_{DOM}$, pH, and the fraction of DOM that carries carboxylic group.
 
-$log(OA) = log(K_{DOM})+log(f)+log(DOC)-log([H^+]+K_{DOM})$
+$OA = \frac{K_{DOM} \times f.DOC}{[H^+]+K_{DOM}}$
 
-From linear model:
-
-$log(OA) = 0.63 \times log(TOC) + 1.06 \times pH - 11.76$
-
-Then $log([H^+]-K_{DOM}) = - log([H^+]) \times 1,06 = -log([H^+] + exp(1.06))$
-
-So $K_{DOM} = exp(1.06) =  2.88$
-
-Constant terms are $log(K_{DOM}) + log(f)$ and should be equal to the intercept.
-
-$log(2.88)+log(f) = -11.76$
-
-$log(f) = -11.76 - 1.06$
-
-$log(f) = -12.82$
-
-$f = 2,7 \times 10^{-6}$
-
-```{r log-OA}
-logOA <- log(OA)
-logTOC <- log(TOC)
-
-summary(llm <- lm(logOA~logTOC+pH))
-
-lOA <- 0.63*logTOC+1.06*pH-11.76
-
-qplot(logOA,lOA)+geom_abline(intercept = 0, slope = 1)+
-  theme_minimal()
-``
-```
-
-According to @Kulinski2012:
+Values for river water:
 
 -   K = 2.98e-8
 
 -   f = 0.14
 
-Tests are made with different values for K and f
-
-```{r test-K-f}
-Kk <- 2.98e-8
-fk <- 0.14
-
-OAk <- Kk*fk*TOC/(Hplus + Kk)
-plot(OA, OAk)
-cor(OA,OAk)
-
-Ks <- seq(from = 1e-5, to = 3e-5, by = 0.5e-5)
-
-fs <- seq(from = 0.1, to = 0.2, by = 0.01)
-
-nb_test <- length(Ks)*length(fs)
+```{r OA-Hplus}
+invH <- 1/Hplus
+summary(klm <- lm(OA~TOC:invH))
 
 
-OA_test <- data.frame(OA = OA)
-for(i in 1:length(Ks)){
-  for (j in 1:length(fs)){
-    oa <- Ks[i]*fs[j]*TOC/(Hplus + Ks[i])
-    col = i*j+1
-    oaname <- paste("k",i,"f",j, sep = "")
-   
-   OA_test[,oaname] <- oa
-   #colnames(OA_test)[col] <- oaname
-  }
-}
-
-plot(OA,TOC)
-
-ggplot(OA_test,aes(x=OA))+geom_point(aes(y= k1f1, col = "k1f1"))+
-  geom_point(aes(y= k2f1, col = "k2f1"))+
-  geom_point(aes(y= k3f1, col = "k3f1"))+
-  geom_point(aes(y= k4f1, col = "k4f1"))+
-  geom_point(aes(y= k5f1, col = "k5f1"))+
-  geom_abline(slope = 1, intercept = 0)+
-  scale_color_manual(values = c("firebrick","lightblue","black","orange","darkolivegreen"))+
-  theme_minimal()
-
-ggplot(OA_test,aes(x=OA))+geom_point(aes(y= k1f2, col = "k1f2"))+
-  geom_point(aes(y= k2f2, col = "k2f2"))+
-  geom_point(aes(y= k3f2, col = "k3f2"))+
-  geom_point(aes(y= k4f2, col = "k4f2"))+
-  geom_point(aes(y= k5f2, col = "k5f2"))+
-  geom_abline(slope = 1, intercept = 0)+
-  scale_color_manual(values = c("firebrick","lightblue","black","orange","darkolivegreen"))+
-  theme_minimal()
-
-ggplot(OA_test,aes(x=OA))+geom_point(aes(y= k1f3, col = "k1f3"))+
-  geom_point(aes(y= k2f3, col = "k2f3"))+
-  geom_point(aes(y= k3f3, col = "k3f3"))+
-  geom_point(aes(y= k4f3, col = "k4f3"))+
-  geom_point(aes(y= k5f3, col = "k5f3"))+
-  geom_abline(slope = 1, intercept = 0)+
-  scale_color_manual(values = c("firebrick","lightblue","black","orange","darkolivegreen"))+
-  theme_minimal()
-
-ggplot(OA_test,aes(x=OA))+geom_point(aes(y= k1f4, col = "k1f4"))+
-  geom_point(aes(y= k2f4, col = "k2f4"))+
-  geom_point(aes(y= k3f4, col = "k3f4"))+
-  geom_point(aes(y= k4f4, col = "k4f4"))+
-  geom_point(aes(y= k5f4, col = "k5f4"))+
-  geom_abline(slope = 1, intercept = 0)+
-  scale_color_manual(values = c("firebrick","lightblue","black","orange","darkolivegreen"))+
-  theme_minimal()
-
+kOA <- coef(klm)[2]*TOC*invH+coef(klm)[1]
+plot(OA,kOA)
+abline(a = 0, b = 1)
 ```
 
-# Model CA
+# Model NCA
 
-```{r lm-CA}
-summary(m4 <- rlm(CA~TA, method = "MM"))
-plot(TA, CA)
-abline(a=coef(m4)[1], b = coef(m4)[2])
+NCA = TA - CA
 
-CA_pred <- predict(m4, cba, type = "response")
-plot(CA, CA_pred)
+```{r model-nca}
+summary(n1 <- lm(NCA~EC+TOC))
 
-summary(m5 <- rlm(CA~TOC, method = "MM"))
-plot(TOC, CA)
-abline(a=coef(m5)[1], b = coef(m5)[2])
+NCAp <- predict(n1, type = "response")
+plot(NCA, NCAp)
+abline(a = 0, b = 1)
+
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
 ```
 
-# Model DIC/TA
+```{r glm-OA-TOC}
+summary(n2 <- glm(NCA~TOC+EC, family = Gamma(link = "sqrt"))) 
 
-```{r ratio}
-RA <- DIC/TA
-RCA <-  CA/TA
-ROA <- OA / TA
+NCAp <- predict(n2, type = "response")
+plot(TA, NCAp)
+abline(a = 0, b = 1)
 
-plot(TOC, ROA)
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
+```
+
+```{r model-nca-log}
+summary(n3 <- lm(log10(NCA)~log10(EC)+log10(TOC)))
+saveRDS(n3, "n3.rds")
+
+NCAp <- 10^predict(n3, type = "response")
+
+plot(TA, NCAp)
+abline(a = 0, b = 1)
+
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
+```
+
+Better than non-transformed LM.
+
+```{r model-nca-gam}
+library(mgcv)
+
+summary(n4 <- gam(log10(NCA)~log10(EC)+log10(TOC)))
+saveRDS(n4, "n4.rds")
+
+NCAp <- 10^predict(n4, type = "response")
+
+plot(TA, NCAp)
+abline(a = 0, b = 1)
+
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
+```
+
+https://stats.oarc.ucla.edu/r/dae/tobit-models/#%3A\~%3Atext%3DThe%20tobit%20model%2C%20also%20called%2Cbelow%20and%20above%2C%20respectively). About censoring: https://www.ssc.wisc.edu/\~bhansen/718/NonParametrics9.pdf
+
+```{r model-nca-vgam}
+library(VGAM)
+
+summary(n4 <- vglm(NCA~EC+TOC, tobit(Lower = 0, Upper = TA)))
+saveRDS(n4, "n4.rds")
+
+NCAp <- predict(n4, type = "response")
+
+plot(TA, NCAp)
+abline(a = 0, b = 1)
+
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
+```
+
+```{r model-nca-vgam}
+library(VGAM)
+
+summary(n5 <- vglm(log10(NCA)~log10(EC)+log10(TOC), tobit(Lower = -Inf, Upper = log10(TA))))
+saveRDS(n5, "n5.rds")
+
+NCAp <- 10^predict(n5, type = "response")
+
+plot(TA, NCAp)
+abline(a = 0, b = 1)
+
+plot(TOC, NCA)
+points(TOC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 5e-4, y = 6e-4)
+
+plot(EC, NCA)
+points(EC, NCAp, col = "red")
+text(labels = paste("r2 = ",round((cor(NCA,NCAp, use = "pairwise.complete"))^2,2)), x = 25, y = 6e-4)
+```
+
+```{r aquaenv with our predicted CA}
+NCAp <- 10^predict(n3)
+
+NCA <- TA - CA
+
+plot(NCA, NCAp)
+abline(a = 0, b = 1)
+
+nae <- aquaenv(pH = pH_Liu, TA = TA-NCAp, SumCO2 = NULL, t = temp, S = 0)
+
+plot(fCO2,nae$fCO2)
+abline(a = 0, b = 1)
 ```
