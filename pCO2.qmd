@@ -7,6 +7,8 @@ editor: visual
 ```{r dataset}
 library(AquaEnv)
 library(MASS)
+library(mgcv)
+
 library(dplyr)
 library(ggplot2)
 
@@ -15,14 +17,10 @@ boxplot(cba.all$TOC)
 boxplot(cba.all$Alkalinity)
 cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 1)
 
-bdg.niva <- readRDS("bdg.niva.rds") %>% select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
 
 cba <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 ```
-
-Problems with dataset:
-
--   In the CBA dataset, alkalinity is supposed to be in meq/L (and I double-checked) but I have a doubt about it, since I only get the right order of magnitude in the results if I consider it to be in ueq/L.
 
 -   After talking to Nico, i confirm that CO2 is the sum of all carbonates (so SumCO2 in aquaenv)
 
@@ -98,7 +96,7 @@ qplot()+geom_boxplot(aes(x = "pH measured", y = pH))+geom_boxplot(aes(x = "pH Li
 TA has very high outliers. Should I remove them? TA \> 0.001 mol/L
 
 ```{r ratio-DIC-TOC}
-qplot(Lg,Lt,col = rC, size = log10(A))+scale_color_viridis_c()+
+qplot(Lg,Lt,col = rC, size = rC)+scale_color_viridis_c()+
   theme_minimal()
 plot(log10(A), rC)
 ```
@@ -109,28 +107,30 @@ plot(log10(A), rC)
 
 ```{r aquaenv-no-correction}
 
-ae1 <- aquaenv(S=0, t=temp,pH = pH, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+ae1 <- aquaenv(S=0, t=temp,pH = pH_Liu, TA=TA, SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
 
 plot(DIC, ae1$SumCO2)
 abline(a=0, b=1)
 
 plot(TOC, ae1$fCO2)
-text(x = 0.0025, y = 0.012, label = paste("super = ",sum(ae1$fCO2 > fCO2.2019.atm)))
-text(x = 0.0025, y = 0.010, label = paste("under = ", sum(ae1$fCO2 < fCO2.2019.atm)))
+text(x = 0.0025, y = 0.009, label = paste("super = ",sum(ae1$fCO2 > fCO2.2019.atm)))
+text(x = 0.0025, y = 0.008, label = paste("under = ", sum(ae1$fCO2 < fCO2.2019.atm)))
 abline(a = fCO2.2019.atm , b = 0)
 
 ```
 
-Aquaenv overstimate DIC concentration. All lakes are supersaturated.
+Aquaenv overstimate DIC concentration. Most lakes are supersaturated.
 
 ## Aquaenv with OA correction from Liu
 
 ```{r aquaenv-Liu-correction}
 
-ae2 <- aquaenv(S=0, t=temp,pH = pH, TA=(TA-OA_Liu), SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+ae2 <- aquaenv(S=0, t=temp,pH = pH_Liu, TA=(TA-OA_Liu), SumCO2 = NULL, fCO2atm = fCO2.2019.atm)
+
+qplot(TA, OA_Liu, col = pH)+geom_abline(intercept=0, slope=1, col = "red")+scale_color_viridis_c()+theme_minimal()
 
 plot(DIC, ae2$SumCO2)
-abline(a=0, b=1)
+abline(a=0, b=1, "red")
 
 plot(TOC, ae2$fCO2)
 text(x = 0.0025, y = -0.010, label = paste("super = ",sum(ae2$fCO2 > fCO2.2019.atm)))
@@ -138,19 +138,32 @@ text(x = 0.0025, y = -0.015, label = paste("under = ", sum(ae2$fCO2 < fCO2.2019.
 abline(a = fCO2.2019.atm , b = 0)
 ```
 
-Better correlation between SumCO2 and DIC. Most lakes become undersaturated
+With carbonate alkalinity estimated from Liu et al, we obtain negative sumCO2 -\> for 17 of the samples, OA is higher than TA and CA is inferior to 0.
 
 ## Aquaenv using pH and CO2, to find TA
 
 ```{r aquaenv-TA}
 
-ae2 <- aquaenv(S=0, t=temp,pH = pH, SumCO2 = DIC, fCO2atm = fCO2.2019.atm)
+ae2 <- aquaenv(S=0, t=temp,pH = pH_Liu, SumCO2 = DIC, fCO2atm = fCO2.2019.atm)
 
 plot(TA, ae2$TA)
+abline(a=0, b=1)
+
+plot(DIC, ae1$SumCO2)
 abline(a=0, b=1)
 ```
 
 Calculated carbonate alkalinity is much lower than TA.
+
+```{r compare-ae}
+qplot(ae2$fCO2, ae1$fCO2, col = log10(DIC))+scale_color_viridis_c()+theme_minimal()
+
+error <- ae1$fCO2 - ae2$fCO2
+
+plot(TA,error)
+plot(pH, error)
+
+```
 
 # Compute fCO2 from CO2 manually
 
@@ -226,12 +239,10 @@ text(x = 0.0025, y = 0.004, label = paste("super = ",sum(fCO2_Liu > fCO2.2019.at
 text(x = 0.0025, y = 0.003, label = paste("under = ", sum(fCO2_Liu < fCO2.2019.atm)))
 abline(a = fCO2.2019.atm, b = 0)
 
-qplot(fCO2,fCO2_Liu,col = pH)+scale_color_viridis_c()+geom_abline(slope = 1, intercept = 0, col = "gray")+
-
-  theme_minimal()
+qplot(fCO2,fCO2_Liu,col = pH)+scale_color_viridis_c()+geom_abline(slope = 1, intercept = 0, col = "gray")+  theme_minimal()
 ```
 
-No big difference with pH correction. Some lakes are very supersaturated, but half are not.
+No big difference with pH correction. Some lakes are very supersaturated, but most of them are just under equilibrium.
 
 Less lakes are supersaturated compared to the aquaenv model. Less high fCO2 values
 
@@ -265,45 +276,99 @@ Fmin[which(is.na(Fmin) == T)] <- 0
 OH <- Kw/HpLiu
 
 IA <- 2*SO4+NO3+Cl+Fmin+HpLiu-2*Ca-2*Mg-Kplus-Na-OH  #Al doesn't change the results
-plot(TA,IA/TA)
+plot(TA,IA)
 
 #carbonate alkalinity
 CA <- HCO3+2*CO3
 plot(TA, CA)
 abline(a = 0, b = 1, col = "red")
-plot(TA, CA/TA)
 
 # Organic alkalinity
 OA <- TA - IA - CA
-plot(TA, OA/TA)
+plot(TA, OA)
 
 # Non-carbonate alkalinity
 NCA <- IA + OA # = TA - CA
-plot(TA, NCA/TA)
+plot(TA, NCA)
+
+
+  
 ```
 
 ```{r OA}
 alk_df <- data.frame(TA = TA, OA = OA, OA_Liu = OA_Liu, NCA = IA + OA, CA = CA, CA_Liu = TA - OA_Liu)
 
+ggplot(alk_df, aes(x = TA))+geom_point(aes(y=CA, col = "CA"))+
+  geom_point(aes(y=OA, col = "OA"))+
+  geom_point(aes(y=IA, col = "IA"))+
+  scale_color_manual(values = c("lightblue","orange","firebrick"))+
+  geom_abline(slope=1,intercept = 0)+
+  theme_minimal()
+
 ggplot(alk_df,aes(x = TA)) + geom_point(aes(y = OA, col = "calculated OA"))+
+  geom_point(aes(y = OA_Liu, col = "OA according to Liu"))+
+  scale_color_manual(values= c("firebrick", "lightblue"))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(alk_df,aes(x = TA))+
   geom_point(aes(y = OA_Liu, col = "OA according to Liu"))+
   geom_point(aes(y = NCA, col = "calculated\n non carbonate alk"))+
   scale_color_manual(values= c("firebrick", "lightblue","orange"))+
   geom_abline(slope = 1, intercept = 0)+
   theme_minimal()
 
-ggplot(alk_df,aes(x = TA)) + geom_point(aes(y = CA, col = "calculated CA"))+
-  geom_point(aes(y = CA_Liu, col = "CA according to Liu"))+
-  geom_point(aes(y = NCA, col = "calculated\n non carbonate alk"))+
+ggplot(alk_df,aes(x = TA))+
+  geom_point(aes(y = OA_Liu, col = "OA according to Liu"))+
+  geom_point(aes(y = CA, col = "calculated\n carbonate alk"))+
   scale_color_manual(values= c("firebrick", "lightblue","orange"))+
   geom_abline(slope = 1, intercept = 0)+
   theme_minimal()
 
 ```
 
-Looks like the CA we calculate is equal to the OA calculated according to Liu.
-
 From @Kerr2021: \* There are more errors in carbonate alkalinity in low salinity waters because the equilibrium constants have not been rigorously evaluated @Woosley2021 \* Alkalinity on filtered water \<- no microbial alkalinity. Contribution expected to be low @Kim2996, @Ko2006
+
+```{r error-ca}
+error <- ae1$fCO2-fCO2_Liu
+
+E <- (CA-TA)/K0
+
+plot(E,error)
+
+DIC_e <- error*K0+TA-CA+DIC
+plot(DIC, DIC_e)
+plot(error, DIC_e)
+plot(TA, DIC_e)
+abline(a=0, b = 1)
+plot(pH_Liu, DIC_e)
+plot(EC,DIC_e)
+
+plot(TA,error)
+plot(pH_Liu, error)
+plot(log10(TA), log10(error))
+plot(EC,error)
+
+pH_Liu <- pH - (0.03+0.05*log10(I))
+TA_cor <- TA + log10(I)
+
+qplot(pH, fCO2_Liu, col = "calc")+geom_point(aes(y = ae1$fCO2, col = "ae-TA"))
+```
+aquaenv with TA (even low TA) and low pH: assumes that there is more DIC than there actually is?
+
+```{r fake-high-dic}
+ae1.df <- data.frame(t = ae1$t, TA = ae1$TA, pH = ae1$pH, SumCO2 = ae1$CO2, fCO2 = ae1$fCO2)
+
+ae1.df[order(ae1.df$fCO2, decreasing = T),] %>% head(10)
+
+
+```
+
+```{r complete-ae}
+ae3 <- aquaenv(pH = pH_Liu, TA = TA, SumCO2 = NULL, t = temp, S = 0,
+               SumHNO3 =NO3, SumH2SO4 = SO4)
+qplot(fCO2_Liu,ae3$fCO2)
+```
 
 ## Compare TA from aquaenv with CA manual
 
@@ -314,7 +379,7 @@ qplot()+geom_point(aes(x=TA, y = ae3$TA, col = "AquaEnv"))+geom_point(aes(x = TA
   theme_minimal()
 ```
 
-Good correspondance between CA calculated with aquaenv and CA calculated manually!
+Good correspondence between CA calculated with aquaenv and CA calculated manually!
 
 # Model CA
 
@@ -325,6 +390,12 @@ abline(a=coef(m1)[1], b = coef(m1)[2])
 ```
 
 CA is \~33% of TA for low TA.
+
+```{r gam-CA-TA}
+summary(m1 <- gam(CA~TA, family = Gamma(link = "log")))
+plot(TA, CA)
+abline(a=coef(m1)[1], b = coef(m1)[2])
+```
 
 ```{r lm-CA-TOC}
 summary(m2 <- lm(CA~TOC, method = "MM"))
@@ -424,29 +495,6 @@ plot(NCA, OA_Liu)
 abline(a = 0, b = 1)
 ```
 
-## KDOM?
-
-From @Kulinski2012
-
-OA depends on a dissociation constant $K_{DOM}$, pH, and the fraction of DOM that carries carboxylic group.
-
-$OA = \frac{K_{DOM} \times f.DOC}{[H^+]+K_{DOM}}$
-
-Values for river water:
-
--   K = 2.98e-8
-
--   f = 0.14
-
-```{r OA-Hplus}
-invH <- 1/Hplus
-summary(klm <- lm(OA~TOC:invH))
-
-
-kOA <- coef(klm)[2]*TOC*invH+coef(klm)[1]
-plot(OA,kOA)
-abline(a = 0, b = 1)
-```
 
 # Model NCA
 
@@ -577,5 +625,30 @@ abline(a = 0, b = 1)
 nae <- aquaenv(pH = pH_Liu, TA = TA-NCAp, SumCO2 = NULL, t = temp, S = 0)
 
 plot(fCO2,nae$fCO2)
+abline(a = 0, b = 1)
+```
+
+
+## KDOM?
+
+Try something from @Kulinski2012
+
+OA depends on a dissociation constant $K_{DOM}$, pH, and the fraction of DOM that carries carboxylic group.
+
+$OA = \frac{K_{DOM} \times f.DOC}{[H^+]+K_{DOM}}$
+
+Values for river water:
+
+-   K = 2.98e-8
+
+-   f = 0.14
+
+```{r OA-Hplus}
+invH <- 1/Hplus
+summary(klm <- lm(OA~TOC:invH))
+
+
+kOA <- coef(klm)[2]*TOC*invH+coef(klm)[1]
+plot(OA,kOA)
 abline(a = 0, b = 1)
 ```
