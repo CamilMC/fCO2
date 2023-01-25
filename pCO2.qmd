@@ -17,7 +17,7 @@ boxplot(cba.all$TOC)
 boxplot(cba.all$Alkalinity)
 cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 1)
 
-bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA__ID", "lake_area_km2","basin_area_km2"))
 
 cba <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID")
 ```
@@ -56,8 +56,12 @@ DIC <- as.numeric(cba$CO2) * 1e-6 # from umol/L to mol/L
 TOC <- cba$TOC/12.011 * 1e-3 # mg/L to mol/L
 
 # Conductivity
+a <- 0.020 #C-1
 EC <- cba$EC_Kje # uS/cm
+tEC <- cba$t_EC
+cEC <- EC * (1 + a*(cba$T - tEC))
 I <- 1.3e-5 * EC #@Liu
+
 TP <- as.numeric(cba$TOTP) / 30.974 * 1e-6 # from ug/L to mol/L
 CP <- TOC/TP
 
@@ -354,6 +358,7 @@ TA_cor <- TA + log10(I)
 
 qplot(pH, fCO2_Liu, col = "calc")+geom_point(aes(y = ae1$fCO2, col = "ae-TA"))
 ```
+
 aquaenv with TA (even low TA) and low pH: assumes that there is more DIC than there actually is?
 
 ```{r fake-high-dic}
@@ -453,6 +458,14 @@ which.min(temp)
 
 Works well for pH \> 5.5
 
+Try with gam
+
+```{r gam-ca}
+
+gca <- gam(DIC~s(I), method = "REML") %>% summary()
+gca2 <- gam(DIC~s(I)+s(TOC), method = "REML") %>% summary()
+```
+
 # Model IA
 
 ```{r model-ia}
@@ -494,7 +507,6 @@ abline(a = 0, b = 1)
 plot(NCA, OA_Liu)
 abline(a = 0, b = 1)
 ```
-
 
 # Model NCA
 
@@ -627,7 +639,6 @@ nae <- aquaenv(pH = pH_Liu, TA = TA-NCAp, SumCO2 = NULL, t = temp, S = 0)
 plot(fCO2,nae$fCO2)
 abline(a = 0, b = 1)
 ```
-
 
 ## KDOM?
 

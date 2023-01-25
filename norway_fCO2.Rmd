@@ -1,0 +1,560 @@
+---
+title: "norway_fCO2"
+author: "Camille Crapart"
+date: "2023-01-23"
+output: 
+   bookdown::html_document2:
+     code_folding: hide
+     toc: true
+     toc_float: true
+     number_sections: true
+     fig_caption: true
+
+bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache.lazy = F)
+options(knitr.kable.NA="", knitr.table.format = "html")
+```
+
+```{r libraries}
+library(readxl)
+
+library(AquaEnv)
+library(MASS)
+library(mgcv)
+
+library(dplyr)
+library(ggplot2)
+library(colorspace)
+
+library(sf)
+library(sp)
+
+fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
+fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
+fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
+```
+
+atm concentration of CO2: <https://climate.nasa.gov/vital-signs/carbon-dioxide/>, dataset on <https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt>
+
+```{r cba-data}
+cba.all <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
+
+ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)
+ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)
+ggplot(cba.all)+geom_point(aes(x = pH_Kje, y = as.character(Lake_ID)))+
+  geom_vline(xintercept = 5)
+
+cor(cba.all$Alkalinity,cba.all$Ca*2, use = "pairwise.complete")
+
+cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 0.7) 
+
+bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+
+cba <- merge(cba,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
+
+nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data =  cba[,c("Long","Lat")]) 
+nws.cba <- raster::extract(nws.oct.2019, cba.spdf)
+
+cba$nws_m.s <- nws.cba
+```
+
+```{r N112}
+n112.all <- read.table("Larsen/N112_subset_110909.txt", sep="", header = TRUE,na.strings = c(".", "NA"))
+
+n112 <- n112.all %>% subset(ykoord > 6e6) %>% subset(is.na(TIC.ug) == F) %>% subset(is.na(alkendpoint) == F) %>% subset(alkendpoint > 0)
+names(n112)
+
+nws.oct.2004 <- "NWS/Wind_WFDE5_CRU_200410_v2.1.nc" %>% raster::raster()
+n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
+nws.n112 <- raster::extract(nws.oct.2004, n112.spdf.wgs)
+
+n112$nws_m.s <- nws.n112
+```
+
+```{r finnmark}
+finnmark <- read_xlsx("finse/Finnmark2020_data.xlsx")
+
+nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
+finnmark.spdf <- SpatialPointsDataFrame(coords = finnmark[,c("Lon","Lat")], data =  finnmark[,c("Lon","Lat")]) 
+nws.finnmark <- raster::extract(nws.oct.2019, finnmark.spdf)
+
+finnmark$nws_m.s <- nws.finnmark
+```
+
+```{r norway}
+norway <- data.frame(survey = c(rep("cba", dim(cba)[1]),rep("n112",dim(n112)[1]),rep("finnmark",dim(finnmark)[1])))
+
+
+norway$lake.id <- c(cba$Lake_ID,
+                    n112$Vatnlnr,
+                    finnmark$Sample)
+  
+norway$lake.name <- c(cba$Lake_name,
+                      rep(NA,dim(n112)[1]),
+                      finnmark$ID)
+
+norway$TOC <- c(cba$TOC/12.011 * 1e-3, # mg/L to mol/L
+                n112$TOC/12.011 * 1e-3, # mg/L to mol/L
+                finnmark$TOC_mg.L /12.011 * 1e-3)
+
+norway$TIC <- c(rep(NA, dim(cba)[1]),
+                n112$TIC.ug/12.011 * 1e-6, # ug/L to mol/L
+                rep(NA, dim(finnmark)[1]))
+
+norway$Ca <- c(cba$Ca / 40.78 * 1e-3, #mg/L to mol/L
+                rep(NA, dim(n112)[1]), # ug/L to mol/L
+                as.numeric(finnmark$Ca_mg.L)/40.78 * 1e-3 *2)
+
+norway$TN <- c(cba$TN / 14 * 1e-3, #mg/L to mol/L
+                n112$TotN / 14 * 1e-6, # ug/L to mol/L
+                finnmark$TN_mg.L/14 * 1e-3 *2)
+
+norway$Fe <- c(cba$Fe / 55.845 * 1e-3, #mg/L to mol/L
+                rep(NA, dim(n112)[1]),
+                rep(NA, dim(finnmark)[1]))
+
+norway$TA <- c(cba$Alkalinity * 1e-3, # convert from meq/L to mol/L
+               n112$alkendpoint * 1e-6, # assumes ueq/L to mol/L,
+               as.numeric(finnmark$Ca_mg.L) / 40.78 * 1e-3 *2)  #mg/L to mol/L to eq/L, assumes equivalence with TA
+
+norway$temp_c <- c(cba$T,
+                   n112$temp.situ,
+                   finnmark$T_C)
+
+norway$temp_k <- norway$temp_c + 273.15
+  
+norway$EC <- c(cba$EC_Kje,
+               rep("NA",dim(n112)[1]),
+               finnmark$EC_uS.cm) %>% as.numeric()
+
+norway$IS <- 1.3e-5 * norway$EC
+
+norway$fCO2.atm <- c(rep(fCO2.atm.2019, dim(cba)[1]),rep(rep(fCO2.atm.2004),dim(n112)[1]),rep(fCO2.atm.2020,dim(finnmark)[1]))
+
+norway$pH <- c(cba$pH_Kje,
+               n112$pH,
+               finnmark$pH)
+
+norway$Hplus <- 10^(-norway$pH)
+
+norway$CO2 <- c(as.numeric(cba$CO2) * 1e-6, # from umol/L to mol/L
+                n112$co2.umolar * 1e-6, # umol/L to mol/kg_solution
+                as.numeric(finnmark$CO2_uM) * 1e-6) # uM to M
+
+
+norway$long <- c(cba$Long,
+                 n112.spdf.wgs@coords[,1],
+                 finnmark$Lon)
+
+norway$lat <- c(cba$Lat,
+                 n112.spdf.wgs@coords[,2],
+                 finnmark$Lat)
+
+norway$lake.area <- c(cba$lake_area_km2,
+                      n112$lake.area,
+                     rep(NA,dim(finnmark)[1]))
+
+norway$catchment.area <- c(cba$basin_area_km2,
+                      n112$poly.area,
+                     rep(NA,dim(finnmark)[1]))
+
+norway$nws_m.s <- c(cba$nws_m.s,
+                    n112$nws_m.s,
+                    finnmark$nws_m.s)
+```
+
+```{r constants}
+
+norway$Kw = with(norway, exp(148.9802 - 13847.26/temp_k - 23.6521*log(temp_k))) # Dickson and Riley, 1979
+
+#norway$K0 <- with(norway, 10^-((-2622.38/temp_k) + 15.5873 - 0.0178471*temp_k)) #Harned and Davis, 1943
+norway$K0 <- with(norway, exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100))) # Weiss 1974
+norway$K1 <- with(norway, 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k)) # Harned and Davis, 1943
+norway$K2 <- with(norway, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Harned and Scholes, 1941
+
+```
+
+```{r carbonate-speciation-from-CO2}
+norway$H2CO3 <- norway$CO2 # in mol/L
+norway$HCO3 <- with(norway, H2CO3 * K1 / Hplus)
+norway$CO3 <- with(norway, K2 * HCO3 / Hplus)
+
+norway$fCO2 <- with(norway, CO2 / K0)
+norway$dfCO2 <- with(norway, fCO2 - fCO2.atm)
+
+norway$OH <- with(norway, Kw/Hplus)
+
+# Check
+norway$DIC <- with(norway, H2CO3 + HCO3 + CO3)
+norway$CA <- with(norway, HCO3 + 2*CO3)
+
+ggplot(norway, aes(x = log10(TOC), y = fCO2, col = survey))+
+  geom_hline(yintercept = fCO2.atm.2019, col = "firebrick")+
+  geom_hline(yintercept = fCO2.atm.2020, col = "lightblue")+
+  geom_hline(yintercept = fCO2.atm.2004, col = "orange")+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  geom_point()+
+  theme_minimal()
+
+ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
+  geom_point(aes(y = HCO3, col = "HCO3"))+
+  geom_point(aes(y = CO3, col = "CO3"))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
+
+#ggplot(norway)+geom_point(aes(x=TA, y = CA, col = survey))+
+#  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+#  geom_abline(slope = 1, intercept = 0)+
+#  theme_minimal()
+
+ggplot(norway)+geom_point(aes(x=pH, y = fCO2, col = survey))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+```
+
+```{r carbonate-speciation-from-TIC, eval = F}
+norway$H2CO3_tic <- with(norway, TIC*1/(1+(K1/Hplus)+(K1*K2/Hplus^2)))
+norway$HCO3_tic <- with(norway, H2CO3_tic * K1 / Hplus)
+norway$CO3_tic <- with(norway, K2 * HCO3_tic / Hplus)
+
+norway$fCO2_tic <- with(norway, H2CO3_tic / K0)
+
+# Check
+norway$CA_tic <- with(norway, HCO3_tic + 2*CO3_tic)
+
+ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3_tic, col = "H2CO3"))+
+  geom_point(aes(y = HCO3_tic, col = "HCO3"))+
+  geom_point(aes(y = CO3_tic, col = "CO3"))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
+
+ggplot(norway)+geom_point(aes(x=TA, y = CA_tic, col = survey))+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(filter(norway, survey == "n112"))+geom_point(aes(x=CA,y=CA_tic))+geom_abline(slope = 1, intercept = 0)+theme_minimal()
+
+```
+
+## fCO2 from TA
+
+Theory: TA // CA
+
+$TA = [HCO_3^-]+2 \times [CO_3^{2-}] + [OH^-] - [H^+]$
+
+@Liu2020, from @Millero1995
+
+$[HCO_3^-] = [CO3^{2-}] \times [H^+] / K_2]$
+
+So $TA = [CO3^{2-} \times [H^+] / K_2] + 2 \times [CO_3^{2-}] + [OH^-] - [H^+]$
+
+And $[CO_3^{2-}] = (TA - [OH^-] + [H^+]) / ([H^+]/K_2 + 2)$
+
+Then $[HCO_3^-] = [CO3^{2-} \times [H^+] / K_2]$
+
+And $[H_2CO_3] = [HCO_3^-]\times [H^+] / K_1$
+
+$fCO_2 = [H_2CO_3] / K_0$
+
+```{r ae-ta}
+
+nofin <- filter(norway, survey != "finnmark")
+
+nofin$ta_CO3 <- with(nofin,(TA + OH - Hplus) / (Hplus/K2 +2)) # in mol/L
+nofin$ta_HCO3 <- with(nofin, ta_CO3*Hplus/K2)
+nofin$ta_H2CO3 <- with(nofin, ta_HCO3*Hplus/K1)
+nofin$ta_fCO2 <- with(nofin,ta_H2CO3/K0)
+
+nofin$ta_DIC <- with(nofin, ta_H2CO3 + ta_HCO3 + ta_CO3)
+
+ggplot(nofin)+geom_point(aes(x = TA,y = TA+OH-Hplus))
+
+ggplot(nofin)+geom_point(aes(x = fCO2, y = ta_fCO2, size = Hplus, col = survey))+
+  scale_color_viridis_d()+
+  annotate(x = 4e-3, y = 3e-2, geom="label", label = paste("r=",round(cor(nofin$fCO2,nofin$ta_fCO2, use = "pairwise.complete"),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(filter(nofin, pH > 5.5))+geom_point(aes(x = fCO2, y = ta_fCO2, col = survey, size = Hplus, alpha = TOC))+
+  scale_color_viridis_d()+
+  scale_size(range = c(0.1,5))+
+  annotate(x = 4e-3, y = 1e-2, geom="label", label = paste("r=",round(with(filter(nofin, pH > 5.5),cor(fCO2,ta_fCO2, use = "pairwise.complete")),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+```
+
+```{r deviance}
+nofin$fCO2_diff <- with(nofin, ta_fCO2 - fCO2) # calculated - measured
+
+ggplot(nofin)+geom_point(aes(x = pH, y = fCO2_diff, col = survey, size = log10(TOC)))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = log10(TOC), y = fCO2_diff, col = survey, size = log10(TA)))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = pH, y = fCO2_diff, col = survey, size = log10(lake.area)))+theme_minimal()
+
+```
+
+```{r fix-pH-with-Liu}
+nofin$pH_Liu <- with(nofin, pH - (0.03+0.05*log10(IS)))
+nofin$Hplus_Liu <- 10^(-nofin$pH_Liu)
+nofin$OH_Liu <- with(nofin,Kw*Hplus_Liu)
+
+nofin$CO3_Liu <- with(nofin,(TA - OH_Liu + Hplus_Liu) / (Hplus_Liu/K2 +2)) # in mol/L
+nofin$HCO3_Liu <- with(nofin, CO3_Liu*Hplus_Liu/K2)
+nofin$H2CO3_Liu <- with(nofin, HCO3_Liu*Hplus_Liu/K1)
+nofin$fCO2_Liu <- with(nofin,H2CO3_Liu/K0)
+
+nofin$DIC_Liu <- with(nofin, H2CO3_Liu + HCO3_Liu + CO3_Liu)
+
+
+ggplot(nofin)+geom_point(aes(x = fCO2, y = fCO2_Liu, col = pH_Liu, size = TOC))+
+  scale_color_viridis_c()+
+  annotate(x = 4e-3, y = 4e-2, geom="label", label = paste("r=",round(cor(nofin$fCO2,nofin$fCO2_Liu, use = "pairwise.complete"),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(filter(nofin))+geom_point(aes(x = fCO2, y = fCO2_Liu, col = pH_Liu, size = TOC))+
+  scale_color_viridis_c()+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+```
+
+```{r OA-Liu}
+nofin$OA_Liu <- 0.08 * nofin$TOC
+nofin$TA_Liu <- with(nofin, TA-OA_Liu)
+
+
+nofin$CO3_Liu <- with(nofin,(TA_Liu - OH_Liu + Hplus_Liu) / (Hplus_Liu/K2 +2)) # in mol/L
+nofin$HCO3_Liu <- with(nofin, CO3_Liu*Hplus_Liu/K2)
+nofin$H2CO3_Liu <- with(nofin, HCO3_Liu*Hplus_Liu/K1)
+nofin$fCO2_Liu <- with(nofin,H2CO3_Liu/K0)
+
+nofin$DIC_Liu <- with(nofin, H2CO3_Liu + HCO3_Liu + CO3_Liu)
+nofin$CA_Liu <- with(nofin, HCO3_Liu + 2*CO3_Liu)
+
+ggplot(nofin,aes(x = CA))+geom_point(aes(y = CA_Liu, col = survey))+
+  labs(x = "CA calculated from CO2", y = "CA calculated from TA with Liu correction")+
+  geom_abline(slope = 1, intercept = 0)+theme_minimal()
+
+ggplot(filter(nofin),aes(x = fCO2))+geom_point(aes(y = fCO2_Liu, col = survey))+
+  labs(x = "fCO2 calculated from CO2", y = "fCO2 calculated from TA with Liu correction")+
+  geom_abline(slope = 1, intercept = 0)+theme_minimal()
+  
+  
+```
+
+# Model OA using Hruska
+
+\@Hruska method
+
+$CA = [HCO_3^-] + 2[CO_3^{2-}]$
+
+$IA = [OH- + 2[SO_4{2-}] + [NO_3^-] + [CL^-] + [F^-] - [H^+] - 2[Ca^{2+}] - 2[Mg^{2+}] - [K^+] + [Na^+]$
+
+$OA = [organic \; bases] - [organic \; acids]$
+
+$TA = CA + IA + OA <=> OA = TA - CA - IA$
+
+```{r organic-acids}
+pKa1 <- 3.04
+Ka1 <- 10^(-pKa1)
+
+pKa2 <- 4.42
+Ka2 <- 10^(-pKa2)
+
+pKa3 <- 6.46
+Ka3 <- 10^(-pKa3)
+
+n <- 10.2 #ueq/mg
+nofin$m <- n*12.011*1e3*1e-6 *1e-3# ueq/mg to eq/mol, site density BUT THERE IS A 1e-3 PB
+nofin$RCOO <- with(nofin, (Ka1/Hplus + 2*Ka2/Hplus   + 3*Ka3/Hplus)* m/3 * TOC)
+
+ggplot(nofin)+geom_point(aes(x = pH, y = RCOO, col = survey))
+ggplot(nofin)+geom_point(aes(x = log10(RCOO), y = log10(fCO2), col = survey))
+
+nofin$TAOA <- with(nofin, TA + RCOO + OH - Hplus)
+nofin$TACA <- with(nofin, TA + OH - Hplus)
+
+ggplot(filter(nofin,survey != "finnmark"),aes(x = CA))+
+  geom_point(aes(y = TAOA, col = "TA corrected by OA"))+
+  geom_point(aes(y = TACA, col = "TA corrected by OH and H"))+
+  geom_point(aes(y = TA, col = "TA not corrected"))+
+  scale_color_viridis_d()+
+  labs(x = "CA calculated from CO2", y = "CA calculated from TA, TOC and pH")+
+  annotate(x = 5e-4, y = 3e-3, geom = "label", label = paste("r TA/CA = ",round(with(filter(nofin,survey != "finnmark"),cor(CA, TA, use = "pairwise.complete")),2)))+
+  annotate(x = 5e-4, y = 2.7e-3, geom = "label", label = paste("r TAOA/CA = ",round(with(filter(nofin,survey != "finnmark"),cor(CA, TAOA, use = "pairwise.complete")),2)))+
+  annotate(x = 5e-4, y = 2.4e-3, geom = "label", label = paste("r TACA/CA = ",round(with(filter(nofin,survey != "finnmark"),cor(CA, TACA, use = "pairwise.complete")),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+```
+
+```{r guess-OA, eval = F}
+nofin$OA_m <- with(nofin, TA-CA + OH - Hplus)
+
+ggplot(nofin)+geom_point(aes(x=sqrt(TOC), y = sqrt(OA_m)))
+
+summary(lmoa <- lm(log10(OA_m)~log10(TOC), data = nofin))
+
+nofin$TA_pred <- with(nofin, TA + OH - Hplus - 10^(-2.36+0.52*log10(TOC)))
+
+ggplot(filter(nofin,survey != "finnmark"),aes(x = CA))+
+  geom_point(aes(y = TA_pred, col = "TA corrected by predicted OA"))+
+  geom_point(aes(y = TACA, col = "TA corrected by OH and H"))+
+  geom_point(aes(y = TA, col = "TA not corrected"))+
+  scale_color_viridis_d()+
+  labs(x = "CA calculated from CO2", y = "CA calculated from TA, TOC and pH")+
+  annotate(x = 0.0015, y = 7e-4, geom = "label", label = paste("r TA/CA = ",round(with(nofin,cor(CA, TA, use = "pairwise.complete")),2)))+
+  annotate(x = 0.0015, y = 6e-4, geom = "label", label = paste("r TApred/CA = ",round(with(nofin,cor(CA, TA_pred, use = "pairwise.complete")),2)))+
+  annotate(x = 0.0015, y = 5e-4, geom = "label", label = paste("r TACA/CA = ",round(with(nofin,cor(CA, TACA, use = "pairwise.complete")),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+```
+
+```{r estimate-fCO2-with-corTA}
+
+nofin$cta_CO3 <- with(nofin,(TA + RCOO + OH - Hplus) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+nofin$cta_DIC <- with(nofin, cta_H2CO3 + cta_HCO3 + cta_CO3)
+
+ggplot(nofin)+geom_point(aes(x = fCO2, y = cta_fCO2, col = pH, size = log10(TOC)))+
+  scale_color_viridis_c()+
+  annotate(x = 4e-3, y = 2e-2, geom="label", label = paste("r=",round(cor(nofin$fCO2,nofin$cta_fCO2, use = "pairwise.complete"),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+ggplot(nofin)+geom_point(aes(x = fCO2, y = cta_fCO2, col = survey, size = log10(TOC)))+
+  scale_color_viridis_d()+
+  annotate(x = 4e-3, y = 2e-2, geom="label", label = paste("r=",round(cor(nofin$fCO2,nofin$cta_fCO2, use = "pairwise.complete"),2)))+
+  geom_abline(slope = 1, intercept = 0)+
+  theme_minimal()
+
+
+```
+
+```{r deviance2}
+nofin$fCO2_diff2 <- with(nofin, cta_fCO2 - fCO2) # calculated - measured
+
+ggplot(nofin)+geom_point(aes(x = pH, y = fCO2_diff2, col = survey, size = TA))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = pH, y = fCO2_diff2, col = survey, size = EC))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = (RCOO), y = fCO2_diff2, col = survey, size = pH))+theme_minimal()
+
+ggplot(nofin)+geom_point(aes(x = log10(TOC), y = log10(fCO2_diff2), col = survey, size = log10(TA)))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = log10(TOC), y = fCO2_diff2, col = survey, size = Fe))+theme_minimal()
+
+```
+
+# Corrects apparent pH
+
+```{r pH-corr}
+ggplot(nofin)+geom_point(aes(x=pH,y = TOC, col = survey))
+
+nofin$OHplus <- with(nofin,(Ka1+2*Ka2+3*Ka3)*TOC*m/3/RCOO)
+
+ggplot(nofin)+geom_point(aes(x = Hplus, y = OHplus))
+
+nofin$Hplus_fix <- with(nofin, Hplus - OHplus)
+
+nofin$pH_fix <- -log10(nofin$Hplus_fix)
+
+ggplot(nofin)+geom_point(aes(x = pH, y = pH_fix))
+
+```
+
+# Includes Calcium?
+
+@Gelberch <https://link.springer.com/content/pdf/10.1007/s002160050832.pdf>
+
+calcium constants
+
+# Evasion rate
+
+wind speed <https://wcrp-cmip.github.io/CMIP6_CVs/docs/CMIP6_institution_id.html>
+
+Data downloaded from Copernicus <https://cds.climate.copernicus.eu/cdsapp#!/dataset/derived-near-surface-meteorological-variables?tab=overview>
+
+See part 1
+
+Theory from @Hastie2018
+
+$FCO_2 = A_{lake}*k*\Delta CO_2$
+
+FCO2 in mol/day, Alake = lake area in m2, $\Delta CO_2$ in mol/m3 is the difference between water and air pCO2.
+
+According to Vachon and Prairie 2013:
+
+$k_{600} = 2.51 + 1.48*U_{10} + 0.39 * U_{10} * log_{10] A_{lake}$
+
+with A in km2 and \<u in m/s
+
+k has to be adjusted for temperature. @Vachon200:
+
+$K_{600} = k_{CO2}*(\frac{600}{Sc_{CO2})^-n$
+
+Get Sc for all lakes:
+
+```{r schmidt}
+library(LakeMetabolizer)
+
+norway$Sc <- getSchmidt(norway$temp_c, "CO2")
+
+norway$n <- NA
+for(i in 1:length(norway$n)){
+  if(norway$nws_m.s[i] < 3.7 & is.na(norway$nws_m.s[i]) == F){
+    norway$n[i] = 2/3
+  }else if(norway$nws_m.s[i] > 3.7 & is.na(norway$nws_m.s[i]) == F){
+    norway$n[i] = 1/2
+  } else if(is.na(norway$nws_m.s[i]) == T){
+    norway$n[i] = NA
+  }
+}
+
+
+norway$k600 <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake.area already in km2
+                    
+norway$kCO2 <- with(norway, k600*(600/Sc)^n)
+
+norway$FCO2 <- with(norway, lake.area*1e3*kCO2*((fCO2 - fCO2.atm)*K0*1e-3)) #-> mol/day
+```
+
+```{r maps}
+ggplot()+
+  geom_point(data = filter(norway, dfCO2 > 0), aes(x=long, y = lat, size = dfCO2, col = survey, shape = "Supersaturated"))+
+  geom_point(data = filter(norway, dfCO2 < 0), aes(x=long, y = lat, size =dfCO2, col = survey, shape = "Undersaturated"))+
+  borders(region = c("Norway"))+xlim(4,32)+ylim(58,72)+
+  labs(size = "fCO2 - fCO2 atm", col = "Survey") +
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  scale_shape_manual(values = c(16,1))+
+    scale_size(range = c(0.1,3))+
+  theme_void()
+
+ggplot()+
+  geom_point(data = filter(norway, FCO2 > 0), aes(x=long, y = lat, size = FCO2, col = "Supersaturated", shape = survey))+
+  geom_point(data = filter(norway, FCO2 < 0), aes(x=long, y = lat, size =FCO2, col = "Undersaturated",shape = survey))+
+  borders(region = c("Norway"))+ylim(58,63)+xlim(4,13)+
+  labs(alpha = "CO2 evasion, mol/day (october)", col = "survey") + 
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  scale_shape_manual(values = c(1,16))+
+  theme_void()
+
+ggplot(norway)+geom_boxplot(aes(x = survey, y = dfCO2, col = survey))
+ggplot(norway)+geom_boxplot(aes(x = survey, y = fCO2, col = survey))
+ggplot(norway)+geom_boxplot(aes(x = survey, y = log10(FCO2), col = survey))
+ggplot(norway)+geom_boxplot(aes(x = survey, y = pH, col = survey))
+ggplot(norway)+geom_boxplot(aes(x = survey, y = TOC, col = survey))
+
+
+
+```
+
+\

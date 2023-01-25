@@ -19,7 +19,6 @@ knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align =
 options(knitr.kable.NA="", knitr.table.format = "html")
 ```
 
-
 ```{r libraries, message = F}
 library(readxl)
 
@@ -83,6 +82,7 @@ c2 <- ggplot(cba.total, aes(x=EC_Kje))+geom_point(aes(y = kond_2019*10, col = "N
   geom_abline(slope = 1, intercept = 0)+
   theme_minimal()
 
+ggplot(cba.total)+geom_point(aes(x=Alkalinity, y = alke))+theme_minimal()
 ggplot(cba.total)+geom_point(aes(x=Ca, y = ca_2019))+theme_minimal()
 ggplot(cba.total)+geom_point(aes(x=Mg, y = mg_2019))+theme_minimal()
 ggplot(cba.total)+geom_point(aes(x=K, y = k_2019))+theme_minimal()
@@ -128,7 +128,6 @@ saveRDS(cba.sel,"cba.sel.rds")
 
 ```
 
-
 ## NDVI
 
 ```{r download-NDVI-raster-2015, eval = F}
@@ -166,8 +165,7 @@ write.csv(summer.ndvi.2015,"NDVI/100lakes.summer.ndvi.2015.csv")
 
 ## Compute fCO2 in CBA lakes
 
-fCO2 in 2019: 410 ppm 
-https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations
+fCO2 in 2019: 410 ppm <https://www.eea.europa.eu/ims/atmospheric-greenhouse-gas-concentrations>
 
 ```{r model-fCO2-CBA, cache = T, cache.extra=file.mtime("cba.sel.rds")}
 cba.sel <- readRDS("cba.sel.rds")
@@ -246,7 +244,7 @@ ggplot(cba.sel)+geom_point(aes(x=ph, y = fCO2_oa, col = toc))+scale_color_viridi
 
 ## Correction excess cations
 
-### Compute xs 
+### Compute xs
 
 ```{r tom-xs-cation}
 
@@ -354,10 +352,9 @@ ggplot(cba.sel, aes(x = CO2))+geom_point(aes(y=CO2_oa, col = "Liu"))+
 
 ```
 
-
 ### My aquaenv
 
-Practical salinity unit: http://www.salinityremotesensing.ifremer.fr/sea-surface-salinity/definition-and-units
+Practical salinity unit: <http://www.salinityremotesensing.ifremer.fr/sea-surface-salinity/definition-and-units>
 
 ```{r CO2-prdict}
 cba.sel <- readRDS("cba.sel.rds")
@@ -474,7 +471,6 @@ cba.sf <- merge(cba.sel,summer.ndvi.2015,by = "Lake_ID") %>% st_as_sf()
 saveRDS(cba.sf, "cba.sf.rds")
 ```
 
-
 ```{r plot-cba, eval = F}
 cba.sf <- readRDS("cba.sf.rds")
 
@@ -506,10 +502,9 @@ ggsave("CO2_oversaturation_cba.png",t1, width = 12, height = 8, unit = "cm", dpi
 
 `r knitr::include_graphics(c("map_fCO2_cba.png", "hist_fCO2_cba.png","CO2_oversaturation_cba.png"))`
 
-`r knitr::knit_exit()`
-## Test and compare LM and GAM 
+`r knitr::knit_exit()` \## Test and compare LM and GAM
 
-Selected  models: lm1, g1b (on log-transformed data), t1, glm1
+Selected models: lm1, g1b (on log-transformed data), t1, glm1
 
 ```{r test-predict-fCO2-toc, eval = T, cache = T, cache.extra=file.mtime("cba.sf.rds")}
 cba.sf <- readRDS("cba.sf.rds")
@@ -569,22 +564,17 @@ ggplot(cba.sf, aes(x=toc))+
 
 ```
 
-The TOC values > 40 mg/L (logTOC > 1,6) are potentially outliers, but removing them doesn't change the test.
-
+The TOC values \> 40 mg/L (logTOC \> 1,6) are potentially outliers, but removing them doesn't change the test.
 
 GAM: linear pred with intercept. The model does not have the "asymptot" at fCO2 = fCO2 atm
 
 LM = GLM id link = Tweedie id link. Both models are similar but underestimate fCO2 for high fCO2
 
-GLM log link = Tweedie log link. 
+GLM log link = Tweedie log link.
 
-From AIC: GAM/GLM with id link slightly better, but the best is LM. 
+From AIC: GAM/GLM with id link slightly better, but the best is LM.
 
-
-
-
-
-# Northern Lakes Survey Database 
+# Northern Lakes Survey Database
 
 ## Download from NOFA database
 
@@ -606,9 +596,7 @@ catchment.poly.corine <- st_transform(catchment.poly, crs = st_crs("EPSG:3035"))
 saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
 ```
 
-
-## Computes fCO2 in Northern Lakes 
-
+## Computes fCO2 in Northern Lakes
 
 ```{r model-fco2-4D, eval = F}
 ion <- readRDS("ion.rds")
@@ -645,13 +633,11 @@ ggplot(ae)+geom_point(aes(x=TA, y = fCO2, col = pH))+scale_color_viridis_c()+the
 
 ```
 
-
 ## Catchment characteristics
 
-### Soil 
+### Soil
 
-https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html
-
+<https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html>
 
 ```{r extract-soil-depth, eval = F}
 
@@ -666,12 +652,11 @@ saveRDS(soil.df, "soil.df.rds")
 
 ### NDVI
 
-NDVI values are extracted from the GIMMS NDVI3g dataset [@NCAR2018], stored on http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/, in the "ecocast" dataset and accessed via the "gimms" package [@Detsch2021] on Rstudio. 
+NDVI values are extracted from the GIMMS NDVI3g dataset [@NCAR2018], stored on <http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/>, in the "ecocast" dataset and accessed via the "gimms" package [@Detsch2021] on Rstudio.
 
-Data is taken bi-monthly [@Tucker2005]. Raster layers of all slices are downloaded using the downloadGimms function, then monthly composites are calculated using the monthlyComposites function. The maximum NDVI value is taken for each pixel. Afterwards the NDVI values for each catchment polygon are extracted using the extract function from the raster package [@Hijmans2018]. 
+Data is taken bi-monthly [@Tucker2005]. Raster layers of all slices are downloaded using the downloadGimms function, then monthly composites are calculated using the monthlyComposites function. The maximum NDVI value is taken for each pixel. Afterwards the NDVI values for each catchment polygon are extracted using the extract function from the raster package [@Hijmans2018].
 
-The values stored in the ecocast dataset are composed of the NDVI value and a flag value indicating the goodness of the data. All the NDVI values extracted, corresponding to the values for the studied catchments, had a flag of 1, indicating a good value. The NDVI value was retrieved from the stored value using the formula $floor(ndvi3g/10)/1000$ [@Detsch2021], and then the mean of the 3 summer values (June, July and August) was computed for each catchment. 
-
+The values stored in the ecocast dataset are composed of the NDVI value and a flag value indicating the goodness of the data. All the NDVI values extracted, corresponding to the values for the studied catchments, had a flag of 1, indicating a good value. The NDVI value was retrieved from the stored value using the formula $floor(ndvi3g/10)/1000$ [@Detsch2021], and then the mean of the 3 summer values (June, July and August) was computed for each catchment.
 
 ```{r summer-ndvi, eval = F}
 
@@ -709,11 +694,11 @@ write.csv(summer.ndvi,"summer.ndvi.csv")
 
 ### Runoff
 
-The runoff data was downloaded from the CORDEX database [@CORDEXvERC]. The data is available at https://esg-dn1.nsc.liu.se/projects/esgf-liu/.
+The runoff data was downloaded from the CORDEX database [@CORDEXvERC]. The data is available at <https://esg-dn1.nsc.liu.se/projects/esgf-liu/>.
 
-The names of the variables in the CORDEX project follow the CF Metadata convention: http://cfconventions.org/. We used here the "mrros" variable, for surface runuff, in kg/m2/s. 
+The names of the variables in the CORDEX project follow the CF Metadata convention: <http://cfconventions.org/>. We used here the "mrros" variable, for surface runuff, in kg/m2/s.
 
-According to Euro-CORDEX guidelines, we used the mean runoff over 30 years. We chose the interval 1970 - 2000 to match the temperature and precipitation data provided by WorldClim (p11 on EURO-CORDEX guidelines https://www.euro-cordex.net/imperia/md/content/csc/cordex/guidance_for_euro-cordex_climate_projections_data_use__2021-02_1_.pdf). This time period matches .
+According to Euro-CORDEX guidelines, we used the mean runoff over 30 years. We chose the interval 1970 - 2000 to match the temperature and precipitation data provided by WorldClim (p11 on EURO-CORDEX guidelines <https://www.euro-cordex.net/imperia/md/content/csc/cordex/guidance_for_euro-cordex_climate_projections_data_use__2021-02_1_.pdf>). This time period matches .
 
 ```{r runoff, eval = F}
 runoff.raster <- "CORDEX/mrros_Lmon_CNRM-CM6-1-HR_historical_r1i1p1f2_gr_185001-201412.nc"
@@ -730,7 +715,7 @@ saveRDS(runoff.fennoscandia,"CORDEX/runoff.fennoscandia.rds")
 
 ### Temperature, precipitation and slope
 
-Temperature and precipitation are downloaded from the database Worldclim [@WorldClim]. We use the average of the time interval 1970-2000, stored in the "Bioclimatic variable" dataset, available for download at: https://www.worldclim.org/data/worldclim21.html. We used the highest available resolution (30 seconds). Temperature is the mean annual temperature from 1970 to 2000 in °C, or "bio1" in the Bioclimatic dataset. The original data is in C*10 so the data is divided by 10 before use. Precipitation is the mean annual precipitation in mm or bio12 in the Bioclimatic dataset.  
+Temperature and precipitation are downloaded from the database Worldclim [@WorldClim]. We use the average of the time interval 1970-2000, stored in the "Bioclimatic variable" dataset, available for download at: <https://www.worldclim.org/data/worldclim21.html>. We used the highest available resolution (30 seconds). Temperature is the mean annual temperature from 1970 to 2000 in °C, or "bio1" in the Bioclimatic dataset. The original data is in C\*10 so the data is divided by 10 before use. Precipitation is the mean annual precipitation in mm or bio12 in the Bioclimatic dataset.
 
 ```{r temp-prec, eval = F}
 bio.fennoscandia <- raster::getData(name = "worldclim", var = "bio", res = 2.5)
@@ -742,7 +727,7 @@ annual.prec <- raster::extract(bio.fennoscandia$bio12, catchment.poly, fun = mea
 saveRDS(annual.prec,"annual.prec.Rdata")
 ```
 
-The altitude data was accessed through the "getData" function, and comes from the NASA digital elevation model (SRTM 90 m). The slope was then computed using the "terrain" function from the raster package.  
+The altitude data was accessed through the "getData" function, and comes from the NASA digital elevation model (SRTM 90 m). The slope was then computed using the "terrain" function from the raster package.
 
 ```{r altitude-slope, eval = F}
 alt.nor <- getData("alt",country = "NOR", mask = T)
@@ -770,36 +755,34 @@ saveRDS(slope.df, "slope.df.Rdata")
 
 ### Land cover
 
-The Land Cover data was downloaded from https://land.copernicus.eu/pan-european/corine-land-cover/lcc-2000-2006. The previous version (1995-2000) excludes Norway so the 2000 version was preferred. 
-
+The Land Cover data was downloaded from <https://land.copernicus.eu/pan-european/corine-land-cover/lcc-2000-2006>. The previous version (1995-2000) excludes Norway so the 2000 version was preferred.
 
 The land cover data was downloaded as a raster (.tiff file), which included the legend recording the code for each land use. The raster and legend were assembled in QGIS before being imported as a shapefile in R. The codes (corresponding to the line in the extracted dataframe) of the categories of interest were:
 
 Arable land:
 
-* 12: non-irrigated arable land
-* 16: fruit trees and berries plantations
-* 18: pastures
-* 19: annual crops associated with permanent crops
-* 20: Complex cultivation patterns
+-   12: non-irrigated arable land
+-   16: fruit trees and berries plantations
+-   18: pastures
+-   19: annual crops associated with permanent crops
+-   20: Complex cultivation patterns
 
 Bogs:
 
-* 36: peat bogs
-* 35: inland marshes, excluded because all zeros in the studied area.
+-   36: peat bogs
+-   35: inland marshes, excluded because all zeros in the studied area.
 
 Forest:
 
-* 23: Broad-leaved forest
-* 24: Coniferous forest
-* 25: Mixed forest
+-   23: Broad-leaved forest
+-   24: Coniferous forest
+-   25: Mixed forest
 
 Bare:
 
-* 31: Bare rocks
-* 32: Sparsely vegetated areas
-* 33: Burnt areas
-
+-   31: Bare rocks
+-   32: Sparsely vegetated areas
+-   33: Burnt areas
 
 ```{r extract-land-cover, eval = F}
 corine <- raster::raster("Corine_Land_Cover/U2006_CLC2000_V2020_20u1.tif")
@@ -808,7 +791,7 @@ clc.remote <- raster::extract(corine,catchment.poly.corine)
 saveRDS(clc.remote,"clc.remote.Rdata")
 ```
 
-The proportion of each land-cover category was computed for each catchment. 
+The proportion of each land-cover category was computed for each catchment.
 
 ```{r corine-tab-prop, eval = F}
 clc.remote <- readRDS("clc.remote.Rdata")
@@ -839,12 +822,12 @@ saveRDS(bare,"bare.rds")
 
 The nitrogen and sulfur deposition data were extracted from the EMEP database [@EMEP]. The data from 2000 was used as it is the first model available.
 
-N-deposition (NOx and NH3) is the sum of: 
+N-deposition (NOx and NH3) is the sum of:
 
-* Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
-* Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2 
-* Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
-* Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
+-   Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
+-   Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2
+-   Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
+-   Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
 
 ```{r extract-Ndep, eval = F}
 EMEP_file <- "EMEP/EMEP01_rv4.42_year.2000met_2000emis_rep2021.nc"
@@ -872,8 +855,8 @@ saveRDS(ndep.df,"ndep.df.Rdata")
 
 The S-deposition is composed of the sum of:
 
-* Dry deposition of oxidized sulphur per m2 grid DDEP_SOX_m2Grid, in mg/m2
-* Wet deposition of oxidized sulphur WDEP_SOX, in mg/m2
+-   Dry deposition of oxidized sulphur per m2 grid DDEP_SOX_m2Grid, in mg/m2
+-   Wet deposition of oxidized sulphur WDEP_SOX, in mg/m2
 
 ```{r extract-Sdep, eval = F}
 library(ncdf4)
@@ -894,7 +877,6 @@ sdep.df$tsdep <- rowSums(sdep.df@data[,c(2:3)])
 
 saveRDS(sdep.df,"sdep.df.rds")
 ```
-
 
 ### Merge dfs
 
@@ -961,9 +943,6 @@ total_filter <- total_filter %>% filter(uncertain == FALSE)
 saveRDS(total_filter, file = "waterchem.rds")
 
 ```
-
-
-
 
 ```{r selected-df, eval = F}
 
@@ -1089,13 +1068,11 @@ ggplot()+
 
 `r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png","CO2_oversaturation.png"))`
 
-
 # Corplot and PCA
 
 `r wtc <- readRDS("wtc.rds")`
 
 There are `r sum(wtc$sat == 1)` (`r round(sum(wtc$sat == 1)/dim(wtc)[1]*100,1)`%) supersaturated lakes and `r sum(wtc$sat == -1)` (`r round(sum(wtc$sat == -1)/dim(wtc)[1]*100,1)`%)undersaturated lakes.
-
 
 ## Super- and undersaturated lakes
 
@@ -1130,7 +1107,6 @@ corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ndvi.value","arable","
 corrplot::corrplot.mixed(cor(dplyr::select(wtc, c("fCO2","ph","alk","cond","ca","mg","na","k","cl","so4","f","no3","nh4","tp","tn","toc","cn","cp"))), tl.cex = 1.5, number.cex = 1.5)
 ```
 
-
 ## PCA
 
 ```{r pca-total, fig.dim = c(12,10), cache = T, cache.extra=file.mtime("wtc.rds")}
@@ -1157,8 +1133,7 @@ par(mfrows = c(1,2))
 plot.pca.12
 plot.pca.23
 
-``` 
-
+```
 
 # fCO2 modelled with TOC
 
@@ -1166,9 +1141,9 @@ plot.pca.23
 oversat <- dplyr::filter(wtc, sat == 1)
 undersat <- dplyr::filter(wtc, sat == -1)
  
-``` 
+```
 
-## fCO2 modelled with TOC, LM 
+## fCO2 modelled with TOC, LM
 
 Fit fCO2 with only TOC as predictor:
 
@@ -1213,7 +1188,7 @@ ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"
 
 ```
 
-## fCO2-TOC with GAM and Gamma distribution 
+## fCO2-TOC with GAM and Gamma distribution
 
 ```{r gam-fco2-toc, cache = T, cache.extra=file.mtime("wtc.rds")}
 g1 <- mgcv::gam(fCO2~toc, data = wtc, family = Gamma(link = "identity"))
@@ -1244,10 +1219,7 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+geom_p
   scale_color_manual(values = c("lightblue","black"))+theme_minimal()
 ```
 
-
-
 ## GAM with Tweedie
-
 
 ```{r fCO2-TOC-tweedie, cache = T, cache.extra=file.mtime("wtc.rds")}
 t1 <- gam(list(fCO2~toc,~1, ~1), data = wtc, family = twlss(link = list("identity","identity","identity")))
@@ -1354,45 +1326,37 @@ ggplot()+geom_point(data = wtc, aes(x = log10(toc), y = log10(fCO2), col = "obs"
 
 ```
 
-
-
 # Adding other variables
 
-Goal: predict fCO2 in lakes // part of TIC pool. 
+Goal: predict fCO2 in lakes // part of TIC pool.
 
-Processes involved: 
+Processes involved:
 
 `r knitr::include_graphics(c("C-cycle.png","C-cycle-legend.png"))`
 
 @Maberly2012 CO2 imported is from SOC respiration
 
-@Allesson2022 conductivity is linked to groundwater influx -> TIC import
- 
- 
+@Allesson2022 conductivity is linked to groundwater influx -\> TIC import
 
-Choosen variables: 
+Choosen variables:
 
+-   TOC is freshwater OC pool
 
-* TOC is freshwater OC pool
+-   Temp as proxy for bacterioplankton respiration. \*\* not significant in models below. I suggest a DOC quality proxy ex. C/N
 
-* Temp as proxy for bacterioplankton respiration. ** not significant in models below. I suggest a DOC quality proxy ex. C/N
-
-* IS ("ionic strenght"; though incomplete,as a "proxy" itself for conductivity) for TIC imported (we don't use Ca because Ca is too correlated to alkalinity, which we already use to compute fCO2)
-
+-   IS ("ionic strenght"; though incomplete,as a "proxy" itself for conductivity) for TIC imported (we don't use Ca because Ca is too correlated to alkalinity, which we already use to compute fCO2)
 
 Neglected processes:
 
-* transport: we consider the water pool only
+-   transport: we consider the water pool only
 
-* photomineralization is neglected (Lina's estimation of contribution to CO2 production = 3%) [@Allesson2021] 
+-   photomineralization is neglected (Lina's estimation of contribution to CO2 production = 3%) [@Allesson2021]
 
-* sedimentation : ??? assume that sedimentation rate and respiration balance each other. 
+-   sedimentation : ??? assume that sedimentation rate and respiration balance each other.
 
-* methanogenesis: left out at the moment
-
+-   methanogenesis: left out at the moment
 
 **IF THE INTERACTION BETWEEN TOC and SAT IS NOT INCLUDED, GLM OBTAINS THE SAME RESULTS AS LM (RESULTS FOR LM ARE THE SAME WITH AND WITHOUT INTERACTION)**
-
 
 ```{r glm-variables-id, cache = T, cache.extra=file.mtime("wtc.rds")}
 wtc <- readRDS("wtc.rds")
@@ -1425,8 +1389,6 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
 
 ```
 
-
-
 ```{r cba-test-glm, cache = T, cache.extra=file.mtime("cba.sf.rds")}
 cba.sf <- readRDS("cba.sf.rds")
 
@@ -1447,10 +1409,9 @@ scale_color_manual(values = c("black","lightblue","firebrick","orange")) +
 
 ```
 
+temp is not significant in above model.
 
-temp is not significant in above model. 
-
-+ The only way to get the "cloud" of points for oversaturated lakes is to include pH in the model -> how to do without?
+-   The only way to get the "cloud" of points for oversaturated lakes is to include pH in the model -\> how to do without?
 
 ```{r test-ph}
 
@@ -1569,8 +1530,7 @@ ggplot(wtc)+geom_point(aes(x = log10(fCO2), y = log10(fphastie2), col = log10(sl
 
 `r knitr::knit_exit()`
 
-
-# More 
+# More
 
 ```{r glm-variables-ind, cache = T, cache.extra=file.mtime("wtc.rds"), fig.dim = c(15,10)}
 
@@ -1614,8 +1574,6 @@ p7 <- ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black"
 
 ggarrange(p3,p5,p6,p7,nrow=2, ncol = 2)
 ```
-
-
 
 ```{r glm-ndvi}
 wtc <- readRDS("wtc.rds")
@@ -1726,10 +1684,6 @@ ggplot(wtc.ndvi,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2)), col = "Black")
 
 ```
 
-
-
-
-
 ## Tests with tweedie
 
 ```{r gam-tweedie-toc-NDVI, cache = T}
@@ -1783,7 +1737,7 @@ ggplot(wtc,aes(x=log10(toc)))+geom_point(aes(y=log10(fCO2), col = "Obs"))+
   scale_color_manual(values = c("firebrick","lightblue","black"))+theme_minimal()
 ```
 
-Similar results for GAM with tweedie and GLM with gamma. Smoothed tweedie has lower AIC. All models are unable to predict undersaturation at high TOC concentration.   
+Similar results for GAM with tweedie and GLM with gamma. Smoothed tweedie has lower AIC. All models are unable to predict undersaturation at high TOC concentration.
 
 ```{r predict-sat, cache = T}
 
@@ -1802,7 +1756,6 @@ ggplot(wtc)+geom_point(aes(x=log10(toc),y=log10(fCO2), col = sat.pred))+
   geom_hline(yintercept = log10(fCO2.1995), col = "purple")+
   theme_minimal()
 ```
-
 
 ```{r gam-over-under, cache = T}
 oversat <- subset(wtc,fCO2 > fCO2.1995)
@@ -1829,13 +1782,9 @@ ggplot()+geom_point(data = wtc, aes(x=log10(toc), y=log10(fCO2)))+
 
 ```
 
-
-
-
-
 # Extra
 
-## Full model and stepwise selection 
+## Full model and stepwise selection
 
 ```{r stepwise-selection-lm}
 library(MASS)
@@ -1851,8 +1800,6 @@ summary(step.model1)
 
 ## Full model on log-transformed variables
 
-
-
 ```{r lm-log-stepwise, eval = T}
 
 lm2 <- lm(log10fCO2~., data = logwtc)
@@ -1861,12 +1808,6 @@ summary(lm2)
 step.model2 <- stepAIC(lm2, direction = "both", trace = FALSE)
 summary(step.model2)
 ```
-
-
-
-
-
-
 
 ## fCO2 modelled with TOC, GAM
 
@@ -1924,7 +1865,3 @@ ggplot(cba.sf, aes(x=toc))+geom_point(aes(y=fCO2lm + fCO2.1995, col = "LM", shap
 
 
 ```
-
-
-
-
