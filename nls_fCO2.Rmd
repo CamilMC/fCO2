@@ -337,15 +337,28 @@ saveRDS(sdep.df,"sdep.df.rds")
 
 ### Near surface wind speed
 
-```{r nws}
+https://cds.climate.copernicus.eu/cdsapp#!/dataset/10.24381/cds.6c68c9bb?tab=overview
+
+Resolution : 1x1 degree ~11.1x11.1 km <- 123 km2
+
+```{r nws, eval = T}
 library(sp)
 ion <- readRDS("ion.rds")
+lakes <- readRDS("lakes.rds")
 
 nws.oct.1995 <- "NWS/Wind_WFDE5_CRU_199510_v2.1.nc" %>% raster::raster()
+plot(nws.oct.1995)
+
 ion.spdf <- SpatialPointsDataFrame(coords = ion[,c("longitude","latitude")], data =  ion[,c("longitude","latitude")]) 
 ion.nws <- raster::extract(nws.oct.1995, ion.spdf)
 
 ion$nws_m.s <- ion.nws
+
+# 
+# lakes.nws <- raster::extract(nws.oct.1995, lakes, sp = F, df = F, na.rm = T, fun = mean)
+# saveRDS(lakes.nws, "lakes.nws.rds")
+# 
+# lakes$nws <- cbind(lakes,unlist(lakes.nws))
 
 ```
 
@@ -500,11 +513,22 @@ nlss <- readRDS("nlss.rds")
 lmoaM <- readRDS("lmoaM.rds")
 
 nlss$invHplus <- 1/nlss$Hplus
+nlss$invHplus2 <- 1/(nlss$Hplus^2)
 
 nlss$OA <- predict(lmoaM, newdata = nlss, type = "response") # TA corrected by OA
 
-ggplot(nlss, aes(x = pH))+geom_point(aes(y = log10(OA), col = log10(TA)))
+ggplot(nlss, aes(x = pH))+geom_point(aes(y = log10(sqrt(OA)), col = log10(TA)))
 ggplot(nlss, aes(x = log10(TA)))+geom_point(aes(y = log10(OA), col = log10(TA)))+geom_abline(slope = 1, intercept = 0)
+
+ggplot(nlss, aes(x = pH))+geom_point(aes(y = OA, col = TOC))
+
+ggplot(nlss, aes(x = log10(TA)))+geom_point(aes(y = log10(sqrt(OA)), col = log10(TOC)))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
+
+ggplot(nlss, aes(x = TOC))+geom_point(aes(y = OA, col = log10(TA)))+
+  geom_abline(slope = 1, intercept = 0)+
+  scale_color_viridis_c()+theme_minimal()
 
 ```
 
@@ -575,15 +599,19 @@ ggplot(nlss) + geom_point(aes(x = log10(TOC), y = log10(fCO2), col = "corrected 
 ggplot(nlss, aes(x = log10(TA))) + geom_point(aes(y = log10(fCO2), col = "corrected TA"), alpha = 0.5)+
   geom_point(aes(y = log10(ta_fCO2), col = "non corrected TA"), alpha = 0.5)+
   geom_hline(yintercept = log10(fCO2.1995*1e-6), col = "firebrick")+
-  geom_vline(xintercept = log10(0.07*1e-3))+
   scale_color_manual(values = c("firebrick","lightblue","orange"))+
   theme_minimal()
 
 ggplot(nlss, aes(x = pH)) + geom_point(aes(y = log10(fCO2), col = "corrected TA"), alpha = 0.5)+
   geom_point(aes(y = log10(ta_fCO2), col = "non corrected TA"), alpha = 0.5)+
   geom_hline(yintercept = log10(fCO2.1995*1e-6), col = "firebrick")+
-  geom_vline(xintercept = 5.4)+
+  geom_vline(xintercept = 8)+
   scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
+
+ggplot(nlss, aes(x = pH)) + geom_point(aes(y = log10(fCO2), col = log10(TOC)), alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.1995*1e-6), col = "firebrick")+
+  scale_color_viridis_c()+
   theme_minimal()
 
 ggplot(nlss, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
@@ -591,6 +619,15 @@ ggplot(nlss, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
   geom_point(aes(y = CO3, col = "CO3"))+
   labs(title = "Carbonates from corrected alkalinity")+
   scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  theme_minimal()
+
+
+ggplot(nlss, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
+  geom_point(aes(y = HCO3, col = "HCO3"))+
+  geom_point(aes(y = CO3, col = "CO3"))+
+  labs(title = "Carbonates from corrected alkalinity")+
+  scale_color_manual(values = c("firebrick","lightblue","orange"))+
+  ylim(0,0.005)+
   theme_minimal()
 
 
@@ -611,10 +648,6 @@ ggplot(nlss)+geom_point(aes(x=pH, y = fCO2, col = survey))+
   theme_minimal()
 
 ```
-```{r co2evasion}
-
-
-```
 
 
 ```{r model-fCO2-toc}
@@ -633,20 +666,120 @@ ggplot(nlss)+geom_point(aes(x = log10(TOC), y = log10(fCO2*1e6), shape = survey)
   labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
   theme_minimal()
 
-summary(glmfCO2nlss <- glm(log10(fCO2*1e6)~TOC,data = nlss, family = Gamma(link = "identity")))
+summary(glmfCO2nlss <- glm(log10(fCO2*1e6)~log10(TOC), data = nlss, family = Gamma(link = "log")))
+r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+nlss$predfCO2sqrt <- predict(glmfCO2nlss, type = "response") 
+
+ggplot(nlss, aes(x = log10(TOC)))+geom_point(aes(y = log10(fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2sqrt, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+
+
+
+summary(glmfCO2nlss <- glm(fCO2~TOC,data = nlss, family = Gamma(link = "identity")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
 
 ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = fCO2*1e6), shape = 1)+
+  geom_point(aes(y = fCO2), shape = 1)+
   geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
-  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4], col = "Std Error"), lty = 2)+
-  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4], col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("lightblue", "firebrick"))+
-  annotate(x = 2.5*1e-3, y = 1e5, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
   theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in atm", title = "Norhtern Lake surveys")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
   theme_minimal()
+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+
+ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+log10(lake.area),data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2), shape = 1)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+
+ggplot(nlss, aes(x = TOC))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+log10(lake.area),data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2), shape = 1)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+
+ggplot(nlss, aes(x = TOC))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
 
 ```
 
@@ -710,10 +843,9 @@ nlss$mgC.m2.day <- with(nlss, kCO2*(fCO2-fCO2.atm)*K0*1e3 *12.011 * 1e3) # mgC/m
 
 ```{r maps}
 ggplot()+
-  geom_point(data = filter(nlss, dfCO2 > 0), aes(x=long, y = lat, col = fCO2/fCO2.atm * 100))+
+  geom_point(data = nlss, aes(x=long, y = lat, col = TOC*12.011*1e3))+
   borders(region = c("Norway","Sweden","Finland"))+xlim(4,37)+ylim(55,72)+
-  scale_color_viridis_c() +
-  theme_void()
+  scale_color_continuous_sequential(rev = T,  palette = "Reds")+labs(col = "TOC in mg/L")+ theme_void()
 
 ggplot()+
   geom_point(data = filter(nlss, dfCO2 < 0), aes(x=long, y = lat, col = fCO2/fCO2.atm * 100))+
@@ -725,7 +857,7 @@ ggplot()+
 
 ```{r map-mgC.m2.day}
 ggplot()+
-  borders(region = c("Norway", "Sweden","Finland"), fill = "seashell3", col = "seashell3")+xlim(4,35)+ylim(55,72)+
+  borders(region = c("Norway", "Sweden","Finland"), fill = "seashell2", col = "seashell2")+xlim(4,35)+ylim(55,72)+
   geom_point(data = subset(nlss, dfCO2 > 0), aes(x=long, y = lat, size =log10(mgC.m2.day), col = log10(mgC.m2.day)), shape = 16)+
   geom_point(data = subset(nlss, dfCO2 < 0), aes(x=long, y = lat, size =log10(mgC.m2.day),col = log10(mgC.m2.day)), shape = 1)+
   labs(col = "Log10(Carbon evasion, mgC/m2/day)", size = "Log10(Carbon evasion, mgC/m2/day)", title = "Northern Lakes Survey") +
@@ -734,7 +866,12 @@ ggplot()+
   guides(color = guide_legend(), size = guide_legend())+
   annotate(x = 32, y =5, geom = "text", label = paste("Median = ", round(median(nlss$mgC.m2.day, na.rm = T),2)))+
   theme_void(base_size = 15)+
-  theme(legend.position = "bottom", plot.background = element_rect(fill = "aliceblue", color = "aliceblue"))
+  theme(legend.position = "bottom")
+```
+
+```{r }
+
+
 ```
 
 `r knitr::knit_exit()`

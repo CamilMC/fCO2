@@ -63,6 +63,28 @@ nws.cba <- raster::extract(nws.oct.2019, cba.spdf)
 cba$nws_m.s <- nws.cba
 ```
 
+```{r gather-cba}
+
+cba.summer.ndvi.2015 <- readRDS("cba.summer.ndvi.2015.rds")
+
+runoff.cba <- readRDS("runoff.cba.rds")
+
+bogs.cba <- readRDS("CLC/bogs.cba.rds")
+arable.cba <- readRDS("CLC/arable.cba.rds")
+forest.cba <- readRDS("CLC/forest.cba.rds")
+bare.cba <- readRDS("CLC/bare.cba.rds")
+
+ndep.cba <- readRDS("Ndep/ndep.df.cba.rds")
+
+annual.temp.cba <- readRDS("annual.temp.cba.rds")
+annual.prec.cba <- readRDS("annual.prec.cba.rds")
+
+cba <- cba %>% merge(cba.summer.ndvi.2015, by = "Lake_ID") %>% merge(runoff.cba, by = "Lake_ID") %>%
+  merge(bogs.cba, by = "Lake_ID") %>% merge(arable.cba, by = "Lake_ID") %>% merge(forest.cba, by = "Lake_ID") %>%
+  merge(bare.cba, by = "Lake_ID") %>% merge(ndep.cba, by = "Lake_ID") %>% 
+  merge(annual.prec.cba, by = "Lake_ID") %>% merge(annual.temp.cba, by = "Lake_ID")
+```
+
 ```{r N112}
 n112.all <- read.table("Larsen/N112_subset_110909.txt", sep="", header = TRUE,na.strings = c(".", "NA"))
 
@@ -167,6 +189,38 @@ norway$catchment.area <- c(cba$basin_area_km2,
 norway$nws_m.s <- c(cba$nws_m.s,
                     n112$nws_m.s,
                     finnmark$nws_m.s)
+
+norway$ndvi <- c(cba$NDVI,
+                 n112$NDVI,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$runoff <- c(cba$Runoff,
+                 n112$runoff,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$bog <- c(cba$Bog,
+                 n112$bog,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$arable <- c(cba$Arable,
+                 n112$arable,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$forest <- c(cba$Forest,
+                 n112$forest,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$Ndep <- c(cba$TNdep,
+                 n112$Ndep,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$temp.annual <- c(cba$temp,
+                 n112$temp.ann,
+                 rep(NA,dim(finnmark)[1]))
+
+norway$prec.annual <- c(cba$precip,
+                 rep(NA,dim(n112)[1]),
+                 rep(NA,dim(finnmark)[1]))
 ```
 
 ```{r constants}
@@ -209,6 +263,7 @@ norway$OH <- with(norway, Kw/Hplus)
 # Check
 norway$DIC <- with(norway, H2CO3 + HCO3 + CO3)
 norway$CA <- with(norway,  HCO3 + 2*CO3) 
+norway$OA <- with(norway, TA - CA)
 
 ggplot(norway, aes(x = log10(TOC), y = fCO2, col = survey))+
   geom_hline(yintercept = fCO2.atm.2019, col = "firebrick")+
@@ -446,16 +501,363 @@ nofin$cta_DIC_pred <- with(nofin, cta_H2CO3_pred + cta_HCO3_pred + cta_CO3_pred)
 
 ```
 
+```{r compare-loa-models, eval = F}
+
+
+#2 
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "2")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+# 3
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC + fCO2.atm, data = nofin, family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "3")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#4 
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC + fCO2.atm, data = nofin, family = gaussian(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "4")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#5
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "5")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+
+#6
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = subset(nofin, survey == "N112_2004"), family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "6")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#7
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "sqrt")))
+
+nofin$OA_pred <- predict(lmoaM,newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "6")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+
+#8
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "8")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#9
+summary(lmoaM <- glm(CA  ~ TA +invHplus:TOC, data = nofin, family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "gam", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "gam", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "9")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#10
+summary(lmoaM <- glm(CA  ~ TA +invHplus:TOC, data = subset(nofin, TA < 0.07e-3), family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+#11
+summary(lmoaM <- glm(CA  ~ TA +invHplus:TOC, data = subset(nofin, TA > 0.07e-3), family = Gamma(link = "identity")))
+
+nofin$OA_pred <- predict(lmoaM, newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "11")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+```
+
+
+```{r model12}
+#12
+nofin$atmHCO3 <- with(nofin,fCO2.atm/Hplus*K1*K0)
+nofin$invatmHCO3 <- 1/nofin$atmHCO3
+nofin$invtemp <- 1/nofin$temp_k
+nofin$invHplus <- 1/nofin$Hplus
+nofin$invHplus2 <- 1/(nofin$Hplus^2)
+nofin$OA2 <- nofin$OA^2 %>% sqrt()
+nofin$CA.TOC <- nofin$CA / nofin$TOC
+nofin$TOC2 <- nofin$TOC^2
+
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "sqrt")))
+
+nofin$OA_pred <- predict(lmoaM, newdata = nofin, type = "response")
+nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "12")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "loess", se = T)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "loess", se = T)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "12")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(TA)))+
+  geom_point(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(y = log10(fCO2*1e6), col = "Measured fCO2"))+
+  geom_point(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+   geom_smooth(aes(y = log10(fCO2*1e6), col = "Measured fCO2"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = T)+
+  labs(y = "log10(fCO2, uatm)", x = "TA", col = "", title = "12")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(TOC)))+
+  geom_point(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(y = log10(fCO2*1e6), col = "Measured fCO2"))+
+  geom_point(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+   geom_smooth(aes(y = log10(fCO2*1e6), col = "Measured fCO2"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = T)+
+  labs(y = "log10(fCO2, uatm)", x = "log10(TOC)", col = "", title = "12")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(y = log10(fCO2*1e6), col = "Measured fCO2"))+
+  geom_point(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+   geom_smooth(aes(y = log10(fCO2*1e6), col = "Measured fCO2"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = T)+
+  labs(y = "log10(fCO2, uatm)", x = "pH", col = "", title = "12")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(lake.area)))+
+  geom_point(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(y = log10(fCO2*1e6), col = "Measured fCO2"))+
+  geom_point(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_smooth(aes(y = log10(fCO2*1e6), col = "Measured fCO2"), method = "gam", se = T)+
+  geom_smooth(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "gam", se = T)+
+  geom_smooth(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "gam", se = T)+
+  labs(y = "log10(fCO2, uatm)", x = "log10(lake area, km2)", col = "", title = "12")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+#   facet_grid(rows = vars(survey))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(DIC/TOC)))+
+  geom_point(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(y = log10(fCO2*1e6), col = "Measured fCO2"))+
+  geom_point(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = log10(fCO2*1e6), col = "Measured fCO2"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = T)+
+  geom_smooth(aes(y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = T)+
+  labs(y = "log10(fCO2, uatm)", x = "log10(DIC/TOC)", col = "", title = "12")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = pH, y = DIC/TOC))+
+  geom_point()+
+  geom_smooth(method = "gam", se = T)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_minimal()
+
+
+```
+
+
+
 ```{r modeloa}
 
 nofin$sqrtTOC <- sqrt(nofin$TOC)
+nofin$TOC2 <- nofin$TOC^2
 nofin$invHplus <- 1/nofin$Hplus
+nofin$invHplus2 <- 1/(nofin$Hplus)^2
+nofin$invHplus3 <- 1/(nofin$Hplus)^3
+nofin$atmHCO3 <- with(nofin, fCO2.atm/Hplus*K0*K1)
+nofin$invTOC <- 1/nofin$TOC
 
-summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC + fCO2.atm, data = nofin, family = Gamma(link = "sqrt")))
+summary(lmoaM <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "sqrt")))
+#summary(lmoaMcba <- glm(CA  ~ TA + invHplus:TOC, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity")))
 
 saveRDS(lmoaM, "lmoaM.rds")
 
-nofin$OA_pred <- with(nofin, predict(lmoaM, type = "response"))
+nofin$OA_pred <- predict(lmoaM, type = "response")
 
 nofin$TAOA <- with(nofin, OA_pred - OH + Hplus)
 
@@ -486,6 +888,13 @@ ggplot(subset(nofin, survey == "CBA_2019"),aes(x = CA))+
 #  annotate(x = 5e-4, y = 2.7e-3, geom = "label", label = paste("r (TA - OA),CA = ",round(with(filter(nofin,survey != "finnmark"),cor(CA, TAOA, use = "pairwise.complete")),2)))+
   geom_abline(slope = 1, intercept = 0)+
   theme_minimal()
+
+ggplot(nofin, aes(x = TA)) + geom_point(aes(y = CA, col = "measured CA"))+
+  geom_point(aes(y = cta_HCO3 + 2* cta_CO3, col = "predicted CA from OA"))+
+  scale_color_manual(values = c("firebrick", "orange"))+
+  theme_minimal()
+
+
 
 ```
 
@@ -557,7 +966,7 @@ geom_point(aes(x = log10(TOC), y = log10(cta_fCO2_pred), col = "fCO2 with pred O
 
 ```
 
-```{r model-fCO2-cat}
+```{r model-log10fCO2-cat}
 summary(glmfCO2 <- glm(log10(fCO2*1e6)~log10(TOC), data = nofin, family = Gamma(link = "identity")))
 coef.glmfCO2 <- summary(glmfCO2)$coefficients
 r2nofin <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
@@ -570,7 +979,7 @@ ggplot(nofin)+geom_point(aes(x = log10(TOC), y = log10(fCO2*1e6), shape = survey
   scale_shape_manual(values = c(1,16))+
   annotate(x = -2.75, y = 2.3, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
   theme(legend.position = "none")+
-  labs(y = "log10(fCO2, ppm)", x = "log10(TOC, mol/L)", title = "CBA + N112 surveys")+
+  labs(y = "log10(fCO2, uatm)", x = "log10(TOC, mol/L)", title = "CBA + N112 surveys")+
   theme_minimal()
 
 
@@ -587,7 +996,7 @@ ggplot(subset(nofin, survey == "CBA_2019"))+geom_point(aes(x = log10(TOC), y = l
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   annotate(x = -2.75, y = 2.3, geom = "label", label = paste("Slope = ", round(coef.glmfCO2cba[2],2), "\n R2 = ", r2cba))+
   theme(legend.position = "none")+
-  labs(y = "log10(fCO2, ppm)", x = "log10(TOC, mol/L)", title = "CBA survey, 2019")+
+  labs(y = "log10(fCO2, uatm)", x = "log10(TOC, mol/L)", title = "CBA survey, 2019")+
   theme_minimal()
 
 summary(glmfCO2n112 <- glm(log10(fCO2*1e6)~log10(TOC), data = subset(nofin, survey == "N112_2004"), family = Gamma(link = "identity")))
@@ -602,7 +1011,88 @@ ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = log10(TOC), y = 
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   annotate(x = -3, y = 2.7, geom = "label", label = paste("Slope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
   theme(legend.position = "none")+
-  labs("log10(fCO2, ppm)", x = "log10(TOC, mol/L)", title = "N112 survey, 2004")+
+  labs(y = "log10(fCO2, uatm)", x = "log10(TOC, mol/L)", title = "N112 survey, 2004")+
+  theme_minimal()
+
+```
+
+```{r model-fCO2-cat}
+summary(glmfCO2 <- glm(fCO2~TOC, data = nofin, family = Gamma(link = "identity")))
+coef.glmfCO2 <- summary(glmfCO2)$coefficients
+r2nofin <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nofin)+geom_point(aes(x = TOC, y = fCO2, shape = survey))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+TOC*coef.glmfCO2[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]+coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2[1]-coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]-coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA + N112 surveys")+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, shape = survey, col = "measured"))+
+  geom_point(aes(y = coef.glmfCO2[1]+TOC*coef.glmfCO2[2], shape = survey, col = "predicted"))+
+#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+TOC*coef.glmfCO2[2], col = "predict"))+
+#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]+coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]-coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]-coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+#  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "log10(lake area, km2)", title = "CBA + N112 surveys")+
+  theme_minimal()
+
+# glm with lake area
+summary(glmfCO2 <- glm(fCO2~log10(lake.area), data = nofin, family = Gamma(link = "identity")))
+coef.glmfCO2 <- summary(glmfCO2)$coefficients
+r2nofin <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nofin, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, shape = survey))+
+  geom_line(aes(y = coef.glmfCO2[1]+log10(lake.area)*coef.glmfCO2[2], col = "predict"))+
+  geom_line(aes(y = coef.glmfCO2[1]+coef.glmfCO2[3]+log10(lake.area)*(coef.glmfCO2[2]+coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2[1]-coef.glmfCO2[3]+log10(lake.area)*(coef.glmfCO2[2]-coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "log10(lake area, km2)", title = "CBA + N112 surveys")+
+  theme_minimal()
+
+
+
+
+
+
+summary(glmfCO2cba <- glm(fCO2~TOC, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity")))
+summary.glmfCO2cba <- summary(glmfCO2cba)
+coef.glmfCO2cba <- summary(glmfCO2cba)$coefficients
+r2cba <- with(summary.glmfCO2cba, 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "CBA_2019"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+TOC*coef.glmfCO2cba[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]+coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]-coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]-coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2cba[2],2), "\n R2 = ", r2cba))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019")+
+  theme_minimal()
+
+summary(glmfCO2n112 <- glm(fCO2~TOC, data = subset(nofin, survey == "N112_2004"), family = Gamma(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+
+ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+TOC*coef.glmfCO2n112[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]+coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]-coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]-coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.0015, y = 0.001, geom = "label", label = paste("Slope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
   theme_minimal()
 
 ```
@@ -623,8 +1113,11 @@ b1 <- bplot(nofin$pH, "pH")
 b2 <- bplot(nofin$TOC*12.011*1e3, "TOC in mg/L")
 b3 <- bplot(nofin$TA*1e3, "TA, meq/L")
 b4 <- bplot(log10(nofin$lake.area), "log10(Lake area), km2")
+b5 <- bplot(nofin$DIC, "DIC in mol/L")
+b6 <- bplot(nofin$fCO2/nofin$TOC, "TIC/TOC")
 
-ggarrange(plotlist = list(b1,b2,b3,b4),ncol = 2, nrow = 2)
+
+ggarrange(plotlist = list(b1,b2,b3,b4, b5, b6),ncol = 2, nrow = 3)
 #  theme_minimal()
 ```
 
@@ -636,8 +1129,10 @@ ggplot(nofin)+geom_boxplot(aes(y = "fCO2 \n headspace", x = log10(fCO2*1e6), col
   coord_flip()+theme_minimal(base_size = 15)+
   scale_color_manual(values = c("firebrick","dodgerblue3", "orange"))+
   theme(axis.text.x = element_text(angle = 45, hjust= 1), legend.position = "none")+
-  labs(y = "", x = "log10(fCO2, ppm)")
+  labs(y = "", x = "log10(fCO2, uatm)")
 ```
+
+alkalinity limit from @Wallin2014
 
 ```{r compare-fCO2-low-alk}
 
@@ -700,7 +1195,7 @@ ggplot(nofin)+
   geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
   annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
   facet_grid(rows = vars(survey))+
-  labs(y = "log10(modelled fCO2, ppm)", x = "log10(measured fCO2, ppm)", col = "")+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "")+
   scale_color_manual(values = c("firebrick","orange"))+
   theme_minimal()
 ```
@@ -831,19 +1326,19 @@ ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "white")+xlim(4,13)+ylim(58,63)+
   geom_point(data = filter(nofin, dfCO2 > 0), aes(x=long, y = lat, size = fCO2*1e6, col = survey, shape = "Supersaturated"))+
   geom_point(data = filter(nofin, dfCO2 < 0), aes(x=long, y = lat, size =fCO2*1e6, col = survey, shape = "Undersaturated"))+
-  labs(size = "fCO2, ppm", col = "Survey", shape = "") +
+  labs(size = "fCO2, uatm", col = "Survey", shape = "") +
   scale_color_manual(values = c("firebrick","dodgerblue4"))+
   scale_shape_manual(values = c(1,16))+
-    scale_size(range = c(1,6))+
-  theme_void(base_size = 20)
+    scale_size(range = c(1,6), breaks = c(1000,2000,3000,4000))+
+  theme_void(base_size = 15)
 ```
 
-```{r map-mgC.m2.day}
+```{r map-mgC.m2.day, fig.dim = c(10,5)}
 ggplot()+
   borders(region = c("Norway"), fill = "seashell3", col = "seashell3")+xlim(4,13)+ylim(58,63)+
-  geom_point(data = subset(nofin, dfCO2 > 0), aes(x=long, y = lat, size =mgC.m2.day, col = mgC.m2.day), shape = 16)+
-  geom_point(data = subset(nofin, dfCO2 < 0), aes(x=long, y = lat, size =mgC.m2.day,col = mgC.m2.day), shape = 1)+
-  labs(col = "Carbon evasion, in mgC/m2/day", size = "Carbon evasion, in mgC/m2/day") +
+  geom_point(data = subset(nofin, dfCO2 > 0), aes(x=long, y = lat, size =mgC.m2.day*1e-3, col = mgC.m2.day*1e-3), shape = 16)+
+  geom_point(data = subset(nofin, dfCO2 < 0), aes(x=long, y = lat, size =mgC.m2.day*1e-3,col = mgC.m2.day*1e-3), shape = 1)+
+  labs(col = "Carbon evasion\n in gC/m2/day", size = "Carbon evasion\n in gC/m2/day") +
   scale_color_continuous_divergingx(mid = 0, rev = T,  palette = "RdBu")+
   scale_size(range = c(1,6))+
   guides(color = guide_legend(), sice = guide_legend())+
@@ -872,16 +1367,556 @@ ggplot()+
   scale_shape_manual(values = c(1,16))+
   theme_void()
 
+
+
 ggplot(nofin)+geom_boxplot(aes(x = survey, y = dfCO2, col = survey))
-ggplot(nofin)+geom_boxplot(aes(x = survey, y = fCO2, col = survey))
+
 ggplot(nofin)+geom_boxplot(aes(x = survey, y = log10(FCO2), col = survey))
 ggplot(nofin)+geom_boxplot(aes(x = survey, y = pH, col = survey))
 ggplot(nofin)+geom_boxplot(aes(x = survey, y = TOC, col = survey))
+ggplot(nofin)+geom_boxplot(aes(x = survey, y = DIC, col = survey))
+ggplot(nofin)+geom_boxplot(aes(x = survey, y = DIC/TOC, col = survey))
+ggplot(nofin)+geom_boxplot(aes(x = survey, y = fCO2, col = survey))
+ggplot(nofin)+geom_boxplot(aes(x = survey, y = fCO2/TOC, col = survey))
+
+```
 
 
+```{r fCO2-TOC-map}
+ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "white")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = filter(nofin, FCO2 > 0), aes(x=long, y = lat, size = fCO2/TOC, col = "Supersaturated", shape = survey))+
+  geom_point(data = filter(nofin, FCO2 < 0), aes(x=long, y = lat, size =fCO2/TOC, col = "Undersaturated",shape = survey))+
+  labs(alpha = "fCO2/TOC (october)", col = "survey") + 
+  scale_color_manual(values = c("firebrick","dodgerblue3","orange"))+
+  scale_shape_manual(values = c(1,16))+
+  theme_void()
 
 ```
 
 # Bedrock?
 
 <https://geo.ngu.no/kart/berggrunn_mobil/>
+
+# Model fCO2 with NDVI, runoff, Sdep
+
+```{r model-fCO2}
+ggplot(nofin)+geom_point(aes(x = ndvi, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = runoff, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = bog, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = arable, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = Ndep, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = prec.annual, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = temp.annual, y = fCO2, col = survey))+theme_minimal()
+ggplot(nofin)+geom_point(aes(x = log10(lake.area), y = fCO2, col = survey))+theme_minimal()
+
+
+plot(fCO2~ndvi+runoff+bog+arable+Ndep+prec.annual+temp.annual+log10(lake.area+bog), data = subset(nofin, survey == "CBA_2019"))
+plot(log10(fCO2)~ndvi, data = subset(nofin, survey == "CBA_2019"))
+plot(log10(fCO2)~log10(lake.area), data = subset(nofin, survey == "CBA_2019"))
+
+summary(lm(log10(fCO2) ~ log10(lake.area), data = subset(nofin, survey == "CBA_2019"))) # 0.14
+summary(lm(log10(fCO2) ~ ndvi, data = subset(nofin, survey == "CBA_2019"))) # 0.25
+summary(lm(log10(fCO2) ~ runoff, data = subset(nofin, survey == "CBA_2019"))) # 0.07
+summary(lm(log10(fCO2) ~ temp.annual, data = subset(nofin, survey == "CBA_2019"))) # 0.15
+summary(lm(log10(fCO2) ~ prec.annual, data = subset(nofin, survey == "CBA_2019"))) # 0.007
+summary(lm(log10(fCO2) ~ Ndep, data = subset(nofin, survey == "CBA_2019"))) # 0.12
+summary(lm(log10(fCO2) ~ bog, data = subset(nofin, survey == "CBA_2019"))) # 0.004
+summary(lm(log10(fCO2) ~ arable, data = subset(nofin, survey == "CBA_2019"))) # -0.0166
+
+summary(lm(log10(fCO2)~ndvi+log10(lake.area), data = subset(nofin, survey == "CBA_2019"))) # 0.28
+
+summary(lm(log10(fCO2)~TOC, data = subset(nofin, survey == "CBA_2019"))) # 0.15
+summary(lm(log10(fCO2)~log10(TOC), data = subset(nofin, survey == "CBA_2019"))) # 0.23
+summary(lm(log10(fCO2)~log10(TOC)*log10(lake.area), data = subset(nofin, survey == "CBA_2019"))) # 0.23
+
+summary(glm(fCO2~TOC+lake.area, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "log")))
+
+
+summary(lm(pH~log10(TOC), data = subset(nofin, survey == "CBA_2019"))) # 0.11
+summary(lm(log10(TA)~log10(TOC), data = nofin)) # 0.53
+summary(lm(log10(TA)~log10(TOC)+log10(runoff)+log10(Ndep), data = nofin)) # 0.65
+summary(lm(log10(TA)~log10(runoff)+log10(Ndep), data = nofin)) # 0.52
+summary(lm(log10(DIC)~log10(TOC)+log10(runoff), data = nofin)) # 0.45
+
+
+```
+
+````{r glm}
+summary(glmfCO2 <- glm((fCO2*1e6) ~ log10(lake.area), data = nofin, family = Gamma(link = "identity"))) # 0.06
+r2glm <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+r2glm
+
+summary(glmfCO2 <- glm(fCO2 ~ ndvi, data = nofin, family = Gamma(link = "identity"))) # 0.19
+r2glm <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+r2glm
+
+summary(glmfCO2 <- glm(log10(fCO2*1e6) ~ log10(runoff), data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity"))) # 0.15
+r2glm <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+r2glm
+
+summary(glmfCO2 <- glm(fCO2 ~ temp.annual, data = nofin, family = Gamma(link = "identity"))) # 0.16
+r2glm <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
+r2glm
+
+
+summary(glm(log10(fCO2) ~ temp.annual, data = subset(nofin, survey == "CBA_2019"))) # 0.15
+summary(glm(log10(fCO2) ~ prec.annual, data = subset(nofin, survey == "CBA_2019"))) # 0.007
+summary(glm(log10(fCO2) ~ Ndep, data = subset(nofin, survey == "CBA_2019"))) # 0.12
+summary(glm(log10(fCO2) ~ bog, data = subset(nofin, survey == "CBA_2019"))) # 0.004
+summary(glm(log10(fCO2) ~ arable, data = subset(nofin, survey == "CBA_2019"))) # -0.0166
+
+summary(glm(log10(fCO2)~ndvi+log10(lake.area), data = subset(nofin, survey == "CBA_2019"))) # 0.28
+
+summary(glm(log10(fCO2)~TOC, data = subset(nofin, survey == "CBA_2019"))) # 0.15
+summary(glm(log10(fCO2)~log10(TOC), data = subset(nofin, survey == "CBA_2019"))) # 0.23
+summary(glm(log10(fCO2)~log10(TOC)*log10(lake.area), data = subset(nofin, survey == "CBA_2019"))) # 0.23
+
+summary(glm(fCO2~TOC+lake.area, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "log")))
+
+
+summary(glm(pH~log10(TOC), data = subset(nofin, survey == "CBA_2019"))) # 0.11
+summary(glm(log10(TA)~log10(TOC), data = nofin)) # 0.53
+summary(glm(log10(TA)~log10(TOC)+log10(runoff)+log10(Ndep), data = nofin)) # 0.65
+summary(glm(log10(TA)~log10(runoff)+log10(Ndep), data = nofin)) # 0.52
+summary(glm(log10(DIC)~log10(TOC)+log10(runoff), data = nofin)) # 0.45
+
+
+```
+
+
+## Catchment data CBA
+
+### NDVI
+
+```{r ndvi-cba, eval = F}
+# http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/
+library(gimms)
+ndvi.2015 <- downloadGimms(x= 2015,y=2015,dsn = "NDVI")
+ 
+ndvi.max.2015 <- monthlyComposite(ndvi.2015,monthlyIndices(ndvi.2015))
+#saveRDS(ndvi.max.2015,"ndvi.max.2015.rds")
+
+#ndvi.max.2015 <- readRDS("ndvi.max.2015.rds") %>% raster()
+
+# Makes the raster smaller, ensuring faster processing of the data
+summer.scandinavia.2015 <- raster::crop(ndvi.max.2015,c(0,35,55,73))
+
+# Re-introduces NA
+summer.scan <- reclassify(summer.scandinavia.2015, cbind(-Inf, 0, NA), right=FALSE)
+
+# Stack bands for summer
+summer.mean.2015 <- raster::stack(summer.scan[[6]],summer.scan[[7]],summer.scan[[8]]) %>% mean()
+
+# extract data
+summer.ndvi.2015 <- raster::extract(summer.mean.2015,st_as_sf(dplyr::select(cba, c("Lake_ID","geometry"))), fun = mean, df = T, sp = T, na.rm = T)
+names(summer.ndvi.2015) <- c("ebint","ndvi")
+summer.ndvi.2015$NDVI <- floor(summer.ndvi.2015$ndvi/10)/1000
+
+# save df
+names(summer.ndvi.2015) <- c("Lake_ID","ndvi_raw","NDVI")
+saveRDS(summer.ndvi.2015, "cba.summer.ndvi.2015.rds")
+write.csv(summer.ndvi.2015,"cba.summer.ndvi.2015.csv")
+```
+
+### Runoff
+
+```{r runoff-cba, eval = F}
+runoff.raster <- "mrros_Lmon_CNRM-CM6-1-HR_historical_r1i1p1f2_gr_185001-201412.nc"
+
+runoff.stack <- raster::stack(runoff.raster, bands = c(1621:1980)) # runoff from 1985 to 2015
+runoff.mean <- runoff.stack %>% mean() 
+
+runoff.cba <- raster::extract(runoff.mean, st_as_sf(dplyr::select(cba, c("Lake_ID","geometry"))), fun = mean, df = T, sp = T, na.rm = T)
+names(runoff.cba) <- c("Lake_ID","Runoff")
+saveRDS(runoff.cba,"runoff.cba.rds")
+
+ggplot(st_as_sf(runoff.cba))+geom_sf(aes(fill=Runoff,col=Runoff))
+
+```
+
+### CLC
+
+
+The Land Cover data was downloaded from https://land.copernicus.eu/pan-european/corine-land-cover/clc2018. We used the 2018 version (last one available). 
+
+The land cover data was downloaded as a raster (.tiff file), which included the legend recording the code for each land use. The raster and legend were assembled in QGIS before being imported as a shapefile in R. The codes (corresponding to the line in the extracted dataframe) of the categories of interest were:
+
+Arable land:
+
+* 12: non-irrigated arable land
+* 16: fruit trees and berries plantations
+* 18: pastures
+* 19: annual crops associated with permanent crops
+* 20: Complex cultivation patterns
+
+Bogs:
+
+* 36: peat bogs
+* 35: inland marshes, excluded because all zeros in the studied area.
+
+Forest:
+
+* 23: Broad-leaved forest
+* 24: Coniferous forest
+* 25: Mixed forest
+
+Bare:
+
+31: Bare rocks
+32: Sparsely vegetated areas
+33: Burnt areas
+
+```{r extract-land-cover, eval = F}
+corine.2018 <- raster::raster("CLC/U2018_CLC2018_V2020_20u1.tif")
+cba.corine <-st_as_sf(dplyr::select(cba, c("Lake_ID","geometry"))) %>% st_transform(crs(corine.2018))
+cba.list <- split(cba.corine,seq(nrow(cba.corine)))
+
+extract_corine <- function(x){
+  clc <- extract(corine.2018,x)
+  saveRDS(clc,file = paste("CLC/clc",x$Lake_ID,"rds",sep="."))
+}
+
+lapply(cba.list,extract_corine) 
+
+clc.files <- list.files(path = "CLC/", pattern = "clc.*.rds", full.names = T)
+
+list.clc <- sapply(clc.files,readRDS)
+list.clc.cba <- sapply(list.clc, as.integer)
+
+names.list <- stringr::str_extract(clc.files,"\\d+")
+names(list.clc.cba) <- names.list
+
+saveRDS(list.clc.cba,"CLC/list.clc.cba.rds")
+```
+
+```{r corine-tab-prop, eval = F}
+list.clc.niva <- readRDS("CLC/list.clc.cba.rds")
+clc.tab.cba <- sapply(list.clc.cba, function(x) tabulate(x,45)) %>% t()
+clc.tab.area.cba <- clc.tab.cba*prod(res(corine.2018))
+catchment.area <- rowSums(clc.tab.area.cba)
+clc.tab.prop.cba <- sweep(clc.tab.area.cba,1,catchment.area, FUN = "/")
+saveRDS(clc.tab.prop.cba,"CLC/clc.tab.prop.cba.rds")
+```
+
+```{r corine-select-categories, eval = F}
+clc.tab.prop.cba <- readRDS("NIVA_test/CLC/clc.tab.prop.cba.rds") %>% as.data.frame()
+
+bogs <- clc.tab.prop.cba[,36] %>% as.data.frame() %>% setNames("Bog") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(bogs,"CLC/bogs.cba.rds")
+arable <- rowSums(clc.tab.prop.cba[,c(12,16,18,19,20)]) %>% as.data.frame() %>% setNames("Arable") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(arable,"CLC/arable.cba.rds")
+forest <- rowSums(clc.tab.prop.cba[,c(23,24,25)]) %>% as.data.frame() %>% setNames("Forest") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(forest,"CLC/forest.cba.rds")
+bare <- rowSums(clc.tab.prop.cba[,c(31,32,33)]) %>% as.data.frame() %>% setNames("Bare") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(bare,"CLC/bare.cba.rds")
+```
+
+### TNdep
+
+The nitrogen and sulfur deposition data were extracted from the EMEP database (https://emep.int/mscw/mscw_moddata.html#Comp). The data from 2019 was used.
+
+N-deposition (NOx and NH3) is the sum of: 
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
+* Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2 
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
+* Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
+
+```{r extract-Ndep, eval = F}
+EMEP_file <- "Ndep/EMEP01_rv4.42_year.2019met_2019emis.nc"
+
+cba.poly <- st_as_sf(dplyr::select(cba, c("Lake_ID","geometry")))
+  
+woxn <- raster(EMEP_file, varname = "WDEP_OXN") 
+doxn <- raster(EMEP_file, varname = "DDEP_OXN_m2Grid")
+wrdn <- raster(EMEP_file, varname = "WDEP_RDN")
+drdn <- raster(EMEP_file, varname = "DDEP_RDN_m2Grid")
+
+woxn_df <- extract(woxn,cba.poly, sp = T, df = T, na.rm = T, fun = mean) 
+names(woxn_df) <- c("Lake_ID","woxn")
+woxn_u <- woxn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+doxn_df <- extract(doxn,cba.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(doxn_df) <- c("Lake_ID","doxn")
+doxn_u <- doxn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+wrdn_df <- extract(wrdn,cba.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(wrdn_df) <- c("Lake_ID","wrdn")
+wrdn_u <- wrdn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+drdn_df <- extract(drdn,cba.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(drdn_df) <- c("Lake_ID","drdn")
+drdn_u <- drdn_df %>% st_as_sf() %>% st_drop_geometry()  %>% dplyr::distinct() 
+
+ndep.df <- merge(woxn_u,doxn_u, by = "Lake_ID") %>% merge(wrdn_u, by = "Lake_ID") %>% merge(drdn_u, by = "Lake_ID")
+ndep.df$TNdep <- rowSums(ndep.df[,c(2:5)])
+
+saveRDS(ndep.df,"Ndep/ndep.df.cba.rds")
+```
+
+### Temperature and precipitation
+
+```{r temp-prec, eval = F}
+bio.fennoscandia <- raster::getData(name = "worldclim", var = "bio", res = 2.5)
+
+cba.poly <- st_as_sf(dplyr::select(cba, c("Lake_ID","geometry")))
+
+annual.temp <- raster::extract(bio.fennoscandia[[1]], cba.poly, fun = mean, df = T, sp = T)
+names(annual.temp) <- c("Lake_ID", "temp")
+saveRDS(annual.temp,"annual.temp.cba.rds")
+
+annual.prec <- raster::extract(bio.fennoscandia$bio12, cba.poly, fun = mean, df = T, sp = T)
+names(annual.prec) <- c("Lake_ID", "precip")
+saveRDS(annual.prec,"annual.prec.cba.rds")
+```
+
+### slope
+
+# Catchment data N112
+
+## match n112 with nofa lakes
+
+```{r match-n112}
+# catchment.poly <- readRDS("catchment.poly.rds") %>% as_Spatial() %>% crop(extent(4,13,58,63))
+# saveRDS(catchment.poly, "catchment.poly.sn.rds")
+
+catchment.poly <- readRDS("catchment.poly.sn.rds")
+
+ggplot()+geom_sf(data = st_as_sf(catchment.poly))+
+  geom_sf(data = st_as_sf(n112.spdf.wgs), col = "firebrick")+
+  xlim(4,10)+ylim(58,60)+
+  theme_minimal()
+
+n112.polygons <- sp::over(n112.spdf.wgs, catchment.poly)
+
+catchments.nve <- st_read("NVEData/Nedborfelt/Nedborfelt_Sidenedborfelt.shp")
+
+#n112.polygons <- sp::over(n112.spdf.wgs, as_Spatial(st_zm(catchments.nve)))
+
+library(spdep)
+
+n112.sf <- st_as_sf(n112.spdf.wgs) 
+
+catchments.nve.spdf <- catchments.nve %>% st_transform(crs = st_crs(n112.sf))%>% st_make_valid() %>% st_zm() %>% as_Spatial()
+catchments.nve.sf <- catchments.nve %>% st_transform(crs = st_crs(n112.sf))%>% st_make_valid() %>% st_zm()
+
+n112.polygons <- sp::over(n112.spdf.wgs,catchments.nve.spdf)
+n112.polygons <- st_within(n112.sf, catchments.nve.sf)
+
+
+ggplot()+geom_sf(data = catchments.nve)+
+ geom_sf(data = st_as_sf(n112.spdf.wgs), col = "firebrick")+
+  theme_minimal()
+
+lakes.nve <- st_read("NVEData/Innsjo/Innsjo_Innsjo.shp")
+n112.lakes.poly <- merge(lakes.nve, n112, by.y= "Vatnlnr", by.x = "vatnLnr", all.x = F)
+
+ggplot()+
+  geom_sf(data = catchments.nve, fill = "white", col = "lightgray", alpha = 0.5) +
+ geom_sf(data = n112.lakes.poly, fill = "firebrick", col = "firebrick", alpha = 0.5)+
+  theme_minimal()
+
+n112.cat.poly <- st_join(catchments.nve, n112.lakes.poly, join = st_contains, left = F)
+
+ggplot()+geom_sf(data = n112.cat.poly)
+```
+
+```{r more-plots-lake-area}
+ggplot(nofin)+geom_point(aes(x = log10(lake.area), y = fCO2/TOC, shape = survey, color = survey))+
+  theme_minimal()
+
+ggplot(nofin)+geom_boxplot(aes(x = "Lake area", y = log10(lake.area), color = survey))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()
+
+```
+
+
+### NDVI
+
+```{r ndvi-n112, eval = F}
+# http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/
+library(gimms)
+ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI", server = "nasanex", version = 0L)
+
+ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI")
+
+ndvi.2004.raster <- rasterizeGimms(ndvi.2004)
+ 
+ndvi.max.2004 <- monthlyComposite(x = ndvi.2004.raster, indices = monthlyIndices(ndvi.2004, version = 0L))
+
+#saveRDS(ndvi.max.2004,"ndvi.max.2004.rds")
+
+ndvi.max.2004 <- readRDS("ndvi.max.2004.rds")
+ndvi.summer.2004 <- raster::subset(ndvi.max.2004, 6:8, filename = "ndvi.summer.2004.grd")
+summer.mean.2004 <- stackApply(x = ndvi.max.2004, indices = c(6:8), fun = mean, na.rm = T)
+
+# Makes the raster smaller, ensuring faster processing of the data
+summer.scandinavia.2004 <- raster::crop(ndvi.summer.2004,c(0,35,55,73))
+
+# Re-introduces NA
+summer.scan <- reclassify(ndvi.max.2004, cbind(-Inf, 0, NA), right=FALSE)
+
+# Stack bands for summer
+summer.mean.2004 <- raster::stack(summer.scan[[6]],summer.scan[[7]],summer.scan[[8]]) %>% mean()
+
+# extract data
+summer.ndvi.2004 <- raster::extract(summer.mean.2004,st_as_sf(dplyr::select(cba, c("Lake_ID","geometry"))), fun = mean, df = T, sp = T, na.rm = T)
+names(summer.ndvi.2004) <- c("ebint","ndvi")
+summer.ndvi.2004$NDVI <- floor(summer.ndvi.2004$ndvi/10)/1000
+
+# save df
+names(summer.ndvi.2004) <- c("Lake_ID","ndvi_raw","NDVI")
+saveRDS(summer.ndvi.2004, "n112.summer.ndvi.2004.rds")
+write.csv(summer.ndvi.2004,"n112.summer.ndvi.2004.csv")
+```
+
+### Runoff
+
+```{r runoff-n112, eval = F}
+runoff.raster <- "mrros_Lmon_CNRM-CM6-1-HR_historical_r1i1p1f2_gr_185001-201412.nc"
+
+runoff.stack <- raster::stack(runoff.raster, bands = c(1490:1850)) # runoff from 1974 to 2004
+runoff.mean <- runoff.stack %>% mean() 
+
+runoff.n112 <- raster::extract(runoff.mean, st_zm(dplyr::select(n112.cat.poly, c("vatnLnr","geometry"))), fun = mean, df = T, sp = T, na.rm = T)
+names(runoff.n112) <- c("Vatnlnr","Runoff")
+saveRDS(runoff.n112,"runoff.n112.rds")
+
+ggplot(st_as_sf(runoff.n112))+geom_sf(aes(fill=Runoff,col=Runoff))
+```
+
+### CLC
+
+
+The Land Cover data was downloaded from https://land.copernicus.eu/pan-european/corine-land-cover/clc2018. We used the 2018 version (last one available). 
+
+The land cover data was downloaded as a raster (.tiff file), which included the legend recording the code for each land use. The raster and legend were assembled in QGIS before being imported as a shapefile in R. The codes (corresponding to the line in the extracted dataframe) of the categories of interest were:
+
+Arable land:
+
+* 12: non-irrigated arable land
+* 16: fruit trees and berries plantations
+* 18: pastures
+* 19: annual crops associated with permanent crops
+* 20: Complex cultivation patterns
+
+Bogs:
+
+* 36: peat bogs
+* 35: inland marshes, excluded because all zeros in the studied area.
+
+Forest:
+
+* 23: Broad-leaved forest
+* 24: Coniferous forest
+* 25: Mixed forest
+
+Bare:
+
+31: Bare rocks
+32: Sparsely vegetated areas
+33: Burnt areas
+
+```{r extract-land-cover, eval = F}
+corine.2004 <- raster::raster("CLC_2004/U2012_CLC2006_V2020_20u1.tif")
+n112.corine <- dplyr::select(n112.cat.poly, c("vatnLnr","geometry")) %>% st_zm() %>% st_transform(crs(corine.2004))
+n112.list <- split(n112.corine,seq(nrow(n112.corine)))
+
+extract_corine <- function(x){
+  clc <- extract(corine.2004,x)
+  saveRDS(clc,file = paste("CLC_2004/clc",x$vatnLnr,"rds",sep="."))
+}
+
+lapply(n112.list,extract_corine) 
+
+clc.files <- list.files(path = "CLC_2004/", pattern = "clc.*.rds", full.names = T)
+
+list.clc <- sapply(clc.files,readRDS)
+list.clc.n112 <- sapply(list.clc, as.integer)
+
+names.list <- stringr::str_extract(clc.files,"\\d+")
+names(list.clc.n112) <- names.list
+
+saveRDS(list.clc.n112,"CLC/list.clc.n112.rds")
+```
+
+```{r corine-tab-prop, eval = F}
+list.clc.n112 <- readRDS("CLC/list.clc.n112.rds")
+clc.tab.n112 <- sapply(list.clc.n112, function(x) tabulate(x,45)) %>% t()
+clc.tab.area.n112 <- clc.tab.n112*prod(res(corine.2004))
+catchment.area <- rowSums(clc.tab.area.n112)
+clc.tab.prop.n112 <- sweep(clc.tab.area.n112,1,catchment.area, FUN = "/")
+saveRDS(clc.tab.prop.n112,"CLC/clc.tab.prop.n112.rds")
+```
+
+```{r corine-select-categories, eval = F}
+clc.tab.prop.n112 <- readRDS("CLC/clc.tab.prop.n112.rds") %>% as.data.frame()
+
+bogs <- clc.tab.prop.n112[,36] %>% as.data.frame() %>% setNames("Bog") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(bogs,"CLC_2004/bogs.n112.rds")
+arable <- rowSums(clc.tab.prop.n112[,c(12,16,18,19,20)]) %>% as.data.frame() %>% setNames("Arable") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(arable,"CLC_2004/arable.n112.rds")
+forest <- rowSums(clc.tab.prop.n112[,c(23,24,25)]) %>% as.data.frame() %>% setNames("Forest") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(forest,"CLC_2004/forest.n112.rds")
+bare <- rowSums(clc.tab.prop.n112[,c(31,32,33)]) %>% as.data.frame() %>% setNames("Bare") %>% tibble::rownames_to_column(var = "Lake_ID")
+saveRDS(bare,"CLC_2004/bare.n112.rds")
+```
+
+### TNdep
+
+The nitrogen and sulfur deposition data were extracted from the EMEP database (https://emep.int/mscw/mscw_moddata.html#Comp). The data from 2019 was used.
+
+N-deposition (NOx and NH3) is the sum of: 
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
+* Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2 
+* Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
+* Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
+
+```{r extract-Ndep, eval = F}
+EMEP_file <- "Ndep/EMEP01_rv4.42_year.2019met_2019emis.nc"
+
+n112.poly <- st_as_sf(dplyr::select(n112, c("Lake_ID","geometry")))
+  
+woxn <- raster(EMEP_file, varname = "WDEP_OXN") 
+doxn <- raster(EMEP_file, varname = "DDEP_OXN_m2Grid")
+wrdn <- raster(EMEP_file, varname = "WDEP_RDN")
+drdn <- raster(EMEP_file, varname = "DDEP_RDN_m2Grid")
+
+woxn_df <- extract(woxn,n112.poly, sp = T, df = T, na.rm = T, fun = mean) 
+names(woxn_df) <- c("Lake_ID","woxn")
+woxn_u <- woxn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+doxn_df <- extract(doxn,n112.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(doxn_df) <- c("Lake_ID","doxn")
+doxn_u <- doxn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+wrdn_df <- extract(wrdn,n112.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(wrdn_df) <- c("Lake_ID","wrdn")
+wrdn_u <- wrdn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
+
+drdn_df <- extract(drdn,n112.poly, sp = T, df = T, na.rm = T, fun = mean)
+names(drdn_df) <- c("Lake_ID","drdn")
+drdn_u <- drdn_df %>% st_as_sf() %>% st_drop_geometry()  %>% dplyr::distinct() 
+
+ndep.df <- merge(woxn_u,doxn_u, by = "Lake_ID") %>% merge(wrdn_u, by = "Lake_ID") %>% merge(drdn_u, by = "Lake_ID")
+ndep.df$TNdep <- rowSums(ndep.df[,c(2:5)])
+
+saveRDS(ndep.df,"Ndep/ndep.df.n112.rds")
+```
+
+### Temperature and precipitation
+
+```{r temp-prec, eval = F}
+bio.fennoscandia <- raster::getData(name = "worldclim", var = "bio", res = 2.5)
+
+n112.poly <- st_as_sf(dplyr::select(n112, c("Lake_ID","geometry")))
+
+annual.temp <- raster::extract(bio.fennoscandia[[1]], n112.poly, fun = mean, df = T, sp = T)
+names(annual.temp) <- c("Lake_ID", "temp")
+saveRDS(annual.temp,"annual.temp.n112.rds")
+
+annual.prec <- raster::extract(bio.fennoscandia$bio12, n112.poly, fun = mean, df = T, sp = T)
+names(annual.prec) <- c("Lake_ID", "precip")
+saveRDS(annual.prec,"annual.prec.n112.rds")
+```
