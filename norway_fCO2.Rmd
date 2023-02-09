@@ -449,7 +449,7 @@ Ka2 <- 10^(-pKa2)
 pKa3 <- 6.46
 Ka3 <- 10^(-pKa3)
 
-m <- 10.2*12.011*1e-6# ueq/mg to eq/mol, site density BUT THERE IS A 1e3 PB
+m <- 10.2*12.011*1e3*1e-6# ueq/mg to eq/mol, site density BUT THERE IS A 1e3 PB
 nofin$RCOO <- with(nofin, (Ka1/Hplus + 2*Ka2/Hplus + 3*Ka3/Hplus)* m/3 * TOC)
 
 nofin$RCOO_4.5 <- with(nofin, (Ka1/10^(-4.5) + 2*Ka2/10^(-4.5) + 3*Ka3/10^(-4.5))* m/3 * TOC)
@@ -897,6 +897,9 @@ ggplot(nofin, aes(x = TA)) + geom_point(aes(y = CA, col = "measured CA"))+
 
 
 ```
+
+
+
 
 ```{r estimate-fCO2-with-corTA, eval = F}
 
@@ -1739,16 +1742,20 @@ ggplot(nofin)+geom_boxplot(aes(x = "Lake area", y = log10(lake.area), color = su
 library(gimms)
 ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI", server = "nasanex", version = 0L)
 
-ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI")
+#ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI")
 
 ndvi.2004.raster <- rasterizeGimms(ndvi.2004)
  
 ndvi.max.2004 <- monthlyComposite(x = ndvi.2004.raster, indices = monthlyIndices(ndvi.2004, version = 0L))
 
-#saveRDS(ndvi.max.2004,"ndvi.max.2004.rds")
+#writeRaster(x = ndvi.max.2004, filename = "NDVI/ndvi.max.2004.nc", format = "CDF")
+
+
+saveRDS(ndvi.max.2004,"NDVI/ndvi.max.2004.rds")
 
 ndvi.max.2004 <- readRDS("ndvi.max.2004.rds")
-ndvi.summer.2004 <- raster::subset(ndvi.max.2004, 6:8, filename = "ndvi.summer.2004.grd")
+
+ndvi.summer.2004 <- raster::subset(ndvi.max.2004, 6:8) 
 summer.mean.2004 <- stackApply(x = ndvi.max.2004, indices = c(6:8), fun = mean, na.rm = T)
 
 # Makes the raster smaller, ensuring faster processing of the data
@@ -1873,17 +1880,17 @@ N-deposition (NOx and NH3) is the sum of:
 * Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
 * Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
 
-```{r extract-Ndep, eval = F}
-EMEP_file <- "Ndep/EMEP01_rv4.42_year.2019met_2019emis.nc"
+```{r extract-Ndep-2004, eval = F}
+EMEP_file <- "EMEP01_rv4.45_day.2004met_2004emis_rep2022.nc"
 
-n112.poly <- st_as_sf(dplyr::select(n112, c("Lake_ID","geometry")))
+n112.poly <- dplyr::select(n112.cat.poly, c("vatnLnr","geometry")))
   
 woxn <- raster(EMEP_file, varname = "WDEP_OXN") 
 doxn <- raster(EMEP_file, varname = "DDEP_OXN_m2Grid")
 wrdn <- raster(EMEP_file, varname = "WDEP_RDN")
 drdn <- raster(EMEP_file, varname = "DDEP_RDN_m2Grid")
 
-woxn_df <- extract(woxn,n112.poly, sp = T, df = T, na.rm = T, fun = mean) 
+woxn_df <- extract(woxn,n112.cat.poly, sp = T, df = T, na.rm = T, fun = mean) 
 names(woxn_df) <- c("Lake_ID","woxn")
 woxn_u <- woxn_df %>% st_as_sf() %>% st_drop_geometry() %>% dplyr::distinct() 
 
