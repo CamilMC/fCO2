@@ -22,6 +22,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(ggpubr)
+
+fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
+fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
+fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
+fCO2.atm.1995 <- 360.17 * 1e-6
 ```
 
 # Bookdown documentation
@@ -60,6 +65,33 @@ nofin$HCO3_hruska <- with(nofin, CO3_hruska*Hplus/K2)
 nofin$H2CO3_hruska <- with(nofin, HCO3_hruska*Hplus/K1)
 nofin$fCO2_hruska <- with(nofin,H2CO3_hruska/K0)
 
+
+ggplot(nofin, aes(x = CA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_hruska*1e3, col = "Modelled CA from Hruska"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = (TA-OH+Hplus)*1e3, col = "CA from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = CA_hruska*1e3, col = "Modelled CA from Hruska"), method = "lm", se = F)+
+  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans(x = "log10", y = "log10")+
+  facet_grid(rows = vars(survey))+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = fCO2*1e6))+
+  geom_point(aes(y = ta_fCO2*1e6, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2_hruska*1e6, col = "fCO2 from TA corrected Hruska"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = ta_fCO2*1e6, col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = fCO2_hruska*1e6, col = "fCO2 from TA corrected Hruska"), method = "lm", se = F)+
+  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  labs(y = "Calculated fCO2, uatm", x = "Measured fCO2, uatm", col = "")+
+  coord_trans(x = "log10", y = "log10")+
+   facet_grid(rows = vars(survey))+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
 g1 <- ggplot(nofin, aes(x = pH))+
   geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
   geom_point(aes(y = CA_hruska*1e3, col = "Hruska"), alpha = 0.5)+
@@ -94,6 +126,30 @@ nofin$H2CO3_Liu <- with(nofin, HCO3_Liu*Hplus/K1)
 nofin$fCO2_Liu <- with(nofin,H2CO3_Liu/K0)
 
 nofin$DIC_Liu <- with(nofin, H2CO3_Liu + HCO3_Liu + CO3_Liu)
+
+ggplot(nofin, aes(x = CA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_Liu*1e3, col = "Modelled CA from Liu"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = (TA-OH+Hplus)*1e3, col = "CA from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = CA_Liu*1e3, col = "Modelled CA from Liu"), method = "lm", se = F)+
+  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = fCO2*1e6))+
+  geom_point(aes(y = ta_fCO2*1e6, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2_Liu*1e6, col = "fCO2 from TA corrected Liu"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = ta_fCO2*1e6, col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = fCO2_Liu*1e6, col = "fCO2 from TA corrected Liu"), method = "lm", se = F)+
+  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+  labs(y = "Calculated fCO2, uatm", x = "Measured fCO2, uatm", col = "")+
+  coord_trans( x = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
 
 g3 <- ggplot(nofin, aes(x = pH))+
   geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
@@ -147,27 +203,318 @@ nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
 nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
 nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
 
-ggplot(nofin)+
-  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
-  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+ggplot(nofin, aes(x = CA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
   geom_abline(slope = 1, intercept = 0, lty = 2)+
-  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
-  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
-  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
-#  facet_grid(rows = vars(survey))+
-  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "12")+
+  geom_vline(xintercept = 0.07, lty = 3)+
+  geom_smooth(aes(y = (TA-OH+Hplus)*1e3, col = "CA from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = CA_pred*1e3, col = "CA from corrected TA"), method = "lm", se = F)+
+  annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
   scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+ggplot(nofin, aes(x = CA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = (TA-OH+Hplus)*1e3, col = "CA from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = CA_pred*1e3, col = "CA from corrected TA"), method = "lm", se = F)+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  facet_grid(rows = vars(survey))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+ggplot(nofin, aes(x = fCO2))+
+  geom_point(aes(y = ta_fCO2, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = ta_fCO2, col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  labs(y = "Calculated fCO2, atm", x = "Measured fCO2, atm", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+ # annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  #facet_grid(rows = vars(survey))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+
+
+```
+
+```{r visualisation-CA-pH}
+
+g5 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA calculated from corrected TA"), alpha = 0.5)+
+  labs(x = "pH", y = "Carbonate Alkalinity, meq/L")+
+  scale_color_manual(values = c("orange", "black"))+
+  facet_grid(rows = vars(survey))+
   theme_minimal()
 
-ggplot(nofin, aes(x = log10(CA)))+
-  geom_point(aes(y = log10(TA - OH + Hplus), col = "CA from TA"))+
-  geom_point(aes(y = log10(CA_pred), col = "Modelled CA"))+
-  geom_abline(slope = 1, intercept = 0, lty = 2)+
-  geom_smooth(aes(y = log10(TA-OH+Hplus), col = "CA from TA"), method = "lm", se = F)+
-  geom_smooth(aes(y = log10(CA_pred), col = "Modelled CA"), method = "lm", se = F)+
-  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
-#  facet_grid(rows = vars(survey))+
-  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "")+
-  scale_color_manual(values = c("firebrick","orange"))+
+g6 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = fCO2, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = cta_fCO2, col = "fCO2 calculated from corrected TA"), alpha = 0.5)+
+  labs(x = "pH", y = "fCO2, atm")+
+  scale_color_manual(values = c("orange", "black"))+
+  facet_grid(rows = vars(survey))+
   theme_minimal()
+
+ggarrange(g5,g6, common.legend = T)
+
+g7 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = (TA-OH+Hplus)*1e3, col = "CA calculated from TA"), alpha = 0.5)+
+  labs(x = "pH", y = "Carbonate Alkalinity, meq/L")+
+  scale_color_manual(values = c("firebrick", "black"))+
+  facet_grid(rows = vars(survey))+
+  theme_minimal()
+
+g8 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = fCO2, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = ta_fCO2, col = "fCO2 calculated from TA"), alpha = 0.5)+
+  labs(x = "pH", y = "fCO2, atm")+
+  scale_color_manual(values = c("firebrick", "black"))+
+  facet_grid(rows = vars(survey))+
+  theme_minimal()
+
+ggarrange(g7,g8, common.legend = T)
+
+ggarrange(g5,g6,g7,g8, nrow = 2, ncol = 2, common.legend = T)
+
+ggplot(nofin, aes(x = TA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_point(aes(y = CA*1e3, col = "Measured CA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_vline(xintercept = 0.07, lty = 3)+
+   annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured TA, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue3"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+```
+
+# Northern European Lakes Survey
+
+```{r nls-constants}
+
+nlss <- readRDS("nlss.rds")
+
+nlss$Kw = with(nlss, exp(148.9802 - 13847.26/temp_k - 23.6521*log(temp_k))) # Dickson and Riley, 1979
+
+#nlss$K0 <- with(nlss, 10^-((-2622.38/temp_k) + 15.5873 - 0.0178471*temp_k)) #Harned and Davis, 1943
+nlss$K0 <- with(nlss, exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100))) # Weiss 1974
+nlss$K1 <- with(nlss, 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k)) # Harned and Davis, 1943
+nlss$K2 <- with(nlss, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Harned and Scholes, 1941
+
+
+nlss$OH <- with(nlss, Kw/Hplus)
+```
+
+```{r nls-oganic-alkalinity}
+
+lmoaM <- readRDS("lmoaM.rds")
+
+nlss$invHplus <- 1/nlss$Hplus
+nlss$invHplus2 <- 1/(nlss$Hplus^2)
+
+nlss$TAOA <- predict(lmoaM, newdata = nlss, type = "response") # TA corrected by OA
+
+nlss$CA_pred <- with(nlss, TAOA-OH+Hplus)
+nlss$CO3 <- with(nlss,(CA_pred) / (Hplus/K2 +2)) # in mol/L
+nlss$HCO3 <- with(nlss, CO3*Hplus/K2)
+nlss$H2CO3 <- with(nlss, HCO3*Hplus/K1)
+nlss$fCO2 <- with(nlss,H2CO3/K0)
+
+nlss$dfCO2 <- with(nlss, fCO2 - fCO2.atm)
+
+nlss$DIC <- with(nlss, H2CO3 + HCO3 + CO3)
+```
+
+```{r nls-fCO2-uncorrected-TA}
+nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
+nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
+nlss$ta_H2CO3 <- with(nlss, ta_HCO3*Hplus/K1)
+nlss$ta_fCO2 <- with(nlss,ta_H2CO3/K0)
+
+nlss$ta_CA <- with(nlss, ta_HCO3+2*ta_CO3)
+
+nlss$ta_dfCO2 <- with(nlss, ta_fCO2 - fCO2.atm)
+
+```
+
+```{r plot-compare-fCO2-nls}
+
+ggplot(nlss, aes(x = TA*1e3)) + 
+  geom_point(aes(y = ta_fCO2*1e6, col = "fCO2 from uncorrected TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2*1e6, col = "fCO2 from corrected TA"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995*1e6, col = "black")+
+  scale_color_manual(values = c("orange","firebrick"))+
+  theme_minimal()+
+  labs(x = "Total alkalinity, meq/L", y = "fCO2, atm", col = "")+
+  coord_trans(x = "log10", y = "log10")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+```
+
+# Predict fCO2 from TOC
+
+```{r fCO2-toc-cba}
+summary(glmfCO2cba <- glm(fCO2~TOC, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity")))
+summary.glmfCO2cba <- summary(glmfCO2cba)
+coef.glmfCO2cba <- summary(glmfCO2cba)$coefficients
+r2cba <- with(summary.glmfCO2cba, 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "CBA_2019"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+TOC*coef.glmfCO2cba[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]+coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]-coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]-coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2cba[2],2), "\n R2 = ", r2cba))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019")+
+  theme_minimal()
+```
+
+```{r fCO2-toc-n112}
+
+summary(glmfCO2n112 <- glm(fCO2~TOC, data = subset(nofin, survey == "N112_2004"), family = Gamma(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+TOC*coef.glmfCO2n112[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]+coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]-coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]-coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.001, geom = "label", label = paste("Intercept = ", round(coef.glmfCO2n112[1]*1e6, 2), "\nSlope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+
+```
+
+```{r n112-loglink}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmfCO2n112 <- glm(fCO2~TOC, data = df, family = Gamma(link = "log")))
+coefs <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_log <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+ggplot(df)+
+  geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log), col = "predict"))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log + predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log - predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.002, geom = "label", label = paste("Intercept = ", round(coefs[1]*1e6, 2), "\nSlope = ", round(coefs[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+
+```
+
+```{r n112-gaussian}
+
+summary(glmfCO2n112 <- glm(fCO2~TOC, data = subset(nofin, survey == "N112_2004"), family = gaussian(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+TOC*coef.glmfCO2n112[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]+coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]-coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]-coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.001, geom = "label", label = paste("Intercept = ", round(coef.glmfCO2n112[1]*1e6, 2), "\nSlope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+```
+
+```{r}
+df <- subset(nofin, survey == "N112_2004")
+
+df$dfCO2ppm <- df$dfCO2 *1e6
+
+summary(glmfCO2n112 <- glm(dfCO2ppm~TOC, data = df, start = c(fCO2.atm.2004*1e6,1), family = gaussian(link = "log")))
+coefs <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_log <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+ggplot(df)+
+  geom_point(aes(x = TOC, y = dfCO2))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log), col = "predict"))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log + predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log - predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.002, geom = "label", label = paste("Intercept = ", round(coefs[1]*1e6, 2), "\nSlope = ", round(coefs[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+```
+
+```{r fCO2-toc}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC, data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2*1e6))+
+    geom_line(aes(y = (coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2])*1e6, col = "predict"))+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.00005, y = 1e4, geom = "label", 
+           label = paste("Intercept =",round(coef.glmfCO2nlss[1]*1e6, 2),"\n Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+```{r glm-ta-fCO2}
+
+summary(glmfCO2nlss <- glm(ta_fCO2~TOC, data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = ta_fCO2*1e6))+
+    geom_line(aes(y = (coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2])*1e6, col = "predict"))+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.00005, y = 1e4, geom = "label", 
+           label = paste("Intercept =",round(coef.glmfCO2nlss[1]*1e6, 2),"\n Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
 ```

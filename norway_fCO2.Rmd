@@ -251,6 +251,7 @@ $[H_2CO_3] = TIC \times 1/(1 + K_1/[H^+] + K_1 \times K_2 / [H^+]^2)$
 And $[H_2CO_3] = pCO_2 \times K_0$, or $pCO_2 = [H_2CO_3] / K_0$
 
 ```{r carbonate-speciation-from-CO2}
+nofin <- subset(norway, survey != "finnmark")
 norway$H2CO3 <- norway$CO2 # in mol/L
 norway$HCO3 <- with(norway, H2CO3 * K1 / Hplus)
 norway$CO3 <- with(norway, K2 * HCO3 / Hplus)
@@ -277,6 +278,14 @@ ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
   geom_point(aes(y = HCO3, col = "HCO3"))+
   geom_point(aes(y = CO3, col = "CO3"))+
   scale_color_manual(values = c("firebrick","dodgerblue3","orange"))+
+  theme_minimal()
+
+
+ggplot(nofin, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3"))+
+  geom_point(aes(y = HCO3, col = "HCO3"))+
+  geom_point(aes(y = CO3, col = "CO3"))+
+  scale_color_manual(values = c("firebrick","dodgerblue3","orange"))+
+  facet_grid(rows = vars(survey), scales = "free_y")+
   theme_minimal()
 
 #ggplot(norway)+geom_point(aes(x=TA, y = CA, col = survey))+
@@ -1034,38 +1043,6 @@ ggplot(nofin)+geom_point(aes(x = TOC, y = fCO2, shape = survey))+
   theme(legend.position = "none")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA + N112 surveys")+
   theme_minimal()
-
-ggplot(nofin, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, shape = survey, col = "measured"))+
-  geom_point(aes(y = coef.glmfCO2[1]+TOC*coef.glmfCO2[2], shape = survey, col = "predicted"))+
-#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+TOC*coef.glmfCO2[2], col = "predict"))+
-#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]+coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]+coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
-#  geom_line(aes(x = TOC, y = coef.glmfCO2[1]-coef.glmfCO2[3]+TOC*(coef.glmfCO2[2]-coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
-  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-#  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "fCO2, atm", x = "log10(lake area, km2)", title = "CBA + N112 surveys")+
-  theme_minimal()
-
-# glm with lake area
-summary(glmfCO2 <- glm(fCO2~log10(lake.area), data = nofin, family = Gamma(link = "identity")))
-coef.glmfCO2 <- summary(glmfCO2)$coefficients
-r2nofin <- with(summary(glmfCO2), 1 - deviance/null.deviance) %>% round(2)
-
-ggplot(nofin, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, shape = survey))+
-  geom_line(aes(y = coef.glmfCO2[1]+log10(lake.area)*coef.glmfCO2[2], col = "predict"))+
-  geom_line(aes(y = coef.glmfCO2[1]+coef.glmfCO2[3]+log10(lake.area)*(coef.glmfCO2[2]+coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
-  geom_line(aes(y = coef.glmfCO2[1]-coef.glmfCO2[3]+log10(lake.area)*(coef.glmfCO2[2]-coef.glmfCO2[4]), col = "Std Error"), lty = 2)+
-  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  annotate(x = 0.0005, y = 0.004, geom = "label", label = paste("Slope = ", round(coef.glmfCO2[2],2), "\n R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "fCO2, atm", x = "log10(lake area, km2)", title = "CBA + N112 surveys")+
-  theme_minimal()
-
-
-
-
 
 
 summary(glmfCO2cba <- glm(fCO2~TOC, data = subset(nofin, survey == "CBA_2019"), family = Gamma(link = "identity")))

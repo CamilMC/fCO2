@@ -90,8 +90,6 @@ saveRDS(ae, "ae.rds")
 
 ## Catchment characteristics
 
-
-
 ### Soil
 
 <https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html>
@@ -337,9 +335,9 @@ saveRDS(sdep.df,"sdep.df.rds")
 
 ### Near surface wind speed
 
-https://cds.climate.copernicus.eu/cdsapp#!/dataset/10.24381/cds.6c68c9bb?tab=overview
+<https://cds.climate.copernicus.eu/cdsapp#!/dataset/10.24381/cds.6c68c9bb?tab=overview>
 
-Resolution : 1x1 degree ~11.1x11.1 km <- 123 km2
+Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2
 
 ```{r nws, eval = T}
 library(sp)
@@ -507,7 +505,6 @@ ggarrange(plotlist = list(b1,b2,b3,b4),ncol = 2, nrow = 2)
 
 ```
 
-
 ```{r model-CA-from-OA}
 nlss <- readRDS("nlss.rds")
 lmoaM <- readRDS("lmoaM.rds")
@@ -649,8 +646,7 @@ ggplot(nlss)+geom_point(aes(x=pH, y = fCO2, col = survey))+
 
 ```
 
-
-```{r model-fCO2-toc}
+```{r model-log-fCO2-toc}
 summary(glmfCO2nlss <- glm(log10(fCO2*1e6)~log10(TOC), data = nlss, family = Gamma(link = "identity")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
@@ -665,23 +661,9 @@ ggplot(nlss)+geom_point(aes(x = log10(TOC), y = log10(fCO2*1e6), shape = survey)
   theme(legend.position = "none")+
   labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
   theme_minimal()
+```
 
-summary(glmfCO2nlss <- glm(log10(fCO2*1e6)~log10(TOC), data = nlss, family = Gamma(link = "log")))
-r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
-nlss$predfCO2sqrt <- predict(glmfCO2nlss, type = "response") 
-
-ggplot(nlss, aes(x = log10(TOC)))+geom_point(aes(y = log10(fCO2*1e6), col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2sqrt, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-
-
-
+```{r model-fCO2-toc-link-identity}
 summary(glmfCO2nlss <- glm(fCO2~TOC,data = nlss, family = Gamma(link = "identity")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
@@ -692,127 +674,99 @@ ggplot(nlss, aes(x = TOC))+
   geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
   geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("lightblue", "firebrick"))+
-  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  annotate(x = 0.003, y = 0.15, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
   theme(legend.position = "none")+
   labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
   theme_minimal()
-
-nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
-
-ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-
-summary(glmfCO2nlss <- glm(fCO2~TOC+log10(lake.area),data = nlss, family = Gamma(link = "identity")))
-coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
-r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
-
-ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = fCO2), shape = 1)+
-  geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
-  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
-  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
-
-ggplot(nlss, aes(x = TOC))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-
-summary(glmfCO2nlss <- glm(fCO2~TOC+log10(lake.area),data = nlss, family = Gamma(link = "identity")))
-coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
-r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
-
-ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = fCO2), shape = 1)+
-  geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
-  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
-  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
-
-ggplot(nlss, aes(x = TOC))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
-ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
-  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
-  scale_color_manual(values = c("lightblue", "firebrick"))+
-  scale_shape_manual(values = c(1,16))+
-  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
-  theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
-  theme_minimal()
-
 
 ```
 
-```{r model-tafCO2-toc}
-summary(glmfCO2nlss <- glm(log10(ta_fCO2*1e6)~log10(TOC), data = nlss, family = Gamma(link = "identity")))
+```{r glm-fCO2-toc-link-log}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC,data = nlss, family = Gamma(link = "log")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
 
-ggplot(nlss)+geom_point(aes(x = log10(TOC), y = log10(ta_fCO2*1e6), shape = survey))+
-  geom_line(aes(x = log10(TOC), y = coef.glmfCO2nlss[1]+log10(TOC)*coef.glmfCO2nlss[2], col = "predict"))+
-  geom_line(aes(x = log10(TOC), y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+log10(TOC)*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
-  geom_line(aes(x = log10(TOC), y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+log10(TOC)*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+nlss$predfCO2_log <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  geom_line(aes(y = exp(predfCO2_log + predfCO2_se), col = "Std"))+
+  geom_line(aes(y = exp(predfCO2_log - predfCO2_se), col = "Std"))+
   scale_color_manual(values = c("lightblue", "firebrick"))+
   scale_shape_manual(values = c(1,16))+
-  annotate(x = -2.75, y = 2.3, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+```
+
+```{r}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC,data = nlss, family = Gamma(link = "log")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+nlss$predfCO2_log <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  geom_line(aes(y = exp(predfCO2_log + predfCO2_se), col = "Std"))+
+  geom_line(aes(y = exp(predfCO2_log - predfCO2_se), col = "Std"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+```
+
+```{r fCO2-toc-lake.area}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+log10(lake.area),data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2), shape = 1)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2], col = "predict"))+
+  geom_line(aes(y = coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  annotate(x = 0.003, y = 0.0015, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2 in atm", title = "Norhtern Lake surveys")+
+  theme_minimal()
+
+nlss$predfCO2 <- predict(glmfCO2nlss, type = "response") 
+
+ggplot(nlss, aes(x = TOC))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
+  scale_color_manual(values = c("lightblue", "firebrick"))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
   theme(legend.position = "none")+
   labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
   theme_minimal()
 
-summary(glmfCO2nlss <- glm(ta_fCO2~TOC, data = nlss, family = Gamma(link = "log")))
-coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
-r2nofin <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
-
-ggplot(nlss, aes(x = TOC))+geom_point(aes(y = ta_fCO2*1e6), shape = 1)+
-  geom_line(aes(y = exp(coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2]), col = "predict"))+
-  geom_line(aes(y = exp(coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4])), col = "Std Error"), lty = 2)+
-  geom_line(aes(y = exp(coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4])), col = "Std Error"), lty = 2)+
+ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 from corrected TA"))+
+  geom_point(aes(y = predfCO2, col = "fCO2 modelled"))+
   scale_color_manual(values = c("lightblue", "firebrick"))+
-  annotate(x = 2.5*1e-3, y = 1e5, geom = "label", label = paste("Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nofin))+
+  scale_shape_manual(values = c(1,16))+
+  #annotate(x = -2.75, y = 2.3, geom = "label", label = paste("R2 = ", r2nofin))+
   theme(legend.position = "none")+
-  labs(y = "log10(fCO2) in atm", title = "Norhtern Lake surveys")+
+  labs(y = "log10(fCO2) in ppm", title = "Norhtern Lake surveys")+
   theme_minimal()
 
+```
+
+```{}
 ```
 
 ```{r schmidt}
@@ -876,10 +830,7 @@ ggplot()+
 
 `r knitr::knit_exit()`
 
-
-
 # Other
-
 
 ```{r match-catchment, eval = F}
 catchments <- readRDS("catchments.rds")
@@ -975,8 +926,6 @@ ggplot()+
 ```
 
 `r knitr::include_graphics(c("map_fCO2.png", "hist_fCO2.png","CO2_oversaturation.png"))`
-
-
 
 # Corplot and PCA
 
