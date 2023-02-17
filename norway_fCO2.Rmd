@@ -1742,7 +1742,7 @@ ggplot(nofin)+geom_boxplot(aes(x = "Lake area", y = log10(lake.area), color = su
 library(gimms)
 ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI", server = "nasanex", version = 0L)
 
-#ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI")
+ndvi.2004 <- downloadGimms(x= 2004,y=2004,dsn = "NDVI")
 
 ndvi.2004.raster <- rasterizeGimms(ndvi.2004)
  

@@ -1,0 +1,173 @@
+---
+title: "Supplementary Information"
+author: "Camille Crapart"
+date: "2023-02-09"
+output: 
+   bookdown::pdf_document2:
+     code_folding: hide
+     toc: true
+     number_sections: true
+     fig_caption: true
+     keep_tex: true
+
+bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+```
+
+# Bookdown documentation
+
+<https://bookdown.org/yihui/bookdown/a-single-document.html>
+
+# Organic alkalinity
+
+## Hruska alkalinity
+
+```{r organic-acids, eval = F}
+
+pKa1 <- 3.04
+Ka1 <- 10^(-pKa1)
+
+pKa2 <- 4.42
+Ka2 <- 10^(-pKa2)
+
+pKa3 <- 6.46
+Ka3 <- 10^(-pKa3)
+
+m <- 10.2*1e-6*12.011*1e3*1e-3# ueq/mg to eq/mol, site density BUT THERE IS A 1e3 PB: have to multiply by 1e-3 to stay in the range
+nofin$RCOO <- with(nofin, (Ka1/Hplus + 2*Ka2/Hplus + 3*Ka3/Hplus)* m/3 * TOC) # estimated in eq/L
+
+nofin$RCOO_4.5 <- with(nofin, (Ka1/10^(-4.5) + 2*Ka2/10^(-4.5) + 3*Ka3/10^(-4.5))* m/3 * TOC)
+
+nofin$OA_hruska <- with(nofin, RCOO-RCOO_4.5)
+
+ggplot(nofin)+geom_point(aes(x = pH, y = RCOO, col = survey))
+ggplot(nofin)+geom_point(aes(x = log10(RCOO), y = log10(fCO2), col = survey))
+
+nofin$CA_hruska <- with(nofin, TA + OA_hruska - OH + Hplus) 
+
+nofin$CO3_hruska <- with(nofin,CA_hruska / (Hplus/K2 +2)) # in mol/L
+nofin$HCO3_hruska <- with(nofin, CO3_hruska*Hplus/K2)
+nofin$H2CO3_hruska <- with(nofin, HCO3_hruska*Hplus/K1)
+nofin$fCO2_hruska <- with(nofin,H2CO3_hruska/K0)
+
+g1 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = CA_hruska*1e3, col = "Hruska"), alpha = 0.5)+
+  geom_point(aes(y = CA_Liu*1e3, col = "Liu"), shape = "")+
+  labs(x = "pH", y = "Carbonate alkalinity, meq/L")+
+  scale_color_manual(values = c("firebrick","orange", "black"))+
+#  facet_grid(rows = vars(survey))+
+  theme_minimal()
+  
+g2 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = fCO2, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = fCO2_hruska, col = "Hruska"), alpha = 0.5)+
+  labs(x = "pH", y = "fCO2, atm")+
+  scale_color_manual(values = c("firebrick","black"))+
+ # facet_grid(rows = vars(survey))+
+  theme_minimal()
+```
+
+## Liu
+
+```{r fix-pH-OA-with-Liu}
+#nofin$pH_Liu <- with(nofin, pH - (0.03+0.05*log10(IS)))
+#nofin$Hplus_Liu <- 10^(-nofin$pH_Liu)
+#nofin$OH_Liu <- with(nofin,Kw*Hplus_Liu)
+
+nofin$OA_Liu <- 0.08 * nofin$TOC
+nofin$CA_Liu <- with(nofin, TA-OA_Liu - OH + Hplus)
+
+nofin$CO3_Liu <- with(nofin,CA_Liu / (Hplus/K2 +2)) # in mol/L
+nofin$HCO3_Liu <- with(nofin, CO3_Liu*Hplus/K2)
+nofin$H2CO3_Liu <- with(nofin, HCO3_Liu*Hplus/K1)
+nofin$fCO2_Liu <- with(nofin,H2CO3_Liu/K0)
+
+nofin$DIC_Liu <- with(nofin, H2CO3_Liu + HCO3_Liu + CO3_Liu)
+
+g3 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = CA*1e3, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = CA_Liu*1e3, col = "Liu"), alpha = 0.5)+
+  labs(x = "pH", y = "Carbonate Alkalinity, meq/L")+
+  scale_color_manual(values = c("orange", "black"))+
+#  facet_grid(rows = vars(survey))+
+  theme_minimal()
+
+g4 <- ggplot(nofin, aes(x = pH))+
+  geom_point(aes(y = fCO2, col = "Measured"), alpha = 0.5)+
+  geom_point(aes(y = fCO2_Liu, col = "Liu"), alpha = 0.5)+
+  labs(x = "pH", y = "fCO2, atm")+
+  scale_color_manual(values = c("orange", "black"))+
+#  facet_grid(rows = vars(survey))+
+  theme_minimal()
+
+```
+
+## Compare Hruska and Liu
+
+```{r plot-hruska-liu}
+library(cowplot)
+ggarrange(g1,g2,g3,g4, ncol = 2, nrow = 2, common.legend = T)
+
+```
+
+## CBA/N112 carbonate alkalinity
+
+```{r CA-TA}
+nofin$sqrtCA <- nofin$CA %>% sqrt()
+
+ggplot(nofin, aes(x = log10(TA*1e3)))+
+  geom_point(aes(y = log10(CA*1e3), col = survey), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "Total alkalinity, meq/L, log10", y= "Carbonate alkalinity, meq/L, log10")+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  annotate(x = -2.5, y = -2.75, geom = "text", label = "1:1 line")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+```
+
+```{r empirical-model-ca}
+nofin$invHplus <- 1/nofin$Hplus
+summary(lmOAm <- glm(CA  ~ TA + invHplus:TOC, data = nofin, family = Gamma(link = "sqrt")))
+
+nofin$TAOA <- predict(lmOAm, newdata = nofin, type = "response")
+nofin$CA_pred <- with(nofin, TAOA - OH + Hplus)
+nofin$cta_CO3 <- with(nofin,(TAOA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
+nofin$cta_HCO3 <- with(nofin, cta_CO3*Hplus/K2)
+nofin$cta_H2CO3 <- with(nofin, cta_HCO3*Hplus/K1)
+nofin$cta_fCO2 <- with(nofin,cta_H2CO3/K0)
+
+ggplot(nofin)+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"))+
+  geom_point(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(ta_fCO2*1e6), col = "fCO2 from TA"), method = "lm", se = F)+
+  geom_smooth(aes(x = log10(fCO2*1e6), y = log10(cta_fCO2*1e6), col = "fCO2 from corrected TA"), method = "lm", se = F)+
+  annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+#  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "", title = "12")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+
+ggplot(nofin, aes(x = log10(CA)))+
+  geom_point(aes(y = log10(TA - OH + Hplus), col = "CA from TA"))+
+  geom_point(aes(y = log10(CA_pred), col = "Modelled CA"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_smooth(aes(y = log10(TA-OH+Hplus), col = "CA from TA"), method = "lm", se = F)+
+  geom_smooth(aes(y = log10(CA_pred), col = "Modelled CA"), method = "lm", se = F)+
+  #annotate(x= 2.3, y = 2, geom = "text", label = "1:1 line")+
+#  facet_grid(rows = vars(survey))+
+  labs(y = "log10(modelled fCO2, uatm)", x = "log10(measured fCO2, uatm)", col = "")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()
+```
