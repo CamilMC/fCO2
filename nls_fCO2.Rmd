@@ -766,9 +766,6 @@ ggplot(nlss, aes(x = log10(lake.area)))+geom_point(aes(y = fCO2, col = "fCO2 fro
 
 ```
 
-```{}
-```
-
 ```{r schmidt}
 
 
@@ -821,11 +818,6 @@ ggplot()+
   annotate(x = 32, y =5, geom = "text", label = paste("Median = ", round(median(nlss$mgC.m2.day, na.rm = T),2)))+
   theme_void(base_size = 15)+
   theme(legend.position = "bottom")
-```
-
-```{r }
-
-
 ```
 
 `r knitr::knit_exit()`
