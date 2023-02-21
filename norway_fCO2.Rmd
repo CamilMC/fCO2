@@ -1076,6 +1076,348 @@ ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
   theme_minimal()
 
 ```
+```{r n112-loglink}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmfCO2n112 <- glm(fCO2~TOC,offset = fCO2.atm, data = df, family = Gamma(link = "log")))
+coefs <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_log <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+ggplot(df)+
+  geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log), col = "predict"))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log + predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log - predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.002, geom = "label", label = paste("Intercept = ", round(coefs[1]*1e6, 2), "\nSlope = ", round(coefs[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+```
+
+```{r n112-offset}
+
+summary(glmfCO2n112 <- glm(fCO2~TOC+offset(fCO2.atm), data = subset(nofin, survey == "N112_2004"), family = Gamma(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+
+ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+TOC*coef.glmfCO2n112[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]+coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]-coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]-coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.0015, y = 0.001, geom = "label", label = paste("Slope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+
+```
+
+```{r n112-loglink}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmfCO2n112 <- glm(fCO2~TOC,offset = fCO2.atm, data = df, family = Gamma(link = "log")))
+coefs <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_log <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+ggplot(df)+
+  geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log), col = "predict"))+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log + predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = exp(predfCO2_log - predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.002, geom = "label", label = paste("Intercept = ", round(coefs[1]*1e6, 2), "\nSlope = ", round(coefs[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+
+```
+
+### fCO2 models with gaussian family
+
+```` {r fCO2-toc-n112}
+
+summary(glmfCO2n112 <- glm(fCO2~TOC, data = subset(nofin, survey == "N112_2004"), family = gaussian(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2n112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "N112_2004"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+TOC*coef.glmfCO2n112[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]+coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]+coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2n112[1]-coef.glmfCO2n112[3]+TOC*(coef.glmfCO2n112[2]-coef.glmfCO2n112[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 5e-5, y = 0.001, geom = "label", label = paste("Intercept = ", round(coef.glmfCO2n112[1]*1e6, 2), "\nSlope = ", round(coef.glmfCO2n112[2],2), "\n R2 = ", r2n112))+
+  coord_trans(x = "log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004")+
+  theme_minimal()
+```
+```{r fCO2-toc-cba}
+summary(glmfCO2cba <- glm(fCO2~TOC, data = subset(nofin, survey == "CBA_2019"), family = gaussian(link = "identity")))
+summary.glmfCO2cba <- summary(glmfCO2cba)
+coef.glmfCO2cba <- summary(glmfCO2cba)$coefficients
+r2cba <- with(summary.glmfCO2cba, 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(subset(nofin, survey == "CBA_2019"))+geom_point(aes(x = TOC, y = fCO2))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+TOC*coef.glmfCO2cba[2], col = "predict"))+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]+coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]+coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  geom_line(aes(x = TOC, y = coef.glmfCO2cba[1]-coef.glmfCO2cba[3]+TOC*(coef.glmfCO2cba[2]-coef.glmfCO2cba[4]), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.0003, y = 0.004, geom = "label", label = paste("Intercept = ", round(coef.glmfCO2cba[1]*1e6, 2),"\nSlope = ", round(coef.glmfCO2cba[2],3), "\n R2 = ", r2cba))+
+  coord_trans(x="log10", y = "log10")+
+  theme(legend.position = "none")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019")+
+  theme_minimal()
+```
+```{r fCO2-toc-nlss-gaussian}
+summary(glmfCO2nlss <- glm(fCO2~TOC, data = nlss, family = gaussian(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2*1e6))+
+    geom_line(aes(y = (coef.glmfCO2nlss[1]+TOC*coef.glmfCO2nlss[2])*1e6, col = "predict"))+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]+coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]+coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (coef.glmfCO2nlss[1]-coef.glmfCO2nlss[3]+TOC*(coef.glmfCO2nlss[2]-coef.glmfCO2nlss[4]))*1e6, col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  annotate(x = 0.00005, y = 1e4, geom = "label", 
+           label = paste("Intercept =",round(coef.glmfCO2nlss[1]*1e6, 2),"\n Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nlss))+
+ # coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+### fCO2-toc with sqrt?
+
+```{r fCO2-toc-nlss}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+offset(-fCO2.atm), data = nlss, family = Gamma(link = "sqrt")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+nlss$predfCO2_sqrt <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = predfCO2_sqrt^2, col = "predict"))+
+  geom_line(aes(y = (predfCO2_sqrt+predfCO2_se)^2, col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_sqrt-predfCO2_se)^2, col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 0.00003, y = 0.04, geom = "label", 
+           label = paste("Intercept =",round(((coef.glmfCO2nlss[1])^2)*1e6, 2)," uatm","\n Slope = ", round(coef.glmfCO2nlss[2],2), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+```{r fCO2-toc-nlss}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC, data = nlss, family = Gamma(link = "log")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+nlss$predfCO2_log <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = exp(predfCO2_log), col = "predict"))+
+  geom_line(aes(y = exp(predfCO2_log+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = exp(predfCO2_log-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 0.00003, y = 0.04, geom = "label", 
+           label = paste("Intercept =",round(exp(coef.glmfCO2nlss[1])*1e6, 2)," uatm","\n Slope = ", round(coef.glmfCO2nlss[2],), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+### fCO2 with offset
+
+```{r fCO2-toc-n112-offset}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmfCO2n112 <- glm(fCO2~TOC+0+offset(fCO2.atm), data = df, family = Gamma(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2nn112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_offset <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.2019, col = "pink")+
+  annotate(x = 0.00005, y = 0.002, geom = "label", 
+           label = paste("Intercept =", fCO2.atm.2004*1e6," uatm","\n Slope = ", round(coef.glmfCO2n112[1],2), "\n R2 = ", r2n112))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+```{r fCO2-toc-cba-offset}
+df <- subset(nofin, survey == "CBA_2019")
+
+summary(glmfCO2cba <- glm(fCO2~TOC+0+offset(fCO2.atm), data = df, family = Gamma(link = "identity")))
+coef.glmfCO2cba <- summary(glmfCO2cba)$coefficients
+r2ncba <- with(summary(glmfCO2cba), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_offset <- predict(glmfCO2cba, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2cba, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.2019, col = "pink")+
+  annotate(x = 0.0003, y = 0.003, geom = "label", 
+           label = paste("Intercept =", fCO2.2019," uatm","\n Slope = ", round(coef.glmfCO2cba[1],2), "\n R2 = ", r2cba))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+```{r fCO2-toc-nlss-offset}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+nlss$predfCO2_offset <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 0.00003, y = 0.04, geom = "label", 
+           label = paste("Intercept =", fCO2.1995," uatm","\n Slope = ", round(coef.glmfCO2nlss[1],2), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+### fCO2 with offset and gaussian distribution
+
+```{r fCO2-toc-n112-offset}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmfCO2n112 <- glm(fCO2~TOC+0+offset(fCO2.atm), data = df, family = gaussian(link = "identity")))
+coef.glmfCO2n112 <- summary(glmfCO2n112)$coefficients
+r2nn112 <- with(summary(glmfCO2n112), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_offset <- predict(glmfCO2n112, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2n112, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.2019, col = "pink")+
+  annotate(x = 0.00005, y = 0.002, geom = "label", 
+           label = paste("Intercept =", fCO2.atm.2004*1e6," uatm","\n Slope = ", round(coef.glmfCO2n112[1],2), "\n R2 = ", r2n112))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+```{r fCO2-toc-cba-offset}
+df <- subset(nofin, survey == "CBA_2019")
+
+summary(glmfCO2cba <- glm(fCO2~TOC+0+offset(fCO2.atm), data = df, family = gaussian(link = "identity")))
+coef.glmfCO2cba <- summary(glmfCO2cba)$coefficients
+r2ncba <- with(summary(glmfCO2cba), 1 - deviance/null.deviance) %>% round(2)
+
+df$predfCO2_offset <- predict(glmfCO2cba, se = T)[1] %>% unlist
+df$predfCO2_se <- predict(glmfCO2cba, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.2019, col = "pink")+
+  annotate(x = 0.0003, y = 0.003, geom = "label", 
+           label = paste("Intercept =", fCO2.2019," uatm","\n Slope = ", round(coef.glmfCO2cba[1],2), "\n R2 = ", r2cba))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+```{r fCO2-toc-nlss-offset}
+
+summary(glmfCO2nlss <- glm(fCO2~TOC+0+offset(fCO2.atm), data = nlss, family = gaussian(link = "identity")))
+coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
+r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
+
+nlss$predfCO2_offset <- predict(glmfCO2nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+
+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 0.00003, y = 0.04, geom = "label", 
+           label = paste("Intercept =", fCO2.1995," uatm","\n Slope = ", round(coef.glmfCO2nlss[1],2), "\n R2 = ", r2nlss))+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+## Boxplots
 
 ```{r boxplots-for-presentation}
 library(ggpubr)
@@ -1094,7 +1436,7 @@ b2 <- bplot(nofin$TOC*12.011*1e3, "TOC in mg/L")
 b3 <- bplot(nofin$TA*1e3, "TA, meq/L")
 b4 <- bplot(log10(nofin$lake.area), "log10(Lake area), km2")
 b5 <- bplot(nofin$DIC, "DIC in mol/L")
-b6 <- bplot(nofin$fCO2/nofin$TOC, "TIC/TOC")
+b6 <- bplot(nofin$DIC/nofin$TOC, "TIC/TOC")
 
 
 ggarrange(plotlist = list(b1,b2,b3,b4, b5, b6),ncol = 2, nrow = 3)
@@ -1297,6 +1639,90 @@ nofin$kCO2 <- with(nofin, k600*(600/Sc)^n) #m/day
 nofin$FCO2 <- with(nofin, lake.area*1e6*kCO2*((fCO2 - fCO2.atm)*K0*1e3)) #-> lake.area in m2, dCO2 in mol/m3, k in m/day -> mol/day. K0 is in mol/L <- mol/1e-3 m3
 
 nofin$mgC.m2.day <- with(nofin, kCO2*(fCO2-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
+
+```
+
+```{r fit-evasion-rate-toc}
+nofin$TOC_mg <- nofin$TOC*12.011*1e3
+nofin$gC.m2.day <- nofin$mgC.m2.day*1e-3
+
+summary(glmECO2 <- glm(gC.m2.day~TOC_mg, data = nofin, family = gaussian(link = "identity")))
+coef.glmECO2 <- summary(glmECO2)$coefficients
+r2ECO2 <- with(summary(glmECO2), 1 - deviance/null.deviance) %>% round(2)
+
+nofin$predECO2 <- predict(glmECO2, se = T)[1] %>% unlist
+nofin$predECO2_se <- predict(glmECO2, se = T)[2] %>% unlist
+
+
+ggplot(nofin, aes(x = TOC_mg))+
+  geom_point(aes(y = gC.m2.day, size = DIC/TOC))+
+    geom_line(aes(y = (predECO2), col = "predict"))+
+  geom_line(aes(y = (predECO2+predECO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predECO2-predECO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  #geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 1, y = 10, geom = "label", 
+           label = paste("Slope = ", round(coef.glmECO2[2],2), "\n R2 = ", r2ECO2))+
+  coord_trans(x="log10")+
+  labs(y = "ECO2, g/m2/day", x = "TOC, mg/L", title = "nofin", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+
+```{r fit-evasion-rate-toc-cba}
+df <- subset(nofin, survey == "CBA_2019")
+
+summary(glmECO2 <- glm(mgC.m2.day~TOC_mg, data = df, family = gaussian(link = "identity")))
+coef.glmECO2 <- summary(glmECO2)$coefficients
+r2ECO2 <- with(summary(glmECO2), 1 - deviance/null.deviance) %>% round(2)
+
+df$predECO2 <- predict(glmECO2, se = T)[1] %>% unlist
+df$predECO2_se <- predict(glmECO2, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC_mg))+
+  geom_point(aes(y = mgC.m2.day))+
+    geom_line(aes(y = (predECO2), col = "predict"))+
+  geom_line(aes(y = (predECO2+predECO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predECO2-predECO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  #geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 5, y = 15e3, geom = "label", 
+           label = paste("Slope = ", round(coef.glmECO2[2],2), "\n R2 = ", r2ECO2))+
+  coord_trans(x="log10")+
+  labs(y = "ECO2", x = "TOC, mg/L", title = "CBA", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+```{r fit-evasion-rate-toc-n112}
+df <- subset(nofin, survey == "N112_2004")
+
+summary(glmECO2 <- glm(mgC.m2.day~TOC_mg, data = df, family = gaussian(link = "identity")))
+coef.glmECO2 <- summary(glmECO2)$coefficients
+r2ECO2 <- with(summary(glmECO2), 1 - deviance/null.deviance) %>% round(2)
+
+df$predECO2 <- predict(glmECO2, se = T)[1] %>% unlist
+df$predECO2_se <- predict(glmECO2, se = T)[2] %>% unlist
+
+
+ggplot(df, aes(x = TOC_mg))+
+  geom_point(aes(y = mgC.m2.day))+
+    geom_line(aes(y = (predECO2), col = "predict"))+
+  geom_line(aes(y = (predECO2+predECO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predECO2-predECO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+  #geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 2, y = 3e3, geom = "label", 
+           label = paste("Slope = ", round(coef.glmECO2[2],2), "\n R2 = ", r2ECO2))+
+  coord_trans(x="log10")+
+  labs(y = "ECO2", x = "TOC, mg/L", title = "N112", col = "")+
+  theme_minimal()+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 ```
 
