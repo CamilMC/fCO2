@@ -16,7 +16,7 @@ link-citations: yes
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = T, message = F, warning = F, results = F)
 ```
 
 ```{r libraries}
@@ -24,7 +24,11 @@ library(dplyr)
 library(ggplot2)
 library(ggpubr)
 library(cowplot)
+library(gridExtra)
 library(colorspace)
+library(gamlss)
+
+library(kableExtra)
 
 library(rsq)
 
@@ -45,11 +49,90 @@ fCO2.atm.1995 <- 360.17 * 1e-6
 norway <- readRDS("norway.rds")
 nlss <- readRDS("nlss.rds")
 
+norway$TOC_mg <- norway$TOC*12.011*1e3
+norway$TOC_umol <- norway$TOC*1e6
+norway$TA_ueq <- norway$TA * 1e6
+norway$CA_ueq <- norway$CA * 1e6
+norway$DIC_mg <- norway$DIC*12.011*1e3
+norway$DIC_umol <- norway$DIC * 1e6
+norway$CA_ueq <- norway$CA * 1e6
+norway$Hplus_umol <- norway$Hplus *1e6
+norway$invHplus_umol <- 1/norway$Hplus *1e6
+norway$invHplus <- 1/norway$Hplus
+
+
 ```
 
-# Organic alkalinity
+# Estimation of organic and carbonate alkalinity
 
-## Hruska alkalinity
+## Carbonate speciation N112 / CBA
+
+The concentration of the carbonate species in the N112 and CBA survey is calculated directly from the measured partial pressure of $CO_2$ [@Appelo2005]:
+
+$pCO_2 = [H_2CO_3]/K_0$
+
+$[HCO3^-] = K_1 \times [H_2CO_3]/[H^+]$
+
+$[CO_3^{2-}] = K_2 \times [HCO_3 ^- ] / [H ^+]$
+
+$[TIC] = [H_2CO_3] + [HCO_3^-]+[CO_3 ^{2-}]$
+
+$K_0$ is Henry's constant from @Weiss1974. $K_1$ and $K_2$ are ionization constants of $H_2CO_3$ and $HCO_3^-$ , respectively obtained from @Harned1943 and @Harned1941 and are adjusted for temperature.
+
+In freshwater samples, the chemical activity of carbonate species is assumed to be equal to the molar concentration. Therefore, molar concentration is used in all equilibrium equations.
+
+@Liu2020 reported that in water with low ionic strength, the pH is underestimated by 0.1 to 0.5 units.  We chose to not correct pH in this study because the ionic strength was not available for the N112 survey. Since only one lake in the Northern Lakes Survey had a pH inferior to 5, we assumed that the measurement errors would be minimal.
+
+```{r measured-carbonate-speciation}
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = H2CO3, col = "H2CO3"), alpha = 0.5)+
+  geom_point(aes(y = HCO3, col = "HCO3"), alpha = 0.5)+
+  geom_point(aes(y = CO3, col = "CO3"), alpha = 0.5)+
+  labs(y = "Carbonate species (mol/L)", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3","orange"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = H2CO3, col = "H2CO3"), alpha = 0.5)+
+  geom_point(aes(y = HCO3, col = "HCO3"), alpha = 0.5)+
+  geom_point(aes(y = CO3, col = "CO3"), alpha = 0.5)+
+  geom_point(aes(y = Ca, col = "Ca"))+
+  labs(y = "Carbonate species (mol/L)", col = "")+
+  scale_color_manual(values = c( "firebrick","black","dodgerblue3","orange"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+
+```{r compare-cba-n112}
+toc_boxplot <- ggplot(norway)+
+  geom_boxplot(aes(x = "TOC", y = TOC, col = survey))+
+  geom_boxplot(aes(x = "DIC", y = DIC, col = survey))+
+  labs(x = "", y = "concentration, mol/L")+
+  scale_color_manual(values = c("firebrick", "orange"))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+```
+
+## Organic alkalinity according to @Hruska2003
+
+Hruska et al. suggest that the organic alkalinity (OA) can be computed as a triprotic model. OA is the defined as the concentration of organic bases $[RCOO^-]$ in the solution, minus the concentration of organic bases at pH = 4.5, as for an end-point titration. $[RCOO^-]$ depends on three $pK_a$ that were measured in @Hruska2003:
+
+$$[RCOO^-]=\alpha_1 \times \frac{m \times [TOC]}{3}+ \alpha_2 \times \frac{m \times [TOC]}{3} + \alpha_3 \times \frac{m \times [TOC]}{3}$$
+
+Where α is the ionization fraction of each acid/base couple:
+
+$$\alpha = \frac{[RCOO^-]}{[RCOOH]}=\frac{K_a}{[H^+} = \frac{10^{-pK_a}}{[H^+]}$$
+
+And $m$ is the site density of carboxylic group on the organic matter:
+
+$$m = 10.2 \; \pm \;  0.6 \; \mu eq/mg \; DOC \Leftrightarrow 0.12 \; eq/mol \; DOC$$
+
+$m$ is supposed to be equally divided between the three acids with their respective $pK_a$.
 
 ```{r organic-acids, eval = T}
 
@@ -69,8 +152,11 @@ norway$RCOO_4.5 <- with(norway, (Ka1/10^(-4.5) + 2*Ka2/10^(-4.5) + 3*Ka3/10^(-4.
 
 norway$OA_hruska <- with(norway, RCOO-RCOO_4.5)
 
-ggplot(norway)+geom_point(aes(x = pH, y = RCOO, col = survey))
-ggplot(norway)+geom_point(aes(x = log10(RCOO), y = log10(fCO2), col = survey))
+ggplot(norway)+
+  geom_point(aes(x = pH, y = RCOO, col = survey))+
+  scale_color_manual(values = c("firebrick","dodgerblue3"))
+  theme_minimal()
+
 
 norway$CA_hruska <- with(norway, TA + OA_hruska - OH + Hplus) 
 
@@ -127,11 +213,18 @@ g2 <- ggplot(norway, aes(x = pH))+
   theme_minimal()
 ```
 
-## Liu
+## Organic alkalinity according to \@Liu2020
+
+A simplifying approach was suggested by @Liu2020 , building on @Cai1998 and @Lozovik2005, where the organic alkalinity can be calculated directly from TOC as:
+
+$OA = 80 \% \times 10\% \times [TOC]$
+
+80% being the proportion of DOC that is an organic acid [\@Cai1998], and 10% the maximum fraction of anions contributing to alkalinity [@Lozovik2005]. This last value was calculated for DOC in humic lakes, but overall this equation is designed to be applicable to all kinds of lakes, tropical or temperate.
 
 ```{r fix-pH-OA-with-Liu}
-#norway$pH_Liu <- with(norway, pH - (0.03+0.05*log10(IS)))
-#norway$Hplus_Liu <- 10^(-norway$pH_Liu)
+
+#norway$pH_Liu <- with(norway, pH - (0.03+0.05*log10(IS))) 
+#norway$Hplus_Liu <- 10^(-norway$pH_Liu) 
 #norway$OH_Liu <- with(norway,Kw*Hplus_Liu)
 
 norway$OA_Liu <- 0.08 * norway$TOC
@@ -195,8 +288,13 @@ ggarrange(g1,g2,g3,g4, ncol = 2, nrow = 2, common.legend = T)
 
 ## CBA/N112 carbonate alkalinity
 
+CA is higher than TA for low alkalinity and for high alkalinity samples, but lower than TA in the middle. The regression model has to take this into account.
+
 ```{r CA-TA}
 norway$sqrtCA <- norway$CA %>% sqrt()
+norway$invHplus <- 1/norway$Hplus
+
+norway$diffCATA <- with(norway, CA/TA*100)
 
 ggplot(norway, aes(x = log10(TA*1e3)))+
   geom_point(aes(y = log10(CA*1e3), col = survey), alpha = 0.5)+
@@ -206,11 +304,78 @@ ggplot(norway, aes(x = log10(TA*1e3)))+
   annotate(x = -2.5, y = -2.75, geom = "text", label = "1:1 line")+
   scale_color_manual(values = c("firebrick", "dodgerblue3"))+
   theme_minimal()
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = CA*1e3, col = survey), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "pH", y= "Carbonate alkalinity, meq/L, log10")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = invHplus))+
+  geom_point(aes(y = CA*1e3, col = survey), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "1/H+", y= "Carbonate alkalinity, meq/L, log10")+
+  coord_trans(x="log10", y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = diffCATA, col = survey, size = TOC_mg), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "pH", y= "proportion CA in TA, %")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = invHplus))+
+  geom_point(aes(y = DIC*1e3, col = survey, size = TOC_mg), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "1/H+", y= "DIC, mmol/L")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = DIC*1e3, col = survey, size = TOC_mg), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "pH", y= "DIC, mmol/L")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = TA*1e3))+
+  geom_point(aes(y = DIC*1e3, col = survey, size = TOC_mg), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "TA, meq/L", y= "DIC, mmol/L")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = TOC*1e3))+
+  geom_point(aes(y = DIC*1e3, col = survey, size = TOC_mg), alpha = 0.5)+
+ # geom_line(aes(y = log10(sqrt(TA*1e3))))+
+  labs(x= "TOC, mmol/L", y= "DIC, mmol/L")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()
+  
+
 ```
 
-```{r empirical-model-ca}
-norway$invHplus <- 1/norway$Hplus
-summary(lmOAm <- glm(CA  ~ TA + invHplus:TOC, data = norway, family = Gamma(link = "sqrt")))
+### Try link functions
+
+Several link functions are available with the glm package. We tried the square-root function, the log function and the inverse function. The square-root function, fitting the shape of the relationship between CA and TA, had the best results.
+
+### Log link
+
+```{r empirical-model-ca-log, results = T}
+summary(lmOAm <- glm(CA  ~ TA + invHplus:TOC, data = norway, family = Gamma(link = "log")))
+```
+
+```{r plot-log}
 
 norway$TAOA <- predict(lmOAm, newdata = norway, type = "response")
 norway$CA_pred <- with(norway, TAOA - OH + Hplus)
@@ -219,7 +384,113 @@ norway$cta_HCO3 <- with(norway, cta_CO3*Hplus/K2)
 norway$cta_H2CO3 <- with(norway, cta_HCO3*Hplus/K1)
 norway$cta_fCO2 <- with(norway,cta_H2CO3/K0)
 
+norway$TACA <- with(norway, TA-OH+Hplus)
+
+r2taoa <- summary(lm(CA_pred~CA, norway))$r.squared %>% round(2)
+r2taca <- summary(lm(TACA~CA, norway))$r.squared %>% round(2)
+
 ggplot(norway, aes(x = CA*1e3))+
+  geom_point(aes(y = TACA*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  annotate(x= 0.004, y = 1, geom = "text", label = "1:1")+
+  geom_smooth(aes(y = TACA*1e3, col = "CA from TA"), method = "lm", se = F)+
+  annotate(x = 1.5, y = 2.5, geom = "text", label = paste("R2 = ", r2taca), col = "firebrick")+
+  geom_smooth(aes(y = CA_pred*1e3, col = "CA from corrected TA"), method = "lm", se = F)+
+  annotate(x = 1.5, y = 12, geom = "text", label = paste("R2 = ", r2taoa), col = "orange")+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10")+
+  scale_color_manual(values = c("orange","firebrick"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+```
+
+### Inverse link
+
+```{r empirical-model-ca-inv, results =T}
+summary(lmOAm <- glm(CA  ~ TA + invHplus:TOC, data = norway, family = Gamma(link = "inverse")))
+```
+
+```{r plot-inv}
+norway$TAOA <- predict(lmOAm, newdata = norway, type = "response")
+norway$CA_pred <- with(norway, TAOA - OH + Hplus)
+norway$cta_CO3 <- with(norway,(TAOA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
+norway$cta_HCO3 <- with(norway, cta_CO3*Hplus/K2)
+norway$cta_H2CO3 <- with(norway, cta_HCO3*Hplus/K1)
+norway$cta_fCO2 <- with(norway,cta_H2CO3/K0)
+
+norway$TACA <- with(norway, TA-OH+Hplus)
+
+r2taoa <- summary(lm(CA_pred~CA, norway))$r.squared %>% round(2)
+r2taca <- summary(lm(TACA~CA, norway))$r.squared %>% round(2)
+
+ggplot(norway, aes(x = CA*1e3))+
+  geom_point(aes(y = TACA*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  geom_vline(xintercept = 0.07, lty = 3)+
+  geom_smooth(aes(y = TACA*1e3, col = "CA from TA"), method = "lm", se = F)+
+  annotate(x = 1.5, y = 0.25, geom = "text", label = paste("R2 = ", r2taca), col = "firebrick")+
+  geom_smooth(aes(y = CA_pred*1e3, col = "CA from corrected TA"), method = "lm", se = F)+
+  annotate(x = 1, y = 2.5, geom = "text", label = paste("R2 = ", r2taoa), col = "orange")+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("orange","firebrick"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+```
+
+### Sqrt link
+
+```{r empirical-model-ca-sqrt, results = T}
+summary(lmOAm <- glm(CA  ~ TA + invHplus:TOC, data = norway, family = Gamma(link = "sqrt")))
+```
+
+```{r plot-sqrt}
+norway$TAOA <- predict(lmOAm, newdata = norway, type = "response")
+norway$CA_pred <- with(norway, TAOA - OH + Hplus)
+norway$cta_CO3 <- with(norway,(TAOA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
+norway$cta_HCO3 <- with(norway, cta_CO3*Hplus/K2)
+norway$cta_H2CO3 <- with(norway, cta_HCO3*Hplus/K1)
+norway$cta_fCO2 <- with(norway,cta_H2CO3/K0)
+
+norway$TACA <- with(norway, TA-OH+Hplus)
+
+r2taoa <- summary(lm(CA_pred~CA, norway))$r.squared %>% round(2)
+r2taca <- summary(lm(TACA~CA, norway))$r.squared %>% round(2)
+
+ggplot(norway, aes(x = CA*1e3))+
+  geom_point(aes(y = TACA*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  geom_vline(xintercept = 0.07, lty = 3)+
+  geom_smooth(aes(y = TACA*1e3, col = "CA from TA"), method = "lm", se = F)+
+  annotate(x = 1, y = 0.15, geom = "text", label = paste("R2 = ", r2taca), col = "firebrick")+
+  geom_smooth(aes(y = CA_pred*1e3, col = "CA from corrected TA"), method = "lm", se = F)+
+  annotate(x = 1, y = 2.5, geom = "text", label = paste("R2 = ", r2taoa), col = "orange")+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured CA, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+```
+
+### CA Model with square-root, visualization
+
+```{r plots-ca}
+
+compare.ca <- ggplot(norway, aes(x = CA*1e3))+
   geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
   geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
   geom_abline(slope = 1, intercept = 0, lty = 2)+
@@ -234,8 +505,9 @@ ggplot(norway, aes(x = CA*1e3))+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = "bottom")
+compare.ca
 
-ggplot(norway, aes(x = CA*1e3))+
+compare.ca.facet <- ggplot(norway, aes(x = CA*1e3))+
   geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
   geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
   geom_abline(slope = 1, intercept = 0, lty = 2)+
@@ -248,14 +520,20 @@ ggplot(norway, aes(x = CA*1e3))+
   facet_grid(rows = vars(survey))+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+compare.ca.facet 
 
-ggplot(norway, aes(x = fCO2))+
+r2fco2ta <- summary(lm(ta_fCO2~fCO2, norway))$adj.r.squared %>% round(2)
+r2fco2cta <- summary(lm(cta_fCO2~fCO2, norway))$adj.r.squared %>% round(2)
+
+plot.fco2.fco2 <- ggplot(norway, aes(x = fCO2))+
   geom_point(aes(y = ta_fCO2, col = "fCO2 from TA"), alpha = 0.5)+
   geom_point(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), alpha = 0.5)+
   geom_abline(slope = 1, intercept = 0, lty = 2)+
-  geom_smooth(aes(y = ta_fCO2, col = "fCO2 from TA"), method = "lm", se = F)+
-  geom_smooth(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), method = "lm", se = F)+
-  labs(y = "Calculated fCO2, atm", x = "Measured fCO2, atm", col = "")+
+  geom_smooth(aes(y = ta_fCO2, col = "fCO2 from TA"), method = "lm", se = F, linewith = 0.5)+
+  geom_smooth(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), method = "lm", se = F, linewidth = 0.5)+
+  annotate(x = 0.004, y = 0.015, geom = "text", label = paste("R2 =", r2fco2ta,""), col = "firebrick")+
+annotate(x = 0.004, y = 0.001, geom = "text", label = paste("R2 =", r2fco2cta,""), col = "orange")+  
+  labs(y = "Calculated fCO2 (atm)", x = "Measured fCO2 (atm)", col = "")+
   coord_trans( x = "log10", y = "log10")+
   scale_color_manual(values = c("firebrick","orange"))+
  # annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
@@ -264,7 +542,38 @@ ggplot(norway, aes(x = fCO2))+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = "bottom")
 
+plot.fco2.ca <- ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = ta_fCO2, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), alpha = 0.5)+
+  geom_smooth(aes(y = ta_fCO2, col = "fCO2 from TA"), method = "loess", se = F)+
+  geom_smooth(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), method = "loess", se = F)+
+  labs(y = "Calculated fCO2, atm", x = "Measured CA, meq/L", col = "")+
+  coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+ # annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  #facet_grid(rows = vars(survey))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
 
+
+plot.fco2.ph <- ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = ta_fCO2, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2, col = "Measured fCO2"))+
+  geom_smooth(aes(y = ta_fCO2, col = "fCO2 from TA"), method = "loess", se = F, linewith = 0.5)+
+  geom_smooth(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), method = "loess", se = F, linewidth = 0.5)+
+  geom_smooth(aes(y = fCO2, col = "Measured fCO2"), method = "loess", se = F, linewidth = 0.5)+
+  labs(y = "Calculated fCO2 (atm)", x = "pH", col = "")+
+ # coord_trans(y = "log10")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+ # annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  #facet_grid(rows = vars(survey))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+plot.fco2.ph
 
 ```
 
@@ -306,7 +615,11 @@ g8 <- ggplot(norway, aes(x = pH))+
 
 ggarrange(g7,g8, common.legend = T)
 
-ggarrange(g5,g6,g7,g8, nrow = 2, ncol = 2, common.legend = T)
+
+
+```
+
+```{r visualization-ca-TA}
 
 ggplot(norway, aes(x = TA*1e3))+
   geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
@@ -318,23 +631,594 @@ ggplot(norway, aes(x = TA*1e3))+
   #facet_grid(rows = vars(survey))+
   labs(y = "Calculated CA, meq/L", x = "Measured TA, meq/L", col = "")+
   coord_trans( x = "log10", y = "log10")+
-  scale_color_manual(values = c("firebrick","orange","dodgerblue3"))+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  theme_minimal()
+
+ggplot(norway, aes(x = TA*1e3))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_point(aes(y = CA*1e3, col = "Measured CA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_vline(xintercept = 0.07, lty = 3)+
+   annotate(x= 0.004, y = 0.002, geom = "text", label = "1:1")+
+  facet_grid(rows = vars(survey))+
+  labs(y = "Carbonate Alkalinity, meq/L", x = "Measured Total Alkalinity, meq/L", col = "")+
+  coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
   theme_minimal()+
+  theme(legend.position = "bottom")
+```
+
+```{r compare-measured-calculated-ca}
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = (TA - OH + Hplus)*1e3, col = "CA from TA"), alpha = 0.5)+
+  geom_point(aes(y = CA_pred*1e3, col = "CA from corrected TA"), alpha = 0.5)+
+  geom_point(aes(y = CA*1e3, col = "Measured CA"), alpha = 0.5)+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "pH", col = "")+
+ # coord_trans(y = "log10")+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+  theme_minimal()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = "bottom")
 
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y = ta_fCO2, col = "fCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = cta_fCO2, col = "fCO2 from corrected TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2, col = "Measured CA"), alpha = 0.5)+
+  #facet_grid(rows = vars(survey))+
+  labs(y = "Calculated CA, meq/L", x = "Measured TA, meq/L", col = "")+
+  #coord_trans( x = "log10", y = "log10")+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+```
+
+```{r plot-graph}
+
+ggarrange(compare.ca,toc_boxplot,widths = c(2,1))
+ggarrange(plot.fco2.ph, plot.fco2.fco2, common.legend = T, ncol = 2)
+```
+
+# Model TIC
+
+## Theory
+
+TIC can be expressed as a function of \$TA\$ , $[H^+]$ and $TOC$. First we have to express it depending on $pCO_2$, $HCO_3^-$ or $CO_3^{2-}$.
+
+$TIC = H_2CO_3 + HCO_3^- + CO_3^{2-}$
+
+$$ K_0 = [H_2CO_3]/ pCO_2 \Leftrightarrow H_2CO_3 = pCO_2 \times K_0$$
+
+$$K_1 = \frac{HCO_3^- \times [H^+]}{[H_2CO_3]} \Leftrightarrow [HCO_3^-] = \frac{[H_2CO_3] \times K_1}{[H^+]} $$
+
+$K_2 = \frac{[CO_3^{2-}] \times [H^+]}{[HCO_3^-]} \Leftrightarrow [CO_3^{2-}] = \frac{[HCO_3^-] \times K_2}{[H^+]}$
+
+Therfore
+
+$TIC = pCO_2 \times K_0 \times \left( 1 + \frac{K_1}{H^+} + \frac{K_2K_1}{[H^+]^2} \right)$
+
+$TIC = [HCO_3] \times \left( 1 + \frac{[H^+]}{K_1}+\frac{K_2}{[H^+]} \right) \Leftrightarrow [HCO_3^-] = TIC / K_{tot1}$
+
+$TIC = [CO_3^{2-}] \times \left( 1 + \frac{([H^+]^2}{K_2K_1}+\frac{[H^+]}{K_2} \right) \Leftrightarrow [CO_3^{2-}] = TIC / K_{tot2}$
+
+-   TA is expressed as:
+
+$TA = [HCO_3-] + 2 \times [CO_3^{2-}] + [OH] - [H^+] + OA$
+
+$TA = TIC \times (1/K_{tot1} + 2/K_{tot2}) + [OH] - [H^+] + OA$
+
+-   Organic alkalinity is proportional to $[TOC]/[H^+]$:
+
+$K_a = \frac{[RCOO^-][H^+]}{[RCOOH]} \Leftrightarrow [RCOO^-]=\frac{K_a \times [RCOOH]}{[H^+]} \Leftrightarrow [RCOOH] = \frac{[RCOO^-][H^+]}{K_a}$
+
+Where $K_a$ is the average, or apparent, dissociation constant for organic acids. The part of TOC that can dissociate is $\alpha \times TOC$ . At all pH:
+
+$\alpha TOC = [RCOO^-]+[RCOOH] = [RCOO^-] + \frac{[RCOO^-][H^+]}{K_a} = [RCOO^-] \left( 1 + \frac{[H^+]}{K_a} \right) \Leftrightarrow [RCOO^-] = \alpha TOC \frac{1}{1 + \frac{[H^+]}{K_a}}$
+
+The organic alkalinity is
+
+$OA - OA_{pH = 4.5} = [RCOO^-]-[RCOOH] - ([RCOO^-]_{pH=4.5} - [RCOOH]_{pH=4.5})$
+
+$= [RCOO^-] \left(1- \frac{[H^+]}{K_a} \right) - [RCOO^-]_{4.5} \left(1- \frac{10^{-4.5}}{K_a} \right) = \alpha TOC \l2eft( \frac{1-\frac{[H^+]}{K_a}}{1+\frac{[H^+]}{K_a}} - \frac{1-\frac{10^{-4.5}}{K_a}}{1+\frac{10^{-4.5}}{K_a}} \right)$
+
+\$=\alpha TOC \left( \frac{K_a - [H^+]}{K_a + [H^+]} -
+
+\frac{K_a - 10^{-4.5}}{K_a + 10^{-4.5}} \right)\$
+
+TIC can be expressed as :
+
+$TIC \propto (TA-[OH]+[H^+]-OA)\times \frac{1}{\frac{1}{1+\frac{[H^+]}{K_1}+\frac{K_2}{[H^+]}}+\frac{2}{1+\frac{[H^+]^2}{K_1K_2}+\frac{[H^+]}{K_2}}}$
+
+$TIC \propto (TA-[OH]+[H^+]-OA) \times \left( \frac{[H^+]^2 + K_1[H^+]+K_1K_2}{3K_1K_2} \right)$
+
+## Models
+
+```{r test-model-dic}
+
+norway$alpha <- with(norway,(TA-CA-OH+Hplus)/TOC)
+
+norway$Ktot1 <- with(norway, 1 + Hplus/K1 + K2/Hplus)
+norway$Ktot2 <- with(norway, 1+Hplus^2/(K1*K2)+Hplus/K2)
+norway$invKT <- with(norway, 1 / (1/Ktot1+ 2/Ktot2))
+
+
+
+#test1
+
+summary(lmDICkt <- glm(DIC  ~ TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICkt, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+  labs(y = "DIC ~ TOC")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICkt)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TOC")+coord_trans(x="log10")
+
+#test2
+
+summary(lmDICkt <- glm(DIC  ~ Hplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICkt, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+  labs(y = "DIC ~ Hplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICkt)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ Hplus")+coord_trans(x="log10")
+
+#test3
+
+summary(lmDICs <- glm(DIC  ~ TA, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA")+coord_trans(x="log10")
+
+#test4
+
+summary(lmDICkt <- glm(DIC  ~ TA + TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICkt, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICkt)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + TOC")+coord_trans(x="log10")
+
+#test4
+
+summary(lmDICkt <- glm(DIC  ~ TA + Hplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICkt, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + Hplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICkt)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + Hplus")+coord_trans(x="log10")
+
+#test4
+
+summary(lmDICkt <- glm(DIC  ~ TA + TOC + Hplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICkt, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC + invHplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICkt)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + TOC + invHplus")+coord_trans(x="log10")
+
+# test5
+
+summary(lmDICs <- glm(DIC  ~ TA + TOC + invHplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC + Hplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + TOC + Hplus")+coord_trans(x="log10")
+
+# test6
+
+summary(lmDICs <- glm(DIC  ~ TA*Hplus + TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA*Hplus + TOC")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA*Hplus + TOC")+coord_trans(x="log10")
+
+# test6
+
+summary(lmDICs <- glm(DIC  ~ TA + TOC*Hplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC*Hplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "DIC ~ TA + TOC*Hplus")+coord_trans(x="log10")
+
+
+# test7
+
+summary(lmDICs <- glm(DIC  ~ TA + TOC + invHplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC + invHplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + TOC + invHplus")+coord_trans(x="log10")
+
+# test7
+
+summary(lmDICs <- glm(DIC  ~ TA*invHplus + TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA*invHplus + TOC")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA*invHplus + TOC")+coord_trans(x="log10")
+
+# test7
+
+summary(lmDICs <- glm(DIC  ~ TA:invHplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA:invHplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA:invHplus")+coord_trans(x="log10")
+
+
+
+# test7
+
+summary(lmDICs <- glm(DIC  ~ TA + TOC:invHplus, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA + TOC:invHplus")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA + TOC:invHplus")+coord_trans(x="log10")
+
+# test7
+
+summary(lmDICs <- glm(DIC  ~ TA:invHplus + TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- predict(lmDICs, newdata = norway, type = "response")
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 100e-6, y = 500e-6, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TA:invHplus + TOC")+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+labs(y = "residuals DIC ~ TA:invHplus + TOC")+coord_trans(x="log10")
+
+# Extra
+summary(glmpCO2toc <- glm(fCO2  ~ TOC +0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity")))
+
+norway$toc_pCO2 <- predict(glmpCO2toc, newdata = norway, type = "response")
+r2test <- rsq(glmpCO2toc,adj = T, type = "kl") %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=fCO2,y=toc_pCO2, col = survey))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.004, y = 0.001, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "pCO2 ~ TOC")+
+    theme_minimal()
+
+summary(glmtocdic <- glm(DIC  ~ TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$toc_DIC <- predict(glmtocdic, newdata = norway, type = "response")
+r2test <- rsq(glmtocdic,adj = T, type = "kl") %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=toc_DIC, col = survey))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.001, y = 1e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "DIC ~ TOC")+
+    theme_minimal()
+
+summary(glmpCO2 <- glm(fCO2  ~ TA:invHplus + TOC +0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity")))
+
+norway$pCO2_pred <- predict(glmpCO2, newdata = norway, type = "response")
+summary(lmtest <- lm(pCO2_pred~fCO2, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.004, y = 0.001, geom = "label", label = paste("R2 = ",r2test, ""))+
+    labs(y = "pCO2 ~ TA:invHplus + TOC")+
+    theme_minimal()
+
+norway$pCO2_res <- residuals(glmpCO2)
+ggplot(norway)+geom_point(aes(x = pCO2_pred, y = pCO2_res))+labs(y = "residuals pCO2 ~ TA:invHplus + TOC")+coord_trans(x="log10")
+
+ggplot(norway, aes(x = fCO2))+geom_point(aes(y = ta_fCO2, col = "pCO2 based on TA (aquaenv)"))+
+  geom_point(aes(y = pCO2_pred, col = "pCO2 based on TOC + TA"))+
+  geom_point(aes(y = toc_pCO2, col = "pCO2 based on TOC"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)
+
+ggplot(norway, aes(x = fCO2))+geom_point(aes(y = ta_fCO2, col = "pCO2 based on TA (aquaenv)"))+
+  geom_point(aes(y = pCO2_pred, col = "pCO2 based on TOC + TA"))+
+  geom_point(aes(y = toc_pCO2, col = "pCO2 based on TOC"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  ylim(0,4e-3)
+
+norway$diffpCO2 <- with(norway, ta_fCO2-fCO2)
+
+ggplot(norway)+geom_point(aes(x = pH, y = diffpCO2, col = survey, size = DIC))+scale_color_manual(values = c("firebrick","orange"))+theme_minimal()
+
+
+ggplot(norway)+geom_point(aes(x = TOC, y = diffpCO2, col = survey, size = DIC))+scale_color_manual(values = c("firebrick","orange"))+theme_minimal()
+
+ggplot(norway, aes(x = fCO2))+geom_point(aes(y = toc_pCO2, col = "pCO2 from TOC"))+
+  geom_point(aes(y = pCO2_dic, col = "pCO2 from modelled DIC"))+geom_abline(slope = 1, intercept = 0)
+
+ggplot(norway)+geom_point(aes(x = pH, y = pCO2_dic-fCO2, col = survey, size = TOC))+scale_color_manual(values = c("firebrick","orange"))+theme_minimal()
+
+ggplot(norway)+geom_point(aes(x = pH, y = toc_pCO2-fCO2, col = survey, size = TOC))+scale_color_manual(values = c("firebrick","orange"))+theme_minimal()
+
+```
+
+```{r final-model-dic}
+
+summary(lmDICs <- glm(DIC  ~ TA:invHplus + TOC, data = norway, family = Gamma(link = "identity")))
+
+norway$DIC_pred <- fitted(lmDICs)
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 1e-3, y = 1e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+
+  annotate(x = 1e-3, y = 1e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+norway$dic_res <- residuals(lmDICs)
+norway$dic_stres <- with(norway, dic_res/sqrt(DIC_pred))
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+coord_trans(x="log10")
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_stres))+coord_trans(x="log10")
+
+norway$pCO2_dic <- with(norway, DIC_pred / K0 / (1+(K1/Hplus)+(K1*K2)/(Hplus^2)))
+
+saveRDS(lmDICs, "lmDICs.rds")
+
+#gamlss
+#(brms)
+
+ggplot(norway)+geom_point(aes(x=DIC, y = DIC_pred, col = survey))+
+  coord_trans(x="log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  labs(x = "DIC, mol", y = "Predicted DIC, mol")+
+  theme_minimal()
+
+ggplot(norway, aes(x = fCO2))+
+  geom_point(aes(y = pCO2_dic, col = "pCO2 predicted\nfrom DIC"), alpha = 0.5)+
+  geom_point(aes(y = ta_fCO2, col = "pCO2 predicted\nfrom TA"), alpha = 0.5)+
+  coord_trans(x="log10", y = "log10")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  facet_grid(cols = vars(survey))+
+  labs(x = "\npCO2, atm", y = "predicted pCO2, atm")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1),
+        legend.position = "bottom")
+```
+
+```{r try-gamlss}
+#install.packages("gamlss")
+#library(gamlss)
+
+summary(gamlssDIC <- gamlss(formula = DIC~TA:invHplus+TOC+(1|lake.id), sigma.formula = DIC~TA:invHplus+TOC, data = dplyr::select(norway, c("DIC","TOC","TA","invHplus", "lake.id")), family = GA(mu.link = "identity", sigma.link = "identity")))
+
+norway$DIC_pred <- lpred(gamlssDIC, se.fit = T)$fit
+norway$DIC_se <- lpred(gamlssDIC, se.fit = T)$se.fit
+summary(lmtest <- lm(DIC_pred~DIC, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+#  geom_line(aes(x= DIC, y = DIC_pred+DIC_se))+
+#  geom_line(aes(x= DIC, y = DIC_pred-DIC_se))+
+  annotate(x = 1e-3, y = 1e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+
+  annotate(x = 2e-4, y = 1e-3, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+norway$dic_res <- residuals(gamlssDIC)
+ggplot(norway)+geom_point(aes(x = DIC_pred, y = dic_res))+coord_trans(x="log10")
+
+norway$pCO2_dic <- with(norway, DIC_pred / K0 / (1+(K1/Hplus)+(K1*K2)/(Hplus^2)))
+ggplot(norway)+geom_point(aes(x=fCO2, y = pCO2_dic))
+
+saveRDS(gamlssDIC, "gamlssDICs.rds")
+```
+
+$CA = [HCO_3^-] + 2 \times [CO_3^{2-}]$
+
+$[CO_3^{2-}] = \frac{[HCO_3^-] \times K_2} {[H^+]}$
+
+$CA = [HCO_3^-] \times \left( 1 + \frac{2 \times K_2}{[H^+]} \right) \Leftrightarrow [HCO_3^{-}] = CA / \left( 1 + \frac{2 \times K_2}{[H^+]} \right)$
+
+So
+
+$pCO_2 = [H_2CO_3]/K_0 = \frac{[HCO_3^-] \times [H^+]} {K_1 \times K_0} = \frac{CA \times [H^+]}{ \left( 1 + \frac{2 \times K_2}{[H^+]} \right) \times K_1 \times K_0}$
+
+```{r ca-ta-toc-Hplus, eval = F}
+
+gamlssDIC <- gamlss(formula = CA~TA:invHplus+TOC, sigma.formula = CA~TA:invHplus+TOC, data = dplyr::select(norway, c("CA","TOC","TA","invHplus")), family = NO(mu.link = "identity", sigma.link = "identity"))
+
+norway$CA_pred <- fitted(gamlssCA)
+summary(lmtest <- lm(CA_pred~CA, norway))
+r2test <- summary(lmtest)$r.squared %>% round(2)
+
+ggplot(norway)+geom_point(aes(x=CA,y=CA_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 1e-3, y = 1e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+ggplot(norway)+geom_point(aes(x=CA,y=CA_pred))+
+  geom_abline(slope= 1, intercept = 0)+
+  annotate(x = 2e-4, y = 3e-4, geom = "label", label = paste("R2 = ",r2test, ""))+
+    theme_minimal()
+
+norway$CA_res <- residuals(gamlssCA)
+ggplot(norway)+geom_point(aes(x = CA_pred, y = CA_res))+coord_trans(x="log10")
+
+norway$fCO2_CA <- with(norway, CA_pred / K0 / (1+(K1/Hplus)+(K1*K2)/(Hplus^2)))
+ggplot(norway)+geom_point(aes(x=fCO2, y = fCO2_CA))
+
+saveRDS(gamlssCA, "gamlssCAs.rds")
+```
+
+```{r predicted-fCO2, eval = F}
+
+summary(lmtestdic <- lm(pCO2_dic~fCO2, norway))
+summary(lmtestca <- lm(ca_fCO2~fCO2, norway))
+r2dic <- summary(lmtestdic)$r.squared %>% round(2)
+r2ca <- summary(lmtestca)$r.squared %>% round(2)
+
+ggplot(norway, aes(x = fCO2))+
+  geom_point(aes(y=pCO2_dic, col = "from predicted DIC"))+
+  geom_point(aes(y= ca_fCO2, col = "from predicted CA"))+
+  geom_abline(slope= 1, intercept = 0, lty = 2)+
+  coord_trans(x="log10",y="log10")+
+  geom_smooth(aes(y=pCO2_dic, col = "from predicted DIC"), method = "lm", se = F, linewith = 0.5)+
+  geom_smooth(aes(y=ca_fCO2, col = "from predicted CA"), method = "lm", se = F, linewith = 0.5)+
+  annotate(x = 5.5e-3, y = 1.5e-3, geom = "text", label = paste("R2 = ",r2dic, ""), col = "orange")+
+  annotate(x =4e-3, y = 0.006, geom = "text", label = paste("R2 = ",r2ca, ""), col = "firebrick")+
+  scale_color_manual(values = c("firebrick","orange"))+
+  labs(x="pCO2 measured, atm", y = "pCO2 predicted, atm", col ="")+
+  theme_minimal()
+
+ggplot(norway, aes(x = pH))+
+  geom_point(aes(y=pCO2_dic, col = "from predicted DIC"))+
+  geom_point(aes(y= ca_fCO2, col = "from predicted CA"))+
+  geom_point(aes(y=fCO2, col =  "measured"))+
+  coord_trans(y="log10")+
+  geom_smooth(aes(y=pCO2_dic, col = "from predicted DIC"), method = "loess", se = F, linewith = 0.5)+
+  geom_smooth(aes(y=ca_fCO2, col = "from predicted CA"), method = "loess", se = F, linewith = 0.5)+
+  geom_smooth(aes(y = fCO2, col = "measured"), method = "loess", se = F)+
+  scale_color_manual(values = c("firebrick","orange", "dodgerblue3"))+
+  labs(x="pH", y = "pCO2 predicted, uatm", col ="")+
+  theme_minimal()
 ```
 
 # Northern European Lakes Survey
 
+```{r map-nls}
+
+nlss <- readRDS("nlss.rds")
+ggplot(nlss)+geom_point(aes(x=long, y = lat, col = pH))+theme_minimal()
+```
+
 ```{r nls-oganic-alkalinity}
 
-lmoaM <- readRDS("lmoaM.rds")
+lmCAs <- readRDS("lmCAs.rds")
 
 nlss$invHplus <- 1/nlss$Hplus
 nlss$invHplus2 <- 1/(nlss$Hplus^2)
 
-nlss$TAOA <- predict(lmoaM, newdata = nlss, type = "response") # TA corrected by OA
+nlss$TAOA <- predict(lmCAs, newdata = nlss, type = "response") # TA corrected by OA
 
 nlss$CA_pred <- with(nlss, TAOA-OH+Hplus)
 nlss$CO3 <- with(nlss,(CA_pred) / (Hplus/K2 +2)) # in mol/L
@@ -347,15 +1231,21 @@ nlss$dfCO2 <- with(nlss, fCO2 - fCO2.atm)
 nlss$DIC <- with(nlss, H2CO3 + HCO3 + CO3)
 
 pCA <- ggplot()+
-  geom_point(data = nlss, aes(x = TA, y = CA_pred, col = pH))+
-  geom_label(data = subset(nlss, CA_pred > 0.1), aes(x = TA, y = CA_pred, label = row.nb), nudge_y = 0.03)+
+  geom_point(data = nlss, aes(x = TA*1e3, y = CA_pred*1e3, col = pH))+
+  geom_label(data = subset(nlss, CA_pred > 0.1), aes(x = TA*1e3, y = CA_pred*1e3, label = row.nb), nudge_y = 30)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  geom_vline(xintercept = 0.07, lty = 2)+
+  #coord_trans(x="log10",y="log10")+
+  labs(x = "Measured total alkalinity (meq/L)", y = "Predicted carbonate alkalinity (meq/L)")+
   scale_color_binned_sequential(palette = "Red")+
   theme_minimal()
 
 pCA
+
 ```
 
 ```{r nls-fCO2-uncorrected-TA}
+
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
 nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
 nlss$ta_H2CO3 <- with(nlss, ta_HCO3*Hplus/K1)
@@ -364,33 +1254,133 @@ nlss$ta_fCO2 <- with(nlss,ta_H2CO3/K0)
 nlss$ta_CA <- with(nlss, ta_HCO3+2*ta_CO3)
 
 nlss$ta_dfCO2 <- with(nlss, ta_fCO2 - fCO2.atm)
+```
 
-pCATA <- ggplot()+
-  geom_point(data = nlss, aes(x = TA, y = ta_CA, col = pH))+
-#  geom_label(data = subset(nlss, CA_pred > 0.1), aes(x = TA, y = CA_pred, label = row.nb), nudge_y = 0.03)+
-  scale_color_binned_sequential(palette = "Red")+
+```{r nls-dic-model}
+
+#gamlssDIC <- readRDS("gamlssDIC.rds")
+
+lmDICs <- readRDS("lmDICs.rds")
+
+nlss$invHplus <- 1/nlss$Hplus
+nlss$invHplus2 <- 1/(nlss$Hplus^2)
+
+nlss$DIC_pred <- predict(lmDICs, newdata = dplyr::select(nlss, c("TA","TOC","invHplus")), type = "response")
+
+nlss$pCO2_dic <- with(nlss,DIC_pred/K0/(1+K1/Hplus+(K1*K2)/(Hplus^2)))
+
+nlss$dpCO2_dic <- with(nlss, pCO2_dic - fCO2.atm)
+
+pDIC.pH <- ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_dic, col = "from predicted DIC"))+
+ #geom_point(aes(y = ta_fCO2, col = "from total alkalinity"))+
+  labs(x = "pH", y = "pCO2, atm")+
   theme_minimal()
 
-pCATA
+pDIC.pH
 
+pDIC.ta <- ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = ta_fCO2, col = "pCO2 from total alkalinity"))+
+  labs(x = "pH", y = "pCO2, atm")+
+  theme_minimal()
+
+pDIC.ta
+
+pDIC.alk <- ggplot(data = nlss, aes(x = TA*1e6))+
+  geom_point(aes(y = ta_fCO2, col = "from total alkalinity"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_dic, col = "from predicted DIC"), alpha = 0.5)+
+  geom_point(aes(y = fCO2, col = "from predicted CA"), alpha = 0.5)+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+ # coord_trans(x = "log10", y="log10")+
+  labs(x = "TA, ueq/L", y = "pCO2, atm")+
+  theme_minimal()
+
+pDIC.alk
 ```
 
 ```{r plot-compare-fCO2-nls}
 
-ggplot(nlss, aes(x = TA*1e3)) + 
-  geom_point(aes(y = ta_fCO2*1e6, col = "fCO2 from uncorrected TA"), alpha = 0.5)+
-  geom_point(aes(y = fCO2*1e6, col = "fCO2 from corrected TA"), alpha = 0.5)+
+g1 <- ggplot(nlss, aes(x = TA*1e3)) + 
+  geom_point(aes(y = ta_pCO2*1e6, col = "fCO2 from uncorrected TA"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_dic*1e6, col = "fCO2 from predicted DIC"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995*1e6, col = "black")+
-  scale_color_manual(values = c("orange","firebrick"))+
+  scale_color_manual(values = c("firebrick","dodgerblue3"))+
+  theme_minimal()+
+  labs(x = "Total alkalinity, meq/L", y = "fCO2, atm", col = "")+
+  #coord_trans(x = "log10", y = "log10")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+g1
+
+g1b <- ggplot(filter(nlss, TA > 0), aes(x = TA*1e3)) + 
+  geom_point(aes(y = ta_pCO2*1e6, col = "fCO2 from uncorrected TA"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_dic*1e6, col = "fCO2 from predicted DIC"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995*1e6, col = "black")+
+  scale_color_manual(values = c("firebrick","dodgerblue3"))+
   theme_minimal()+
   labs(x = "Total alkalinity, meq/L", y = "fCO2, atm", col = "")+
   coord_trans(x = "log10", y = "log10")+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = "bottom")
+
+g1b
 ```
 
+```{r plot-fco2-ph, fig.dim = c(8,6)}
+
+g2 <- ggplot(nlss)+
+  geom_boxplot(aes(x=" ", y = log10(pCO2_dic), col = "fCO2 from \npredicted DIC"))+
+  geom_boxplot(aes(x="  ", y = log10(ta_fCO2), col = "fCO2 from \nuncorrected \nalkalinity"))+
+  labs(x ="", y = "pCO2 (atm), log10", col = "")+
+  #coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick", "dodgerblue3"))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+g3 <- ggplot(nlss, aes(x = pH)) + 
+  geom_point(aes(y = log10(pCO2_dic), col = "fCO2 from predicted DIC"), alpha = 0.5)+
+  geom_hline(yintercept = log10(fCO2.atm.1995), col = "black")+
+  scale_color_manual(values = c("firebrick"))+
+  theme_minimal()+
+  ylim(-4.5,-0.5)+
+  labs(x = "pH", y = "pCO2 (atm), log10", col = "")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+g4 <- ggplot(nlss, aes(x = pH)) + 
+  geom_point(aes(y = log10(ta_fCO2), col = "fCO2 from uncorrected alkalinity"), alpha = 0.5)+
+  geom_hline(yintercept =log10( fCO2.atm.1995), col = "black")+
+  scale_color_manual(values = c("dodgerblue3"))+
+  theme_minimal()+
+  ylim(-4.5,-0.5)+
+  labs(x = "pH", y = "fCO2 (atm), log10", col = "")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+
+ggarrange(arrangeGrob(g3,g4, nrow = 2),g2,ncol = 2, widths = c(2,1))
+```
+```{r pCO2-from-TA-pH-TOC}
+summary(glmpCO2 <- glm(fCO2  ~ TA:invHplus + TOC +0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity")))
+
+
+nlss$pCO2_pred <- predict(glmpCO2, newdata = nlss, type = "response")
+g5 <- ggplot(nlss, aes(x = pH)) + 
+  geom_point(aes(y = log10(pCO2_pred), col = "fCO2 from uncorrected alkalinity"), alpha = 0.5)+
+  geom_hline(yintercept =log10( fCO2.atm.1995), col = "black")+
+  scale_color_manual(values = c("dodgerblue3"))+
+  theme_minimal()+
+  ylim(-4.5,-0.5)+
+  labs(x = "pH", y = "pCO2 (atm), log10", col = "")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.position = "bottom")
+print(g5)
+```
+
+
 # Predict fCO2 from TOC
-R-squared: https://rdrr.io/cran/rsq/man/rsq.html
+
+R-squared: <https://rdrr.io/cran/rsq/man/rsq.html> <https://www.sciencedirect.com/science/article/pii/S0304407696018180>
 
 ```{r fCO2-toc-norway}
 
@@ -399,7 +1389,7 @@ df <- norway
 summary(glmfCO2norway <- glm(fCO2~TOC+0+offset(fCO2.atm), data = df, family = Gamma(link = "identity")))
 coef.glmfCO2norway <- summary(glmfCO2norway)$coefficients
 r2norway <- with(summary(glmfCO2norway), 1 - deviance/null.deviance) %>% round(2)
-r2norway <- rsq(glmfCO2norway,adj = T, type = "kl")
+r2norway <- rsq::rsq(glmfCO2norway,adj = T, type = "kl") %>% round(2)
 
 df$predfCO2_offset <- predict(glmfCO2norway, se = T)[1] %>% unlist
 df$predfCO2_se <- predict(glmfCO2norway, se = T)[2] %>% unlist
@@ -417,7 +1407,7 @@ m.norway <- ggplot(df, aes(x = TOC))+
   #xlim(0,0.004)+ylim(0,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 and CBA surveys, 2004 and 2019", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
@@ -426,7 +1416,7 @@ m.norway
 
 ```
 
-```{ rcheck-dic-toc}
+```{r check-dic-toc}
 
 norway$DIC.TIC <- with(norway, DIC/TOC)
 
@@ -452,7 +1442,7 @@ m.norway <- ggplot(df, aes(x = TOC))+
   #xlim(0,0.004)+ylim(0,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 and CBA surveys, 2004 and 2019", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
@@ -479,12 +1469,12 @@ m.n112 <- ggplot(df, aes(x = TOC))+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   geom_hline(yintercept = fCO2.atm.2004, col = "pink")+
-  annotate(x = 3e-5, y = 35e-3, geom = "label", 
+  annotate(x = 3.5e-5, y = 35e-3, geom = "label", 
            label = paste("Intercept =", fCO2.atm.2004*1e6," uatm","\n Slope = ", round(coef.glmfCO2n112[1],2), "\n R2 = ", r2n112))+
   xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "N112 survey, 2004", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
   
@@ -511,12 +1501,12 @@ m.cba <- ggplot(df, aes(x = TOC))+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   geom_hline(yintercept = fCO2.atm.2019, col = "pink")+
-  annotate(x = 3e-5, y = 35e-3, geom = "label", 
+  annotate(x = 3.5e-5, y = 35e-3, geom = "label", 
            label = paste("Intercept =", fCO2.atm.2019*1e6," uatm","\n Slope = ", round(coef.glmfCO2cba[1],2), "\n R2 = ", r2cba))+
   xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "CBA survey, 2019", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
@@ -525,7 +1515,7 @@ print(m.cba)
 
 ```{r fCO2-toc-nlss}
 
-summary(glmfCO2nlss <- glm(fCO2~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "identity")))
+summary(glmfCO2nlss <- glm(pCO2_dic~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "identity")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
 
@@ -534,18 +1524,18 @@ nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
 
 
 m.nlss <- ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = fCO2))+
+  geom_point(aes(y = pCO2_dic))+
     geom_line(aes(y = (predfCO2_offset), col = "predict"))+
   geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
-  annotate(x = 3e-5, y = 0.035, geom = "label", 
+  annotate(x = 3.5e-5, y = 0.035, geom = "label", 
            label = paste("Intercept =", fCO2.atm.1995*1e6," uatm","\n Slope = ", round(coef.glmfCO2nlss[1],2), "\n R2 = ", r2nlss))+
   xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
@@ -565,7 +1555,7 @@ df$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
 
 
 m.nlss.2 <- ggplot(df, aes(x = TOC))+
-  geom_point(aes(y = fCO2))+
+  geom_point(aes(y = pCO2_dic))+
     geom_line(aes(y = (predfCO2_offset), col = "predict"))+
   geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
@@ -575,30 +1565,64 @@ m.nlss.2 <- ggplot(df, aes(x = TOC))+
            label = paste("Intercept =", fCO2.atm.1995*1e6," uatm","\n Slope = ", round(coef.glmfCO2nlss[1],2), "\n R2 = ", r2nlss))+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 m.nlss.2
 ```
 
-```{r fig.dim = c(10,30)}
-ggarrange(m.n112, m.cba, m.nlss,common.legend = T, nrow = 3)
+```{r fCO2total}
+ total <- data.frame(fCO2 = c(norway$fCO2, nlss$pCO2_dic),
+                     fCO2.atm = c(norway$fCO2.atm, nlss$fCO2.atm),
+                     TOC = c(norway$TOC, nlss$TOC),
+                     pH = c(norway$pH, nlss$pH))
+
+summary(glmfCO2total <- glm(fCO2~TOC+0+offset(fCO2.atm), data = total, family = Gamma(link = "identity")))
+coef.glmfCO2total <- summary(glmfCO2total)$coefficients
+r2total <- with(summary(glmfCO2total), 1 - deviance/null.deviance) %>% round(2)
+r2total <- rsq(glmfCO2total, type = "kl")
+
+total$predfCO2_offset <- predict(glmfCO2total, se = T)[1] %>% unlist
+total$predfCO2_se <- predict(glmfCO2total, se = T)[2] %>% unlist
+
+
+m.total <- ggplot(total, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+#  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+  annotate(x = 3.5e-5, y = 0.035, geom = "label", 
+           label = paste("Slope = ", round(coef.glmfCO2total[1],2), "\n R2 = ", round(r2total,2)))+
+  xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "All surveys", col = "")+
+  theme_minimal(base_size = 15)+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+print(m.total)
 ```
 
+```{r all-models, fig.dim = c(12,12)}
+ggarrange(m.n112,m.cba, m.nlss, m.total, nrow = 2, ncol = 2, common.legend = T)
+
+```
 
 ```{r fCO2-toc-nlss-gaussian, fig.dim = c(10,10)}
 nlss$TOC2 <- nlss$TOC^2
 
-summary(glmfCO2nlss <- glm(fCO2~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "sqrt")))
+summary(glmfCO2nlss <- glm(pCO2_dic~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "sqrt")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
 
 nlss$predfCO2_offset <- predict(glmfCO2nlss, se = T)[1] %>% unlist
 nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
 
-m.nlss <- ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = fCO2))+
+ggplot(nlss, aes(x = TOC))+
+  geom_point(aes(y = pCO2_dic))+
     geom_line(aes(y = (predfCO2_offset), col = "predict"))+
   geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
@@ -609,37 +1633,72 @@ m.nlss <- ggplot(nlss, aes(x = TOC))+
   xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
   coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
-print(m.nlss)
+```
+
+```{r fCO2-toc-loglink}
+total <- data.frame(fCO2 = c(norway$fCO2, nlss$pCO2_dic),
+                     fCO2.atm = c(norway$fCO2.atm, nlss$fCO2.atm),
+                     TOC = c(norway$TOC, nlss$TOC),
+                     pH = c(norway$pH, nlss$pH))
+
+summary(glmfCO2total <- glm(fCO2~TOC, data = total, family = Gamma(link = "log")))
+
+coef.glmfCO2total <- summary(glmfCO2total)$coefficients
+r2total <- with(summary(glmfCO2total), 1 - deviance/null.deviance) %>% round(2)
+r2total <- rsq(glmfCO2total, type = "kl")
+
+total$predfCO2_offset <- predict(glmfCO2total, se = T)[1] %>% unlist %>% exp()
+total$predfCO2_se <- predict(glmfCO2total, se = T)[2] %>% unlist
+
+
+m.total <- ggplot(total, aes(x = TOC))+
+  geom_point(aes(y = fCO2))+
+    geom_line(aes(y = (predfCO2_offset), col = "predict"))+
+#  geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
+#  geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
+  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
+#  geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
+ annotate(x = 3.5e-5, y = 0.035, geom = "label", 
+           label = paste("Slope (log) = ", round(coef.glmfCO2total[1],2), "\n R2 = ", round(r2total,2)))+
+ # xlim(1.5e-5,3.5e-3)+ylim(9e-5,0.2)+
+  coord_trans(x="log10", y = "log10")+
+  labs(y = "fCO2, atm", x = "TOC, mol/L", title = "All surveys", col = "")+
+  theme_minimal(base_size = 15)+
+    theme(legend.position = "bottom", 
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+print(m.total)
 ```
 
 ### NLSS fCO2-CO2 model with uncorrected TA
 
-```{r glm-ta-fCO2}
+```{r glm-ta-fCO2, eval = F}
 
-summary(glmfCO2nlss <- glm(ta_fCO2~TOC+0+offset(fCO2.atm), data = nlss, family = Gamma(link = "identity")))
+
+summary(glmfCO2nlss <- glm(ta_fCO2~TOC+0+offset(fCO2.atm), data = filter(nlss, ta_pCO2 > 0), family = Gamma(link = "identity")))
 coef.glmfCO2nlss <- summary(glmfCO2nlss)$coefficients
 r2nlss <- with(summary(glmfCO2nlss), 1 - deviance/null.deviance) %>% round(2)
 
-nlss$predfCO2_offset <- predict(glmfCO2nlss, se = T)[1] %>% unlist
-nlss$predfCO2_se <- predict(glmfCO2nlss, se = T)[2] %>% unlist
+nlss$predfCO2_offset <- predict(glmfCO2nlss, newdata = nlss, se = T)[1] %>% unlist
+nlss$predfCO2_se <- predict(glmfCO2nlss, newdata = nlss, se = T)[2] %>% unlist
 
 
 ggplot(nlss, aes(x = TOC))+
-  geom_point(aes(y = ta_fCO2))+
+  geom_point(aes(y = ta_pCO2))+
     geom_line(aes(y = (predfCO2_offset), col = "predict"))+
   geom_line(aes(y = (predfCO2_offset+predfCO2_se), col = "Std Error"), lty = 2)+
   geom_line(aes(y = (predfCO2_offset-predfCO2_se), col = "Std Error"), lty = 2)+
   scale_color_manual(values = c("dodgerblue3", "firebrick"))+
   geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
-  annotate(x = 0.00003, y = 0.004, geom = "label", 
+  annotate(x = 0.001, y = -0.4, geom = "label", 
            label = paste("Intercept =", fCO2.atm.1995*1e6," uatm","\n Slope = ", round(coef.glmfCO2nlss[1],2), "\n R2 = ", r2nlss))+
-  coord_trans(x="log10", y = "log10")+
+ # coord_trans(x="log10", y = "log10")+
   labs(y = "fCO2, atm (uncorrected)", x = "TOC, mol/L", title = "NLS survey, 1995", col = "")+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
@@ -654,23 +1713,19 @@ See part 1
 
 Theory from @Hastie2018
 
-$FCO_2 = A_{lake}*k*\Delta CO_2$
+$$FCO_2 = A_{lake}*k*\Delta CO_2$$
 
-FCO2 in mol/day, Alake = lake area in m2, $\Delta CO_2$ in mol/m3 is the difference between water and air pCO2.
+$FCO_2$ in mol/day, $A_{lake}$ = lake area in m2, $\Delta CO_2$ in mol/m3 is the difference between water and air pCO2.
 
-According to Vachon and Prairie 2013:
+According to @Vachon2013:
 
-$k_{600} = 2.51 + 1.48*U_{10} + 0.39 * U_{10} * log_{10] A_{lake}$
+$$k_{600} = 2.51 + 1.48 \times U_{10} + 0.39 \times U_{10} \times log_{10} (A_{lake})$$
 
-with A in km2 and \<u in m/s
+with $A$ in km2 and $U_{10}$ in m/s
 
-k has to be adjusted for temperature. @Vachon200:
+$k_{CO_2}$ has to be adjusted for temperature. @Vachon2020:
 
-$K_{600} = k_{CO2}*(\frac{600}{Sc_{CO2})^-n$
-
-Get Sc for all lakes:
-
-Schmidt number from <http://www.diva-portal.org/smash/get/diva2:779938/FULLTEXT01.pdf>
+$$k_{600} = k_{CO_2}\times \left( \frac{600}{Sc_{CO_2}} \right) ^{-n}$$ The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
 
 ```{r norway-schmidt}
 
@@ -698,7 +1753,6 @@ norway$ECO2 <- with(norway, kCO2*(fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
 norway$mgC.m2.day <- with(norway, kCO2*(fCO2-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
 
-norway$TOC_mg <- norway$TOC*12.011*1e3
 
 ```
 
@@ -812,33 +1866,6 @@ ggplot(df, aes(x = TOC_mg))+
 
 ```
 
-```{r ECO2-TOC-nlss}
-df <- filter(nlss, is.na(ECO2) == F)
-
-summary(glmECO2 <- glm(ECO2~TOC_mg+0+offset(K0*fCO2.atm), data = df, family = gaussian(link = "identity")))
-coef.glmECO2 <- summary(glmECO2)$coefficients
-r2ECO2 <- with(summary(glmECO2), 1 - deviance/null.deviance) %>% round(2)
-
-df$predECO2 <- predict(glmECO2, se = T)[1] %>% unlist
-df$predECO2_se <- predict(glmECO2, se = T)[2] %>% unlist
-
-
-ggplot(df, aes(x = TOC_mg))+
-  geom_point(aes(y = ECO2, size = DIC/TOC))+
-    geom_line(aes(y = (predECO2), col = "predict"))+
-  geom_line(aes(y = (predECO2+predECO2_se), col = "Std Error"), lty = 2)+
-  geom_line(aes(y = (predECO2-predECO2_se), col = "Std Error"), lty = 2)+
-  scale_color_manual(values = c("dodgerblue3", "firebrick"))+
-  #geom_hline(yintercept = fCO2.atm.1995, col = "pink")+
-  annotate(x = 1, y = 10, geom = "label", 
-           label = paste("Slope = ", round(coef.glmECO2[2],2), "\n R2 = ", r2ECO2))+
-  coord_trans(x="log10")+
-  labs(y = "Evasion of CO2, g/m2/day", x = "TOC, mg/L", title = "Northern Lakes Survey", col = "")+
-  theme_minimal()+
-    theme(legend.position = "bottom", 
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-```
-
 # Maps
 
 ```{r map-fCO2-norway}
@@ -871,7 +1898,64 @@ map2 <- ggplot()+
 ggarrange(map1, map2, common.legend = T, ncol = 2)
 ```
 
-```{r map-nls}
+```{r map-CBA, fig.dim = c(8,4)}
+
+fCO2_lims <- c(min(log10(norway$fCO2*1e6)), max(log10(norway$fCO2*1e6)))
+
+cba_fCO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = subset(norway, survey == "CBA_2019"), aes(x=long, y = lat, col = log10(fCO2*1e6),size = log10(fCO2*1e6)), shape = 16)+
+  labs(col = "fCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
+  scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
+  scale_size(range = c(0.5,3), limits = fCO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+n112_fCO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = subset(norway, survey == "N112_2004"), aes(x=long, y = lat, col = log10(fCO2*1e6),size = log10(fCO2*1e6)), shape = 16)+
+  labs(col = "fCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
+  scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
+  scale_size(range = c(0.5,3), limits = fCO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+ggarrange(n112_fCO2,cba_fCO2, common.legend = T, ncol = 2, legend = "bottom")
+
+```
+
+```{r map-ECO2-cba, fig.dim = c(8,4)}
+
+ECO2_lims <- c(-2,25)
+leg <- "ECO2, g/m2/day"
+
+cba_ECO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = subset(norway, survey == "CBA_2019"), aes(x=long, y = lat, col = ECO2,size = ECO2), shape = 16)+
+  labs(col = leg, size = leg) +
+  scale_color_continuous_sequential(rev = F, palette = "Oslo", begin = 0.2, limits = ECO2_lims)+
+  scale_size(range = c(0.5,3), limits = ECO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+n112_ECO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = subset(norway, survey == "N112_2004"), aes(x=long, y = lat, col = ECO2,size = ECO2), shape = 16)+
+  labs(col = leg, size = leg) +
+  scale_color_continuous_sequential(rev = F, palette = "Oslo", begin = 0.2, limits = ECO2_lims)+
+  scale_size(range = c(0.5,3), limits = ECO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+ggarrange(n112_ECO2,cba_ECO2, common.legend = T, ncol = 2, legend = "bottom")
+
+```
+
+```{r map-nls-fCO2}
 
 ggplot()+
   borders(region = c("Norway", "Sweden","Finland"), fill = "seashell2", col = "seashell2")+xlim(4,35)+ylim(55,72)+
@@ -882,6 +1966,7 @@ ggplot()+
   guides(color = guide_legend())+
   theme_void(base_size = 15)+
   theme(legend.position = "right")
+
 ```
 
 ```{r map-nls-ECO2}
@@ -897,4 +1982,101 @@ ggplot()+
   theme_void(base_size = 15)+
   theme(legend.position = "right")
 
+```
+
+```{r map-norway-1995}
+
+df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
+
+
+fCO2_lims <- c(min(log10(norway$fCO2*1e6)), max(log10(norway$fCO2*1e6)))
+
+n1995_fCO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = df, aes(x=long, y = lat, col = log10(fCO2*1e6), size = log10(fCO2*2e6)), shape = 16)+
+  labs(col = "fCO2 (uatm), \nlog scale", size = "fCO2 (uatm), \nlog scale") +
+  scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
+  scale_size(range = c(0.5,2), limits = fCO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+
+ECO2_lims <- c(-2,25)
+
+n1995_ECO2 <- ggplot()+
+  borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
+  geom_point(data = subset(df, ECO2 < 100), aes(x=long, y = lat, col = ECO2, size = ECO2), shape = 16)+
+  geom_point(data = subset(df, ECO2 > 100), aes(x=long, y = lat), col = "firebrick", shape = 16, size = 1.5)+
+  labs(col = "Evasion rate\n(gC/m2/day)", size = "Evasion rate\n(gC/m2/day)") +
+  scale_color_continuous_sequential(rev = F, palette = "Oslo", begin = 0.2, limits = ECO2_lims)+
+  scale_size(range = c(0.5,2), limits = ECO2_lims)+
+  guides(color = guide_legend())+
+  theme_void(base_size = 20)+
+  theme(legend.position = "right")
+
+```
+
+```{r summary-evasion}
+
+df <- subset(norway, survey == "N112_2004")
+
+summary_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- subset(norway, survey == "CBA_2019")
+
+summary_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- nlss
+
+summary_nlss <- c(min(df$ECO2, na.rm = T), median(df$ECO2, na.rm = T), max(df$ECO2, na.rm = T),  mean(df$ECO2, na.rm = T), sd(df$ECO2, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
+
+summary_norway_1995 <- c(min(df$ECO2, na.rm = T), median(df$ECO2, na.rm = T),  max(df$ECO2, na.rm = T), mean(df$ECO2, na.rm = T), sd(df$ECO2, na.rm = T))
+
+summary.df <- rbind(summary_nlss, summary_norway_1995, summary_n112, summary_cba) %>% as.data.frame()
+
+rownames(summary.df) <- c("NLS, 1995", "South Norway, 1995", "N112, 2004", "CBA, 2019")
+
+colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
+
+knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T)
+
+
+```
+
+```{r map-compare, fig.dim = c(12,4)}
+ggarrange(n1995_fCO2, n112_fCO2, cba_fCO2, labels = c("1995","2004","2019"), common.legend = T, ncol = 3, legend = "bottom")
+
+ggarrange(n1995_ECO2, n112_ECO2,cba_ECO2, labels = c("1995","2004","2019"), common.legend = T, ncol = 3, legend = "bottom")
+```
+
+```{r boxplots-ECO2}
+
+ggplot()+
+  geom_boxplot(aes(x = "2004", y = subset(norway, survey == "N112_2004")$ECO2, col = "2004"))+
+  geom_boxplot(aes(x = "2019", y = subset(norway, survey =="CBA_2019")$ECO2, col = "2019"))+
+    geom_boxplot(aes(x="1995", y = subset(nlss, nation == "Norway" & lat < 63)$ECO2, col = "1995"))+
+    theme_minimal()
+
+ggplot()+
+  geom_boxplot(aes(x = "2004", y = with(subset(norway, survey == "N112_2004"),fCO2/TOC), col = "2004"))+
+  geom_boxplot(aes(x = "2019", y = with(subset(norway, survey =="CBA_2019"), fCO2/TOC), col = "2019"))+
+    geom_boxplot(aes(x="1995", y = with(subset(nlss, nation == "Norway" & lat < 63),fCO2/TOC), col = "1995"))+
+  coord_trans(y = "log10")+
+    theme_minimal()
+
+ggplot()+
+  geom_boxplot(aes(x = "2004", y = with(subset(norway, survey == "N112_2004"),DIC/TOC), col = "2004"))+
+  geom_boxplot(aes(x = "2019", y = with(subset(norway, survey =="CBA_2019"), DIC/TOC), col = "2019"))+
+    geom_boxplot(aes(x="1995", y = with(subset(nlss, nation == "Norway" & lat < 63),DIC/TOC), col = "1995"))+
+  coord_trans(y = "log10")+
+    theme_minimal()
+
+ggplot()+
+  geom_boxplot(aes(x = "2004", y = with(subset(norway, survey == "N112_2004"),pH), col = "2004"))+
+  geom_boxplot(aes(x = "2019", y = with(subset(norway, survey =="CBA_2019"), pH), col = "2019"))+
+    geom_boxplot(aes(x="1995", y = with(subset(nlss, nation == "Norway" & lat < 63),pH), col = "1995"))+
+    theme_minimal()
 ```
