@@ -107,6 +107,17 @@ ggplot(norway, aes(x = pH))+
   theme(legend.position = "bottom")
 ```
 
+```{r fCO2-from-TA}
+ggplot(norway,aes(x= pH))+geom_point(aes(y = ta_fCO2, col = "pCO2 from TA"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+```
+
 ```{r compare-cba-n112}
 toc_boxplot <- ggplot(norway)+
   geom_boxplot(aes(x = "TOC", y = TOC, col = survey))+
@@ -213,6 +224,16 @@ g2 <- ggplot(norway, aes(x = pH))+
   theme_minimal()
 ```
 
+```{r fCO2-from-hruska}
+ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calculated from Hruska et al"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+
 ## Organic alkalinity according to \@Liu2020
 
 A simplifying approach was suggested by @Liu2020 , building on @Cai1998 and @Lozovik2005, where the organic alkalinity can be calculated directly from TOC as:
@@ -276,6 +297,16 @@ g4 <- ggplot(norway, aes(x = pH))+
   scale_color_manual(values = c("orange", "black"))+
 #  facet_grid(rows = vars(survey))+
   theme_minimal()
+```
+
+```{r fCO2-from-liu}
+ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_Liu, col = "pCO2 from calculated from Liu et al."))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
 ```
 
 ## Compare Hruska and Liu
@@ -735,7 +766,7 @@ $TIC \propto (TA-[OH]+[H^+]-OA) \times \left( \frac{[H^+]^2 + K_1[H^+]+K_1K_2}{3
 
 ## Models
 
-```{r test-model-dic}
+```{r test-model-dic, eval = F}
 
 norway$alpha <- with(norway,(TA-CA-OH+Hplus)/TOC)
 
@@ -1360,6 +1391,7 @@ g4 <- ggplot(nlss, aes(x = pH)) +
 
 ggarrange(arrangeGrob(g3,g4, nrow = 2),g2,ncol = 2, widths = c(2,1))
 ```
+
 ```{r pCO2-from-TA-pH-TOC}
 summary(glmpCO2 <- glm(fCO2  ~ TA:invHplus + TOC +0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity")))
 
@@ -1376,7 +1408,6 @@ g5 <- ggplot(nlss, aes(x = pH)) +
         legend.position = "bottom")
 print(g5)
 ```
-
 
 # Predict fCO2 from TOC
 

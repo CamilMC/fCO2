@@ -716,7 +716,8 @@ nlss$OH <- with(nlss, Kw/Hplus)
 
 ## Carbonate speciation from TA, NLSS
 
-```{r carbonate-speciation-from-TA-nlss}
+```{r carbonate-speciation-from-TA-nlss, eval = F}
+
 
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
 nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
