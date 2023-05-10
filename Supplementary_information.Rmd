@@ -295,7 +295,7 @@ dic.ta <- glm(formula = DIC~TA, data = norway, family = Gamma(link = "identity")
 
 dic.ta.sum <- summary(dic.ta)$coefficients %>% as.data.frame() 
 dic.ta.sp <- rownames(dic.ta.sum)[which(dic.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.ta.sum <- dic.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.ta.sum <- dic.ta.sum %>% format(scientific = T, digits = 2)
 
 kable(dic.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
@@ -332,7 +332,7 @@ pco2.ta <- glm(formula = fCO2~TA+0+offset(fCO2.atm), data = norway, family = Gam
 
 pco2.ta.sum <- summary(pco2.ta)$coefficients %>% as.data.frame() 
 pco2.ta.sp <- rownames(pco2.ta.sum)[which(pco2.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.ta.sum <- pco2.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.ta.sum <- pco2.ta.sum %>% format(scientific = T, digits = 2)
 
 kable(pco2.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
@@ -368,7 +368,7 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 dic.toc <- glm(formula = DIC~TOC, data = norway, family = Gamma(link = "identity"))
 dic.toc.sum <- summary(dic.toc)$coefficients %>% as.data.frame() 
 dic.toc.sp <- rownames(dic.toc.sum)[which(dic.toc.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.toc.sum <- dic.toc.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.toc.sum <- dic.toc.sum %>% format(scientific = T, digits = 2)
 
 kable(dic.toc.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
@@ -405,7 +405,7 @@ pco2.toc <- glm(formula = fCO2~TOC+0+offset(fCO2.atm), data = norway, family = G
 
 pco2.toc.sum <- summary(pco2.toc)$coefficients %>% as.data.frame() 
 pco2.toc.sp <- rownames(pco2.toc.sum)[which(pco2.toc.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.toc.sum <- pco2.toc.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.toc.sum <- pco2.toc.sum %>% format(scientific = T, digits = 2)
 
 kable(pco2.toc.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
@@ -436,12 +436,14 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 
 ## TA + TOC 
 
-```{r glm-dic-toc-ta, fig.dim = c(10,8),results = T}
+```{r glm-dic-toc-ta, fig.dim = c(10,8), results = T}
 
 dic.toc.ta <- glm(formula = DIC~TOC+TA, data = norway, family = Gamma(link = "identity"))
 dic.toc.ta.sum <- summary(dic.toc.ta)$coefficients %>% as.data.frame() 
 dic.toc.ta.sp <- rownames(dic.toc.ta.sum)[which(dic.toc.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.toc.ta.sum <- dic.toc.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.toc.ta.sum <- dic.toc.ta.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.toc.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$DIC_pred <- fitted(dic.toc.ta)
 norway$DIC_pred_res <- residuals(dic.toc.ta)
@@ -476,7 +478,9 @@ pco2.toc.ta <- glm(formula = fCO2~TOC+TA+0+offset(fCO2.atm), data = norway, fami
 
 pco2.toc.ta.sum <- summary(pco2.toc.ta)$coefficients %>% as.data.frame() 
 pco2.toc.ta.sp <- rownames(pco2.toc.ta.sum)[which(pco2.toc.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.toc.ta.sum <- pco2.toc.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.toc.ta.sum <- pco2.toc.ta.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$pCO2_pred <- fitted(pco2.toc.ta)
 norway$pCO2_pred_res <- residuals(pco2.toc.ta)
@@ -509,22 +513,25 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 
 
 
-## TA + TOC*Hplus
 
-```{r glm-dic-tocHplus-ta, fig.dim = c(10,8),results = T}
+## TA * TOC 
 
-dic.tocHplus.ta <- glm(formula = DIC~TOC*Hplus+TA, data = norway, family = Gamma(link = "identity"))
-dic.tocHplus.ta.sum <- summary(dic.tocHplus.ta)$coefficients %>% as.data.frame() 
-dic.tocHplus.ta.sp <- rownames(dic.tocHplus.ta.sum)[which(dic.tocHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.tocHplus.ta.sum <- dic.tocHplus.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+```{r glm-dic-tocta, fig.dim = c(10,8), results = T}
 
-norway$DIC_pred <- fitted(dic.tocHplus.ta)
-norway$DIC_pred_res <- residuals(dic.tocHplus.ta)
-dic.tocHplus.ta.r2 <- with(summary(dic.tocHplus.ta), 1 - deviance/null.deviance) %>% round(2)
+dic.tocta <- glm(formula = DIC~TOC*TA, data = norway, family = Gamma(link = "identity"))
+dic.tocta.sum <- summary(dic.tocta)$coefficients %>% as.data.frame() 
+dic.tocta.sp <- rownames(dic.tocta.sum)[which(dic.toc.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.tocta.sum <- dic.tocta.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.tocta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.tocta)
+norway$DIC_pred_res <- residuals(dic.tocta)
+dic.tocta.r2 <- with(summary(dic.tocta), 1 - deviance/null.deviance) %>% round(2)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
-  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.tocHplus.ta.r2, ""))+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.tocta.r2, ""))+
     theme_minimal()
 
 g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
@@ -545,20 +552,23 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
-```{r glm-pco2-tochplus-ta, fig.dim = c(10,8),results = T}
+```{r glm-pCO2-tocta, fig.dim = c(10,8),results = T}
 
-pco2.tocHplus.ta <- glm(formula = fCO2~TOC*Hplus+TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
-pco2.tocHplus.ta.sum <- summary(pco2.tocHplus.ta)$coefficients %>% as.data.frame() 
-pco2.tocHplus.ta.sp <- rownames(pco2.tocHplus.ta.sum)[which(pco2.tocHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.tocHplus.ta.sum <- pco2.tocHplus.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.tocta <- glm(formula = fCO2~TOC*TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
 
-norway$pCO2_pred <- fitted(pco2.tocHplus.ta)
-norway$pCO2_pred_res <- residuals(pco2.tocHplus.ta)
-pco2.tocHplus.ta.r2 <- with(summary(pco2.tocHplus.ta), 1- deviance/null.deviance) %>% round(2)
+pco2.tocta.sum <- summary(pco2.tocta)$coefficients %>% as.data.frame() 
+pco2.tocta.sp <- rownames(pco2.tocta.sum)[which(pco2.tocta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.tocta.sum <- pco2.tocta.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.tocta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.tocta)
+norway$pCO2_pred_res <- residuals(pco2.tocta)
+pco2.tocta.r2 <- with(summary(pco2.tocta), 1 - deviance/null.deviance) %>% round(2)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
-  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.tocHplus.ta.r2, ""))+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.tocta.r2, ""))+
     theme_minimal()
 
 g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
@@ -576,6 +586,14 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
+
+
+
+
+
+
+
+
 ## TA*Hplus
 
 ```{r glm-dic-taHplus, fig.dim = c(10,8),results = T}
@@ -584,7 +602,9 @@ dic.taHplus <- glm(formula = DIC~TA*Hplus, data = norway, family = Gamma(link = 
 
 dic.taHplus.sum <- summary(dic.taHplus)$coefficients %>% as.data.frame() 
 dic.taHplus.sp <- rownames(dic.taHplus.sum)[which(dic.taHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.taHplus.sum <- dic.taHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.taHplus.sum <- dic.taHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$DIC_pred <- fitted(dic.taHplus)
 norway$DIC_pred_res <- residuals(dic.taHplus)
@@ -616,9 +636,12 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```{r glm-pco2-tahplus, fig.dim = c(10,8),results = T}
 
 pco2.taHplus <- glm(formula = fCO2~TA*Hplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
 pco2.taHplus.sum <- summary(pco2.taHplus)$coefficients %>% as.data.frame() 
 pco2.taHplus.sp <- rownames(pco2.taHplus.sum)[which(pco2.taHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.taHplus.sum <- pco2.taHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.taHplus.sum <- pco2.taHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$pCO2_pred <- fitted(pco2.taHplus)
 norway$pCO2_pred_res <- residuals(pco2.taHplus)
@@ -644,14 +667,89 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
+## TA + TOC*Hplus
+
+```{r glm-dic-tocHplus-ta, fig.dim = c(10,8),results = T}
+
+dic.tocHplus.ta <- glm(formula = DIC~TOC*Hplus+TA, data = norway, family = Gamma(link = "identity"))
+dic.tocHplus.ta.sum <- summary(dic.tocHplus.ta)$coefficients %>% as.data.frame() 
+dic.tocHplus.ta.sp <- rownames(dic.tocHplus.ta.sum)[which(dic.tocHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.tocHplus.ta.sum <- dic.tocHplus.ta.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.tocHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.tocHplus.ta)
+norway$DIC_pred_res <- residuals(dic.tocHplus.ta)
+dic.tocHplus.ta.r2 <- with(summary(dic.tocHplus.ta), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.tocHplus.ta.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+```{r glm-pco2-tochplus-ta, fig.dim = c(10,8),results = T}
+
+pco2.tocHplus.ta <- glm(formula = fCO2~TOC*Hplus+TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
+pco2.tocHplus.ta.sum <- summary(pco2.tocHplus.ta)$coefficients %>% as.data.frame() 
+pco2.tocHplus.ta.sp <- rownames(pco2.tocHplus.ta.sum)[which(pco2.tocHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.tocHplus.ta.sum <- pco2.tocHplus.ta.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.tocHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.tocHplus.ta)
+norway$pCO2_pred_res <- residuals(pco2.tocHplus.ta)
+pco2.tocHplus.ta.r2 <- with(summary(pco2.tocHplus.ta), 1- deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.tocHplus.ta.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+
 ## TOC + TA*Hplus
 
 ```{r glm-dic-toc-taHplus, fig.dim = c(10,8),results = T}
 
 dic.toc.taHplus <- glm(formula = DIC~TOC+TA*Hplus, data = norway, family = Gamma(link = "identity"))
+
 dic.toc.taHplus.sum <- summary(dic.toc.taHplus)$coefficients %>% as.data.frame() 
 dic.toc.taHplus.sp <- rownames(dic.toc.taHplus.sum)[which(dic.toc.taHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.toc.taHplus.sum <- dic.toc.taHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.toc.taHplus.sum <- dic.toc.taHplus.sum %>% format(scientific = T, digits = 2)
+kable(dic.toc.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$DIC_pred <- fitted(dic.toc.taHplus)
 norway$DIC_pred_res <- residuals(dic.toc.taHplus)
@@ -683,9 +781,12 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```{r glm-pco2-toc-tahplus, fig.dim = c(10,8),results = T}
 
 pco2.toc.taHplus <- glm(formula = fCO2~TOC+TA*Hplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
 pco2.toc.taHplus.sum <- summary(pco2.toc.taHplus)$coefficients %>% as.data.frame()
 pco2.toc.taHplus.sp <- rownames(pco2.toc.taHplus.sum)[which(pco2.toc.taHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.toc.taHplus.sum <- pco2.toc.taHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.toc.taHplus.sum <- pco2.toc.taHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$pCO2_pred <- fitted(pco2.toc.taHplus)
 norway$pCO2_pred_res <- residuals(pco2.toc.taHplus)
@@ -719,9 +820,12 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 norway$invHplus <- with(norway, 1/Hplus)
 
 dic.toc.tainvHplus <- glm(formula = DIC~TOC+TA*invHplus, data = norway, family = Gamma(link = "identity"))
+
 dic.toc.tainvHplus.sum <- summary(dic.toc.tainvHplus)$coefficients %>% as.data.frame()
 dic.toc.tainvHplus.sp <- rownames(dic.toc.tainvHplus.sum)[which(dic.toc.tainvHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.toc.tainvHplus.sum <- dic.toc.tainvHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.toc.tainvHplus.sum <- dic.toc.tainvHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.toc.tainvHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$DIC_pred <- fitted(dic.toc.tainvHplus)
 norway$DIC_pred_res <- residuals(dic.toc.tainvHplus)
@@ -756,9 +860,12 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 norway$invHplus <- with(norway, 1/Hplus)
 
 pco2.toc.tainvHplus <- glm(formula = fCO2~TOC+TA*invHplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
 pco2.toc.tainvHplus.sum <- summary(pco2.toc.tainvHplus)$coefficients %>% as.data.frame() 
 pco2.toc.tainvHplus.sp <- rownames(pco2.toc.tainvHplus.sum)[which(pco2.toc.tainvHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.toc.tainvHplus.sum <- pco2.toc.tainvHplus.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.toc.tainvHplus.sum <- pco2.toc.tainvHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.tainvHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$pCO2_pred <- fitted(pco2.toc.tainvHplus)
 norway$pCO2_pred_res <- residuals(pco2.toc.tainvHplus)
@@ -794,10 +901,12 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 norway$invHplus <- with(norway, 1/Hplus)
 
 dic.tocinvHplus.ta <- glm(formula = DIC~TOC*invHplus+TA, data = norway, family = Gamma(link = "identity"))
+
 dic.tocinvHplus.ta.sum <- summary(dic.tocinvHplus.ta)$coefficients %>% as.data.frame() 
 dic.tocinvHplus.ta.sp <- rownames(dic.tocinvHplus.ta.sum)[which(dic.tocinvHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-dic.tocinvHplus.ta.sum <- dic.tocinvHplus.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+dic.tocinvHplus.ta.sum <- dic.tocinvHplus.ta.sum %>% format(scientific = T, digits = 2)
 
+kable(dic.tocinvHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$DIC_pred <- fitted(dic.tocinvHplus.ta)
 norway$DIC_pred_res <- residuals(dic.tocinvHplus.ta)
@@ -831,9 +940,13 @@ plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 norway$invHplus <- with(norway, 1/Hplus)
 
 pco2.tocinvHplus.ta <- glm(formula = fCO2~TOC*invHplus+TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
 pco2.tocinvHplus.ta.sum <- summary(pco2.tocinvHplus.ta)$coefficients %>% as.data.frame() 
 pco2.tocinvHplus.ta.sp <- rownames(pco2.tocinvHplus.ta.sum)[which(pco2.tocinvHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
-pco2.tocinvHplus.ta.sum <- pco2.tocinvHplus.ta.sum %>% mutate(`Pr(>|t|)` = format(`Pr(>|t|)`, scientific = T, digits = 2))
+pco2.tocinvHplus.ta.sum <- pco2.tocinvHplus.ta.sum %>% format(scientific = T, digits = 2)
+  
+
+kable(pco2.tocinvHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 
 norway$pCO2_pred <- fitted(pco2.tocinvHplus.ta)
 norway$pCO2_pred_res <- residuals(pco2.tocinvHplus.ta)
@@ -930,9 +1043,35 @@ nlss$invHplus <- 1/nlss$Hplus
 nlss$TOC_mg <- nlss$TOC*12.011*1e3
 
 ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
-  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(0,32)+
+  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
   scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 0.001, rev = T)+ 
   theme_minimal()
+```
+
+
+```{r compare-boxplots, fig.dim = c(10,10)}
+g1 <- ggplot()+geom_boxplot(data = nlss, aes(x="TA\nNorthern European Lakes Survey, 1995", y=TA, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "TA\n CBA (2019) and N112 (2004) surveys", y = TA, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "Total alkalinity, eq/L")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+g2 <- ggplot()+geom_boxplot(data = nlss, aes(x="TOC\nNorthern European Lakes Survey, 1995", y=TOC, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "TOC\n CBA (2019) and N112 (2004) surveys", y = TOC, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "Total organic carbon, mol/L")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+g3 <- ggplot()+geom_boxplot(data = nlss, aes(x="pH\nNorthern European Lakes Survey, 1995", y=pH, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "pH\n CBA (2019) and N112 (2004) surveys", y = pH, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "pH")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+ggarrange(g1,g2,g3, common.legend = T, nrow = 3)
 ```
 
 
@@ -942,13 +1081,13 @@ library(ggforce)
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
 nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
 nlss$ta_H2CO3 <- with(nlss, ta_HCO3*Hplus/K1)
-nlss$ta_pCO2 <- with(nlss,ta_H2CO3/K0)
+nlss$pCO2_ta <- with(nlss,ta_H2CO3/K0)
 
 ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = ta_pCO2), alpha = 0.5, col = "firebrick")+
+  geom_point(aes(y = pCO2_ta), alpha = 0.5, col = "firebrick")+
   labs(x = "pH", y = "pCO2 from TA, atm")+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  facet_zoom(y = ta_pCO2 > 0, zoom.size = 1)+
+  facet_zoom(y = pCO2_ta > 0, zoom.size = 1)+
   theme_bw()
 ```
 
@@ -963,13 +1102,21 @@ ggplot(data = nlss, aes(x = pH))+
   labs(x = "pH", y = "pCO2 modelled with TOC, atm")+
   theme_bw()
 
+nlss$pCO2_tocta <- predict(pco2.tocta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_tocta), alpha = 0.5, col = "firebrick")+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", y = "pCO2 modelled with TOC, atm")+
+  theme_bw()
+
 nlss$pCO2_tahplus <- predict(pco2.toc.taHplus, newdata = nlss, type = "response") 
 
 ggplot(data = nlss, aes(x = pH))+
   geom_point(aes(y = pCO2_tahplus), alpha = 0.5, col = "firebrick")+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
   labs(x = "pH", y = "pCO2 modelled with TA*Hplus, atm")+
-  facet_zoom(y = pCO2_taHplus > 0, zoom.size = 1, shrink = F)+
+  facet_zoom(y = pCO2_tahplus > 0, zoom.size = 1, shrink = F)+
   theme_bw()
 
 nlss$dic_pred <- predict(dic.toc.taHplus, newdata = nlss, type = "response")
@@ -981,6 +1128,25 @@ ggplot(data = nlss, aes(x = pH))+
   labs(x = "pH", y = "pCO2 from modelled DIC, atm")+
   theme_bw()
 ```
+```{r study-results, eval = F}
+
+ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_calc))
+ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_calc))
+
+ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_ta))
+ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_ta))
+ggplot(nlss)+geom_point(aes(x=Hplus, y = pCO2_ta))
+
+ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_toc))
+ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_toc))
+ggplot(nlss)+geom_point(aes(x=Hplus, y = pCO2_toc))
+
+ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_tocta, col = TOC))
+ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_tocta, col = TA))
+ggplot(nlss)+geom_point(aes(x=Hplus, y = pCO2_tocta))
+
+```
+
 
 # Evasion rate of CO2
 
@@ -1058,11 +1224,11 @@ nlss$kCO2 <- with(nlss, k600*(600/Sc)^n)
 
 ```{r evasion-calculated-ta}
 
-nlss$FCO2_ta <- with(nlss, lake.area*1e6*kCO2*((ta_pCO2 - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
+nlss$FCO2_ta <- with(nlss, lake.area*1e6*kCO2*((pCO2_ta - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
 
-nlss$ECO2_ta <- with(nlss, kCO2*(ta_pCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
-nlss$mgC.m2.day_ta <- with(nlss, kCO2*(ta_pCO2-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
+nlss$mgC.m2.day_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
 
 ```
 
@@ -1075,8 +1241,18 @@ nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2
 nlss$mgC.m2.day_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
 ```
 
+```{r evasion-calculated-dic}
 
-```{r summary-evasion}
+nlss$FCO2_dic <- with(nlss, lake.area*1e6*kCO2*((pCO2_calc - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
+
+nlss$ECO2_dic <- with(nlss, kCO2*(pCO2_calc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+nlss$mgC.m2.day_dic <- with(nlss, kCO2*(pCO2_calc-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
+```
+
+
+
+```{r summary-evasion, results = T}
 
 df <- subset(norway, survey == "N112_2004")
 
@@ -1088,15 +1264,23 @@ summary_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(
 
 df <- nlss
 
-summary_nlss <- c(min(df$ECO2, na.rm = T), median(df$ECO2, na.rm = T), max(df$ECO2, na.rm = T),  mean(df$ECO2, na.rm = T), sd(df$ECO2, na.rm = T))
+summary_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+summary_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_nlss_dic <- c(min(df$ECO2_dic, na.rm = T), median(df$ECO2_dic, na.rm = T), max(df$ECO2_dic, na.rm = T),  mean(df$ECO2_dic, na.rm = T), sd(df$ECO2_dic, na.rm = T))
 
 df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
 
-summary_norway_1995 <- c(min(df$ECO2, na.rm = T), median(df$ECO2, na.rm = T),  max(df$ECO2, na.rm = T), mean(df$ECO2, na.rm = T), sd(df$ECO2, na.rm = T))
+summary_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
 
-summary.df <- rbind(summary_nlss, summary_norway_1995, summary_n112, summary_cba) %>% as.data.frame()
+summary_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
-rownames(summary.df) <- c("NLS, 1995", "South Norway, 1995", "N112, 2004", "CBA, 2019")
+summary_norway_1995_dic <- c(min(df$ECO2_dic, na.rm = T), median(df$ECO2_dic, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_dic, na.rm = T), sd(df$ECO2_dic, na.rm = T))
+
+summary.df <- rbind(summary_nlss_ta, summary_norway_1995_ta,summary_nlss_toc, summary_norway_1995_toc, summary_nlss_dic, summary_norway_1995_dic, summary_n112, summary_cba) %>% as.data.frame()
+
+rownames(summary.df) <- c("NLS, 1995 (TA)", "South Norway, 1995 (TA)","NLS, 1995 (TOC)", "South Norway, 1995 (TOC)", "NLS, 1995 (DIC)", "South Norway, 1995 (DIC)", "N112, 2004", "CBA, 2019")
 
 colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
 
@@ -1105,6 +1289,7 @@ knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T)
 
 ```
 
+`r knitr::knit_exit()`
 
 # Maps
 
@@ -1294,7 +1479,7 @@ ggplot()+
 ```
 
 
-`r knitr::knit_exit()`
+
 
 # Predict fCO2 from TOC
 
