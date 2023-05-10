@@ -298,7 +298,6 @@ catchment.poly.corine <- st_transform(catchment.poly, crs = st_crs("EPSG:3035"))
 saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
 ```
 
-## Computes fCO2 in Northern Lakes
 
 ```{r model-fco2-4D, eval = F}
 ion <- readRDS("ion.rds")
@@ -319,252 +318,7 @@ sum(ion$ph < 4.01)
 # saveRDS(ion.alk, "ion.alk.rds")
 ```
 
-## Catchment characteristics
-
-### Soil
-
-<https://daac.ornl.gov/SOILS/guides/Global_Soil_Regolith_Sediment.html>
-
-```{r extract-soil-depth, eval = F}
-
-soil <- raster::raster("DAAC/average_soil_and_sedimentary-deposit_thickness.tif")
-catchment.poly <- readRDS("catchment.poly.rds")
-soil.df <- raster::extract(soil, catchment.poly, sp = F, df = T, na.rm = T, fun = mean, method = "simple")
-                           
-names(soil.df) <- c("ebint","soil")
-soil.df$soil[which(soil.df$soil > 50)] <- 50 # maximum value
-saveRDS(soil.df, "soil.df.rds")
-```
-
-### NDVI
-
-NDVI values are extracted from the GIMMS NDVI3g dataset [@NCAR2018], stored on <http://poles.tpdc.ac.cn/en/data/9775f2b4-7370-4e5e-a537-3482c9a83d88/>, in the "ecocast" dataset and accessed via the "gimms" package [@Detsch2021] on Rstudio.
-
-Data is taken bi-monthly [@Tucker2005]. Raster layers of all slices are downloaded using the downloadGimms function, then monthly composites are calculated using the monthlyComposites function. The maximum NDVI value is taken for each pixel. Afterwards the NDVI values for each catchment polygon are extracted using the extract function from the raster package [@Hijmans2018].
-
-The values stored in the ecocast dataset are composed of the NDVI value and a flag value indicating the goodness of the data. All the NDVI values extracted, corresponding to the values for the studied catchments, had a flag of 1, indicating a good value. The NDVI value was retrieved from the stored value using the formula $floor(ndvi3g/10)/1000$ [@Detsch2021], and then the mean of the 3 summer values (June, July and August) was computed for each catchment.
-
-```{r summer-ndvi, eval = F}
-
-# Download Gimms NDVI
-
-ndvi.1994 <- downloadGimms(x= 1994,y=1994,dsn = "NDVI")
-ndvi.max <- monthlyComposite(ndvi.1994,monthlyIndices(ndvi.1994))
-saveRDS(ndvi.max,"ndvi.max.rds")
-
-# Load data
-
-ndvi.max <- readRDS("ndvi.max.rds")
-catchment.poly <- readRDS("catchment.poly.Rdata")
-
-# Computes summer mean
-summer.mean <- raster::stack(ndvi.max[[6]],ndvi.max[[7]],ndvi.max[[8]]) %>% mean()
-
-# Crops raster to Scandinavia
-summer.scandinavia <- raster::crop(summer.mean,c(0,35,55,73))
-
-# Re-introduces NA
-summer.scan <- reclassify(summer.scandinavia, cbind(-Inf, 0, NA), right=FALSE)
-saveRDS(summer.scan, "summer.scan.rds")
-
-# Extract NDVI for each catchment
-summer.ndvi <- raster::extract(summer.scan,catchment.poly, fun = mean, df = T, sp = T)
-names(summer.ndvi) <- c("ebint","ndvi")
-summer.ndvi$ndvi.value <- floor(summer.ndvi$ndvi/10)/1000
-summer.ndvi$flag.value <- summer.ndvi$ndvi - floor(summer.ndvi$ndvi/10)*10 + 1 
-
-# Saves NDVI file
-saveRDS(summer.ndvi, "summer.ndvi.Rdata")
-write.csv(summer.ndvi,"summer.ndvi.csv")
-```
-
-### Runoff
-
-The runoff data was downloaded from the CORDEX database [@CORDEXvERC]. The data is available at <https://esg-dn1.nsc.liu.se/projects/esgf-liu/>.
-
-The names of the variables in the CORDEX project follow the CF Metadata convention: <http://cfconventions.org/>. We used here the "mrros" variable, for surface runuff, in kg/m2/s.
-
-According to Euro-CORDEX guidelines, we used the mean runoff over 30 years. We chose the interval 1970 - 2000 to match the temperature and precipitation data provided by WorldClim (p11 on EURO-CORDEX guidelines <https://www.euro-cordex.net/imperia/md/content/csc/cordex/guidance_for_euro-cordex_climate_projections_data_use__2021-02_1_.pdf>). This time period matches .
-
-```{r runoff, eval = F}
-runoff.raster <- "CORDEX/mrros_Lmon_CNRM-CM6-1-HR_historical_r1i1p1f2_gr_185001-201412.nc"
-runoff.nc <- nc_open(runoff.raster)
-
-runoff.stack <- raster::stack(runoff.raster, bands = c(1441:1812)) # Correspond to January 1970 to December 2000
-runoff.mean <- runoff.stack %>% mean() 
-
-catchment.poly <- readRDS("catchment.poly.Rdata")
-runoff.fennoscandia <- raster::extract(runoff.mean, catchment.poly, fun = mean, df = T, sp = T, na.rm = T)
-names(runoff.fennoscandia) <- c("ebint","runoff")
-saveRDS(runoff.fennoscandia,"CORDEX/runoff.fennoscandia.rds")
-```
-
-### Temperature, precipitation and slope
-
-Temperature and precipitation are downloaded from the database Worldclim [@WorldClim]. We use the average of the time interval 1970-2000, stored in the "Bioclimatic variable" dataset, available for download at: <https://www.worldclim.org/data/worldclim21.html>. We used the highest available resolution (30 seconds). Temperature is the mean annual temperature from 1970 to 2000 in °C, or "bio1" in the Bioclimatic dataset. The original data is in C\*10 so the data is divided by 10 before use. Precipitation is the mean annual precipitation in mm or bio12 in the Bioclimatic dataset.
-
-```{r temp-prec, eval = F}
-bio.fennoscandia <- raster::getData(name = "worldclim", var = "bio", res = 2.5)
-
-annual.temp <- raster::extract(bio.fennoscandia[[1]], catchment.poly, fun = mean, df = T, sp = T)
-saveRDS(annual.temp,"annual.temp.Rdata")
-
-annual.prec <- raster::extract(bio.fennoscandia$bio12, catchment.poly, fun = mean, df = T, sp = T)
-saveRDS(annual.prec,"annual.prec.Rdata")
-```
-
-The altitude data was accessed through the "getData" function, and comes from the NASA digital elevation model (SRTM 90 m). The slope was then computed using the "terrain" function from the raster package.
-
-```{r altitude-slope, eval = F}
-alt.nor <- getData("alt",country = "NOR", mask = T)
-alt.swe <- getData("alt",country = "SWE", mask = T)
-alt.fin <- getData("alt",country = "FIN", mask = T)
-
-alt.list <- list(alt.nor,alt.swe,alt.fin)
-alt <- do.call(raster::merge,alt.list)
-
-alt.fennoscandia <- extract(alt,remote.set[,c("longitude","latitude")])
-alt.df <- data.frame(ebint = remote.set$ebint, alt = alt.fennoscandia )
-saveRDS(alt.df, "alt.df.Rdata")
-
-slope.nor <- terrain(alt.nor, unit = "degrees")
-slope.swe <- terrain(alt.swe, unit = "degrees")
-slope.fin <- terrain(alt.fin, unit = "degrees")
-slope.list <- list(slope.nor,slope.swe,slope.fin)
-slope <- do.call(raster::merge,slope.list)
-
-slope.nona <- reclassify(slope,cbind(NA,100), right = NA) #reintroduces NA
-
-slope.fennoscandia <- raster::extract(slope,catchment.poly, sp = T, df = T, fun = mean)
-saveRDS(slope.df, "slope.df.Rdata")
-```
-
-### Land cover
-
-The Land Cover data was downloaded from <https://land.copernicus.eu/pan-european/corine-land-cover/lcc-2000-2006>. The previous version (1995-2000) excludes Norway so the 2000 version was preferred.
-
-The land cover data was downloaded as a raster (.tiff file), which included the legend recording the code for each land use. The raster and legend were assembled in QGIS before being imported as a shapefile in R. The codes (corresponding to the line in the extracted dataframe) of the categories of interest were:
-
-Arable land:
-
--   12: non-irrigated arable land
--   16: fruit trees and berries plantations
--   18: pastures
--   19: annual crops associated with permanent crops
--   20: Complex cultivation patterns
-
-Bogs:
-
--   36: peat bogs
--   35: inland marshes, excluded because all zeros in the studied area.
-
-Forest:
-
--   23: Broad-leaved forest
--   24: Coniferous forest
--   25: Mixed forest
-
-Bare:
-
--   31: Bare rocks
--   32: Sparsely vegetated areas
--   33: Burnt areas
-
-```{r extract-land-cover, eval = F}
-corine <- raster::raster("Corine_Land_Cover/U2006_CLC2000_V2020_20u1.tif")
-clc.remote <- raster::extract(corine,catchment.poly.corine)
-
-saveRDS(clc.remote,"clc.remote.Rdata")
-```
-
-The proportion of each land-cover category was computed for each catchment.
-
-```{r corine-tab-prop, eval = F}
-clc.remote <- readRDS("clc.remote.Rdata")
-clc.tab <- sapply(clc.remote, function(x) tabulate(x,45))
-clc.tab.area <- clc.tab*prod(res(corine))
-catchment.area <- colSums(clc.tab.area)
-clc.tab.prop <- sweep(clc.tab.area,2,catchment.area, FUN = "/")
-names(clc.tab.prop) <- catchment.poly.corine$ebint
-saveRDS(clc.tab.prop,"clc.tab.prop.Rdata")
-```
-
-Then, a dataframe for the category of interest (bogs, arable land, forest, bare land) was created and saved.
-
-```{r corine-select-categories, eval = F}
-clc.tab.prop <- readRDS("clc.tab.prop.Rdata") %>% as.data.frame()
-
-bogs <- clc.tab.prop[36,] %>% t() %>% as.data.frame() %>% setNames("bogs") %>% tibble::rownames_to_column(var = "ebint")
-saveRDS(bogs,"bogs.rds")
-arable <- colSums(clc.tab.prop[c(12,16,18,19,20),]) %>% as.data.frame() %>% setNames("arable") %>% tibble::rownames_to_column(var = "ebint")
-saveRDS(arable,"arable.rds")
-forest <- colSums(clc.tab.prop[c(23,24,25),]) %>% as.data.frame() %>% setNames("forest") %>% tibble::rownames_to_column(var = "ebint")
-saveRDS(forest,"forest.rds")
-bare <- colSums(clc.tab.prop[c(31,32,33),]) %>% as.data.frame() %>% setNames("bare") %>% tibble::rownames_to_column(var = "ebint")
-saveRDS(bare,"bare.rds")
-```
-
-### Nitrogen and sulfur deposition
-
-The nitrogen and sulfur deposition data were extracted from the EMEP database [@EMEP]. The data from 2000 was used as it is the first model available.
-
-N-deposition (NOx and NH3) is the sum of:
-
--   Dry deposition of oxidized nitrogen per m2 grid DDEP_OXN_m2Grid, in mg/m2
--   Wet deposition of oxidized nitrogen WDEP_OXN, in mg/m2
--   Dry deposition of oxidized nitrogen per m2 grid DDEP_RDN_m2Grid, in mg/m2
--   Wet deposition of reduced nitrogen WDEP_RDN, in mg/m2
-
-```{r extract-Ndep, eval = F}
-EMEP_file <- "EMEP/EMEP01_rv4.42_year.2000met_2000emis_rep2021.nc"
-catchment_poly <- readRDS("catchment.poly.Rdata")
-
-woxn <- raster(EMEP_file, varname = "WDEP_OXN") 
-doxn <- raster(EMEP_file, varname = "DDEP_OXN_m2Grid")
-wrdn <- raster(EMEP_file, varname = "WDEP_RDN")
-drdn <- raster(EMEP_file, varname = "DDEP_RDN_m2Grid")
-
-woxn_df <- extract(woxn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean) 
-names(woxn_df) <- c("ebint","woxn")
-doxn_df <- extract(doxn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
-names(doxn_df) <- c("ebint","doxn")
-wrdn_df <- extract(wrdn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
-names(wrdn_df) <- c("ebint","wrdn")
-drdn_df <- extract(drdn,catchment.poly, sp = T, df = T, na.rm = T, fun = mean)
-names(drdn_df) <- c("ebint","drdn")
-
-ndep.df <- merge(woxn_df,doxn_df, by = "ebint") %>% merge(wrdn_df, by = "ebint") %>% merge(drdn_df, by = "ebint")
-ndep.df$tndep <- rowSums(ndep.df@data[,c(2:5)])
-
-saveRDS(ndep.df,"ndep.df.Rdata")
-```
-
-The S-deposition is composed of the sum of:
-
--   Dry deposition of oxidized sulphur per m2 grid DDEP_SOX_m2Grid, in mg/m2
--   Wet deposition of oxidized sulphur WDEP_SOX, in mg/m2
-
-```{r extract-Sdep, eval = F}
-library(ncdf4)
-EMEP_file <- "EMEP/EMEP01_rv4.42_year.2000met_2000emis_rep2021.nc"
-catchment_poly <- readRDS("catchment.poly.Rdata")
-
-wsox <- raster(EMEP_file, varname = "WDEP_SOX") 
-dsox <- raster(EMEP_file, varname = "DDEP_SOX_m2Grid")
-
-wsox_df <- extract(wsox,catchment_poly, sp = T, df = T, na.rm = T, fun = mean) 
-names(wsox_df) <- c("ebint","wsox")
-
-dsox_df <- extract(dsox,catchment_poly, sp = T, df = T, na.rm = T, fun = mean)
-names(dsox_df) <- c("ebint","dsox")
-
-sdep.df <- merge(wsox_df,dsox_df, by = "ebint")
-sdep.df$tsdep <- rowSums(sdep.df@data[,c(2:3)])
-
-saveRDS(sdep.df,"sdep.df.rds")
-```
-
-### Near surface wind speed
+## Near surface wind speed
 
 <https://cds.climate.copernicus.eu/cdsapp#!/dataset/10.24381/cds.6c68c9bb?tab=overview>
 
@@ -595,77 +349,25 @@ saveRDS(ion,"ion.rds")
 
 ## Merge dfs
 
-```{r gather-data, eval = F}
+```{r merge-df, eval = F}
 
 ion <- readRDS("ion.rds")
-
 lakes <- readRDS("lakes.rds")
-#soil.df <- readRDS("soil.df.rds")
 
-summer.ndvi <- readRDS("summer.ndvi.Rdata") %>% st_as_sf() %>% st_drop_geometry()
-runoff.fennoscandia <- readRDS("runoff.fennoscandia.rds") %>% st_as_sf() %>% st_drop_geometry()
+nls <- merge(ion, lakes, by = "ebint")
 
-annual.temp <- readRDS("annual.temp.Rdata") %>% st_as_sf() %>% st_drop_geometry()
-names(annual.temp) <- c("ebint","temp")
-
-annual.prec <- readRDS("annual.prec.Rdata")  %>% st_as_sf() %>% st_drop_geometry()
-names(annual.prec) <- c("ebint","prec")
-
-slope.fennoscandia <- readRDS("slope.fennoscandia.Rdata")  %>% st_as_sf() %>% st_drop_geometry()
-names(slope.fennoscandia) <- c("ebint","slope")
-
-alt.df <- readRDS("alt.df.Rdata")
-
-bogs <- readRDS("bogs.rds")
-arable <- readRDS("arable.rds")
-forest <- readRDS("forest.rds")
-bare <- readRDS("bare.rds")
-
-#ndep <- readRDS("ndep.df.Rdata") %>% st_as_sf() %>% st_drop_geometry()
-#sdep <- readRDS("sdep.df.rds") %>% st_as_sf() %>% st_drop_geometry()
-
-total <- ion %>%
-  merge(lakes, by = "ebint") %>% 
-  merge(summer.ndvi, by = "ebint") %>% 
-  merge(runoff.fennoscandia,by = "ebint") %>% 
-  merge(annual.temp, by ="ebint") %>% 
-  merge(annual.prec, by = "ebint") %>%
-  merge(slope.fennoscandia, by = "ebint") %>%
-  merge(alt.df, by = "ebint") %>%
-  merge(bogs, by = "ebint") %>%
-  merge(arable, by = "ebint")%>%
-  merge(forest,by = "ebint") %>%
-  merge(bare, by = "ebint")# %>%
-#  merge(ndep, by = "ebint") %>% 
-#  merge(sdep, by = "ebint")
-
-total$uncertain <- ifelse(total$dist_closest_ebint/total$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
-total$uncertain[which(is.na(total$uncertain)==TRUE)] <- FALSE
-
-saveRDS(total,file = "total.rds")
-total <- readRDS("total.rds")
-
-
-nls <- total %>% filter(toc >= 0) %>% filter(tp > 0) %>% filter(uncertain == FALSE) %>% filter(!is.na(temp_c))
-
-# fennoscandia_raw <- fennoscandia_raw %>% filter(runoff > 0)
-# fennoscandia_raw <- fennoscandia_raw %>% filter(ndvi.value > 0)
-# fennoscandia_raw <- fennoscandia_raw %>% filter(is.na(slope) == F)
-# fennoscandia_raw <- fennoscandia_raw %>% filter(alt != 0)
-# fennoscandia_raw <- fennoscandia_raw %>% filter(uncertain == FALSE)
-# fennoscandia_raw$uncertain <- NULL
-
-
-
-saveRDS(nls, file = "nls.rds")
-
-```
-
-```{r selected-df, eval = F}
-
-nls <- readRDS("nls.rds")
+nls$uncertain <- ifelse(nls$dist_closest_ebint/nls$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
+nls$uncertain[which(is.na(nls$uncertain)==TRUE)] <- FALSE
 
 nls$temp_c[which(is.na(nls$temp_c)==T)] <- 4
+
+nls <- nls %>% filter(toc >= 0) %>% filter(tp > 0) %>% filter(uncertain == FALSE) 
+
+saveRDS(nls,"nls.rds")
+```
+
+```{r selected-df}
+nls <- readRDS("nls.rds")
 
 nlss <- data.frame(survey = rep("nls", dim(nls)[1]))
 
@@ -713,20 +415,6 @@ nlss$K2 <- with(nlss, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Harned
 
 nlss$OH <- with(nlss, Kw/Hplus)
 ```
-
-## Carbonate speciation from TA, NLSS
-
-```{r carbonate-speciation-from-TA-nlss, eval = F}
-
-
-nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
-nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
-nlss$ta_H2CO3 <- with(nlss, ta_HCO3*Hplus/K1)
-nlss$ta_pCO2 <- with(nlss,ta_H2CO3/K0)
-
-nlss$ta_DIC <- with(nlss, ta_H2CO3 + ta_HCO3 + ta_CO3)
-```
-
 
 ## Save NLS
 
