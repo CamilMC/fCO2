@@ -21,11 +21,14 @@ knitr::opts_chunk$set(echo = T, message = F, warning = F, results = F)
 
 ```{r libraries}
 library(dplyr)
+
 library(ggplot2)
+library(ggforce)
 library(ggpubr)
 library(cowplot)
 library(gridExtra)
 library(colorspace)
+
 library(gamlss)
 
 library(kableExtra)
@@ -63,6 +66,17 @@ norway$invHplus <- 1/norway$Hplus
 
 ```
 
+```{r map-nls}
+
+nlss <- readRDS("nlss.rds")
+nlss$invHplus <- 1/nlss$Hplus
+nlss$TOC_mg <- nlss$TOC*12.011*1e3
+
+ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
+  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
+  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 0.001, rev = T)+ 
+  theme_minimal()
+```
 # Estimation of organic and carbonate alkalinity
 
 ## Carbonate speciation N112 / CBA
@@ -126,6 +140,19 @@ toc_boxplot <- ggplot(norway)+
   scale_color_manual(values = c("firebrick", "dodgerblue"))+
   theme_minimal()+
   theme(legend.position = "bottom")
+
+```
+
+## Organic alkalinity as OA = TA - CA
+
+```{r measured-oa}
+norway$OA <- with(norway, TA-CA)
+
+ggplot(norway)+geom_point(aes(x = pH, y = CA))
+ggplot(norway)+geom_point(aes(x = fCO2, y = fCO2))
+ggplot(norway)+geom_point(aes(x = pH, y = OA))+ylim(-1e-4, 1e-4)
+ggplot(norway)+geom_point(aes(x = TOC, y = OA))
+ggplot(norway)+geom_point(aes(x = TA, y = OA))
 
 ```
 
@@ -324,6 +351,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.ta, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from modelled DIC"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 
@@ -359,6 +397,16 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.ta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "predicted pCO2 NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ## TOC 
@@ -397,6 +445,64 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+```{r glm-dic-toc-log, fig.dim = c(10,8), results = T, eval = F}
+
+dic.toc <- glm(formula = DIC~TOC, data = norway, family = Gamma(link = "log"))
+dic.toc.sum <- summary(dic.toc)$coefficients %>% as.data.frame() 
+dic.toc.sp <- rownames(dic.toc.sum)[which(dic.toc.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.toc.sum <- dic.toc.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.toc.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.toc) 
+norway$DIC_pred_res <- residuals(dic.toc)
+dic.toc.r2 <- with(summary(dic.toc), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.toc.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pCO2-toc, fig.dim = c(10,8), results = T}
@@ -431,6 +537,16 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.toc, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 
@@ -470,6 +586,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc.ta, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pCO2-toc-ta, fig.dim = c(10,8),results = T}
@@ -504,14 +631,207 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.toc.ta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 
 
+## TA*TOC + Hplus 
+
+```{r glm-dic-toc-ta-hplus, fig.dim = c(10,8), results = T}
+
+dic.tocta.Hplus <- glm(formula = DIC~TOC+TA+Hplus, data = norway, family = Gamma(link = "identity"))
+  dic.tocta.Hplus.sum <- summary(dic.tocta.Hplus)$coefficients %>% as.data.frame() 
+  dic.tocta.Hplus.sp <- rownames(dic.tocta.Hplus.sum)[which(dic.tocta.Hplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+  dic.tocta.Hplus.sum <- dic.tocta.Hplus.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.tocta.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.tocta.Hplus)
+norway$DIC_pred_res <- residuals(dic.tocta.Hplus)
+dic.tocta.Hplus.r2 <- with(summary(dic.tocta.Hplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.tocta.Hplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.tocta.Hplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+```{r glm-pCO2-toc-ta-hplus, fig.dim = c(10,8),results = T}
+
+pco2.tocta.Hplus <- glm(formula = fCO2~TOC+TA+Hplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
+pco2.tocta.Hplus.sum <- summary(pco2.tocta.Hplus)$coefficients %>% as.data.frame() 
+pco2.tocta.Hplus.sp <- rownames(pco2.tocta.Hplus.sum)[which(pco2.tocta.Hplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.tocta.Hplus.sum <- pco2.tocta.Hplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.tocta.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.tocta.Hplus)
+norway$pCO2_pred_res <- residuals(pco2.tocta.Hplus)
+pco2.tocta.Hplus.r2 <- with(summary(pco2.tocta.Hplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.tocta.Hplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.tocta.Hplus, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
 
 
 
+## TOC + pH 
 
+```{r glm-dic-toc-Hplus, fig.dim = c(10,8), results = T}
+
+dic.toc.Hplus <- glm(formula = DIC~TOC+Hplus, data = norway, family = Gamma(link = "identity"))
+dic.toc.Hplus.sum <- summary(dic.toc.Hplus)$coefficients %>% as.data.frame() 
+dic.toc.Hplus.sp <- rownames(dic.toc.Hplus.sum)[which(dic.toc.Hplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.toc.Hplus.sum <- dic.toc.Hplus.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.toc.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.toc.Hplus)
+norway$DIC_pred_res <- residuals(dic.toc.Hplus)
+dic.toc.Hplus.r2 <- with(summary(dic.toc.Hplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.toc.Hplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "Hplus", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc.Hplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+```{r glm-pCO2-toc-Hplus, fig.dim = c(10,8),results = T}
+
+pco2.toc.Hplus <- glm(formula = fCO2~TOC+Hplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
+pco2.toc.Hplus.sum <- summary(pco2.toc.Hplus)$coefficients %>% as.data.frame() 
+pco2.toc.Hplus.sp <- rownames(pco2.toc.Hplus.sum)[which(pco2.toc.Hplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.Hplus.sum <- pco2.toc.Hplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.toc.Hplus)
+norway$pCO2_pred_res <- residuals(pco2.toc.Hplus)
+pco2.toc.Hplus.r2 <- with(summary(pco2.toc.Hplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.toc.Hplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.toc.Hplus, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
 
 
 ## TA * TOC 
@@ -542,7 +862,7 @@ norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
 
 
 g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
-  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2", size = DIC))+
   labs(y = "pCO2, atm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
@@ -550,11 +870,22 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc.ta, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS", size = dic_pred), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pCO2-tocta, fig.dim = c(10,8),results = T}
 
-pco2.tocta <- glm(formula = fCO2~TOC*TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+pco2.tocta <- glm(formula = fCO2~TOC+TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
 
 pco2.tocta.sum <- summary(pco2.tocta)$coefficients %>% as.data.frame() 
 pco2.tocta.sp <- rownames(pco2.tocta.sum)[which(pco2.tocta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
@@ -584,6 +915,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.tocta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
 ```
 
 
@@ -631,6 +973,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.taHplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pco2-tahplus, fig.dim = c(10,8),results = T}
@@ -665,6 +1018,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.taHplus, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
 ```
 
 ## TA + TOC*Hplus
@@ -703,6 +1067,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.tocHplus.ta, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pco2-tochplus-ta, fig.dim = c(10,8),results = T}
@@ -737,6 +1112,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.tocHplus.ta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
 ```
 
 
@@ -776,6 +1162,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc.taHplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pco2-toc-tahplus, fig.dim = c(10,8),results = T}
@@ -810,6 +1207,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.toc.ta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
 ```
 
 
@@ -852,6 +1260,27 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.toc.tainvHplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+```{r plot-article-2}
+ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 calculated from DIC~TOC + TA/Hplus"), alpha = 0.5)+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
 ```
 
 
@@ -889,6 +1318,16 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$pCO2_pred <- predict(pco2.toc.tainvHplus, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 
 ```
 
@@ -933,6 +1372,17 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
+nlss$dic_pred <- predict(dic.tocinvHplus.ta, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 ```
 
 ```{r glm-pco2-tocinvhplus-ta, fig.dim = c(10,8),results = T}
@@ -973,7 +1423,16 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 
-with(norway, cor(pCO2_pred, fCO2))
+nlss$pCO2_pred <- predict(pco2.tocinvHplus.ta, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
 ```
 
 
@@ -983,6 +1442,7 @@ with(norway, cor(pCO2_pred, fCO2))
 kable(cbind(data.frame(Predictors = c("TA",
                                 "TOC",
                                 "TA + TOC",
+                                "TA*TOC",
                                 "TA*Hplus",
                                 "TA*Hplus + TOC", 
                                 "TA + TOC*Hplus",
@@ -991,6 +1451,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                         R2 = c(pco2.ta.r2,
                                  pco2.toc.r2,
                                  pco2.toc.ta.r2,
+                               pco2.tocta.r2,
                                  pco2.taHplus.r2,
                                  pco2.toc.taHplus.r2,
                                  pco2.tocHplus.ta.r2,
@@ -999,15 +1460,17 @@ kable(cbind(data.frame(Predictors = c("TA",
                         significant  = c(pco2.ta.sp,
                                  pco2.toc.sp,
                                  pco2.toc.ta.sp,
+                                 pco2.tocta.sp,
                                  pco2.taHplus.sp,
                                  pco2.toc.taHplus.sp,
                                  pco2.tocHplus.ta.sp,
                                  pco2.toc.tainvHplus.sp,
                                  pco2.tocinvHplus.ta.sp),
-                        residuals = c(" "," "," "," "," "," "," "," ")),
+                        residuals = c(" "," "," "," "," "," "," "," "," ")),
                 data.frame(R2 = c(dic.ta.r2, 
                                 dic.toc.r2,
                                 dic.toc.ta.r2,
+                                dic.tocta.r2,
                                 dic.taHplus.r2,
                                 dic.toc.taHplus.r2,
                                 dic.tocHplus.ta.r2,
@@ -1016,12 +1479,13 @@ kable(cbind(data.frame(Predictors = c("TA",
                       significant  = c(dic.ta.sp, 
                                 dic.toc.sp,
                                 dic.toc.ta.sp,
+                                dic.tocta.sp,
                                 dic.taHplus.sp,
                                 dic.toc.taHplus.sp,
                                 dic.tocHplus.ta.sp,
                                 dic.toc.tainvHplus.sp,
                                 dic.tocinvHplus.ta.sp),
-                      residuals =c(" "," "," "," "," "," "," "," "))),
+                      residuals =c(" "," "," "," "," "," "," "," "," "))),
              digits = 2) %>% 
   add_header_above(c(" "= 1, "pCO2" = 3, "DIC" = 3),italic = T) %>%
   column_spec(column = c(2,5), bold = T) %>% 
@@ -1036,17 +1500,7 @@ kable(cbind(data.frame(Predictors = c("TA",
 
 # Northern European Lakes Survey
 
-```{r map-nls}
 
-nlss <- readRDS("nlss.rds")
-nlss$invHplus <- 1/nlss$Hplus
-nlss$TOC_mg <- nlss$TOC*12.011*1e3
-
-ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
-  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
-  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 0.001, rev = T)+ 
-  theme_minimal()
-```
 
 
 ```{r compare-boxplots, fig.dim = c(10,10)}
@@ -1076,8 +1530,6 @@ ggarrange(g1,g2,g3, common.legend = T, nrow = 3)
 
 
 ```{r nls-pCO2-TA}
-library(ggforce)
-
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
 nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
 nlss$ta_H2CO3 <- with(nlss, ta_HCO3*Hplus/K1)
@@ -1088,47 +1540,50 @@ ggplot(data = nlss, aes(x = pH))+
   labs(x = "pH", y = "pCO2 from TA, atm")+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
   facet_zoom(y = pCO2_ta > 0, zoom.size = 1)+
-  theme_bw()
+  theme_bw(base_size = 15)
 ```
 
 
-```{r nls-pCO2-toc}
+```{r nls-pCO2-toc, fid.dim = c(15,13)}
 
 nlss$pCO2_toc <- predict(pco2.toc, newdata = nlss, type = "response")
 
-ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_toc), alpha = 0.5, col = "firebrick")+
+g1 <- ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_toc, col = "pCO2 modelled with TOC"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", y = "pCO2 modelled with TOC, atm")+
-  theme_bw()
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("firebrick"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 
-nlss$pCO2_tocta <- predict(pco2.tocta, newdata = nlss, type = "response")
+nlss$pCO2_toc.ta <- predict(pco2.toc.ta, newdata = nlss, type = "response")
 
-ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_tocta), alpha = 0.5, col = "firebrick")+
+g2 <- ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_toc.ta, col = "pCO2 modelled with TOC+TA"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", y = "pCO2 modelled with TOC, atm")+
-  theme_bw()
+  labs(x = "pH", col = "" , y = "pCO2, atm")+
+  scale_color_manual(values = c("orange"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
 
-nlss$pCO2_tahplus <- predict(pco2.toc.taHplus, newdata = nlss, type = "response") 
 
-ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_tahplus), alpha = 0.5, col = "firebrick")+
-  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", y = "pCO2 modelled with TA*Hplus, atm")+
-  facet_zoom(y = pCO2_tahplus > 0, zoom.size = 1, shrink = F)+
-  theme_bw()
-
-nlss$dic_pred <- predict(dic.toc.taHplus, newdata = nlss, type = "response")
+nlss$dic_pred <- predict(dic.toc.tainvHplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
-ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_calc), alpha = 0.5, col = "firebrick")+
+g3 <- ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from modelled DIC"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", y = "pCO2 from modelled DIC, atm")+
-  theme_bw()
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
+ggarrange(g1,g2,g3, ncol= 3)
 ```
+
 ```{r study-results, eval = F}
+ggplot(nlss)+geom_point(aes(x=TOC, y = TA))
+ggplot(norway)+geom_point(aes(x=TOC, y = TA))
 
 ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_calc))
 ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_calc))
@@ -1141,9 +1596,55 @@ ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_toc))
 ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_toc))
 ggplot(nlss)+geom_point(aes(x=Hplus, y = pCO2_toc))
 
-ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_tocta, col = TOC))
-ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_tocta, col = TA))
-ggplot(nlss)+geom_point(aes(x=Hplus, y = pCO2_tocta))
+ggplot(nlss)+geom_point(aes(x=TA, y = pCO2_toc.ta, col = TOC))
+ggplot(nlss)+geom_point(aes(x=TOC, y = pCO2_toc.ta, col = TA))
+ggplot(nlss)+geom_point(aes(x=pH, y = pCO2_toc.ta))
+
+```
+
+```{r can-there-be-h2co3-at-high-pH}
+
+temp_k <- 4+273.5 # temperature 4 degrees
+
+K0 <- exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100)) # Weiss 1974
+K1 <- 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k) # Harned and Davis, 1943
+K2 <- 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k) # Harned and Scholes, 1941
+
+test <- data.frame(pH = seq(from = 3, to = 10, by = 0.1))
+test$Hplus <- 10^(-test$pH)
+DIC_1 <- rep(1,71) # mol/L
+test$pCO2_1 <- with(test,DIC_1/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
+test$H2CO3_1 <- with(test,pCO2_1*K0)
+test$HCO3_1 <- with(test, K1*H2CO3_1/Hplus)
+test$CO3_1 <- with(test,K2*HCO3_1/Hplus)
+
+DIC_2 <- rep(2,71) # mol/L
+test$pCO2_2 <- with(test,DIC_2/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
+test$H2CO3_2 <- with(test,pCO2_2*K0)
+test$HCO3_2 <- with(test, K1*H2CO3_2/Hplus)
+test$CO3_2 <- with(test,K2*HCO3_2/Hplus)
+
+DIC_3 <- rep(3,71) # mol/L
+test$pCO2_3 <- with(test,DIC_3/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
+test$H2CO3_3 <- with(test,pCO2_3*K0)
+test$HCO3_3 <- with(test, K1*H2CO3_3/Hplus)
+test$CO3_3 <- with(test,K2*HCO3_3/Hplus)
+
+ggplot(test, aes(x=pH))+geom_point(aes(y=H2CO3_1, col = "DIC = 1"))+
+  geom_point(aes(y=H2CO3_2, col = "DIC = 2"))+
+  geom_point(aes(y=H2CO3_3, col = "DIC = 3"))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  geom_vline(xintercept = -log10(K1))+
+  geom_vline(xintercept = -log10(K2))+
+  theme_minimal()
+
+ggplot(test, aes(x=pH))+geom_point(aes(y=H2CO3_1, col = "DIC = 1"))+
+  geom_point(aes(y=H2CO3_2, col = "DIC = 2"))+
+  geom_point(aes(y=H2CO3_3, col = "DIC = 3"))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  geom_vline(xintercept = -log10(K1))+
+  geom_vline(xintercept = -log10(K2))+
+  theme_minimal()
 
 ```
 
@@ -1232,9 +1733,9 @@ nlss$mgC.m2.day_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011 * 1e3) 
 
 ```
 
-```{r evasion-calculated-toc}
+```{r evasion-calculated-toc-ta}
 
-nlss$FCO2_toc <- with(nlss, lake.area*1e6*kCO2*((pCO2_toc - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
+nlss$FCO2_toc <- with(nlss, lake.area*1e6*kCO2*((pCO2_toc.ta - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
 
 nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
@@ -1289,7 +1790,6 @@ knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T)
 
 ```
 
-`r knitr::knit_exit()`
 
 # Maps
 
@@ -1384,7 +1884,7 @@ ggarrange(n112_ECO2,cba_ECO2, common.legend = T, ncol = 2, legend = "bottom")
 
 ggplot()+
   borders(region = c("Norway", "Sweden","Finland"), fill = "seashell2", col = "seashell2")+xlim(4,35)+ylim(55,72)+
-  geom_point(data = nlss, aes(x=long, y = lat, col = log10(fCO2*1e6)), shape = 16, size = 1)+
+  geom_point(data = nlss, aes(x=long, y = lat, col = log10(pCO2_toc.ta*1e6)), shape = 16, size = 1)+
   labs(col = "fCO2 (uatm), \nlog scale") +
   scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8)+
 #  scale_size(range = c(0.5,2), breaks = c(2,3,4,5))+
@@ -1398,8 +1898,8 @@ ggplot()+
 
 ggplot()+
   borders(region = c("Norway", "Sweden","Finland"), fill = "seashell2", col = "seashell2")+xlim(4,35)+ylim(55,72)+
-  geom_point(data = subset(nlss, ECO2 < 100), aes(x=long, y = lat, col = ECO2), shape = 16, size = 1)+
-  geom_point(data = subset(nlss, ECO2 > 100), aes(x=long, y = lat), col = "firebrick", shape = 16, size = 1.5)+
+  geom_point(data = subset(nlss, ECO2_toc < 100), aes(x=long, y = lat, col = ECO2_toc), shape = 16, size = 1)+
+  geom_point(data = subset(nlss, ECO2_toc > 100), aes(x=long, y = lat), col = "firebrick", shape = 16, size = 1.5)+
   labs(col = "Evasion rate\n(gC/m2/day)") +
   scale_color_continuous_sequential(rev = F, palette = "Oslo", begin = 0.2)+
 #  scale_size(range = c(0.5,2), breaks = c(2,3,4,5))+
@@ -1418,7 +1918,7 @@ fCO2_lims <- c(min(log10(norway$fCO2*1e6)), max(log10(norway$fCO2*1e6)))
 
 n1995_fCO2 <- ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
-  geom_point(data = df, aes(x=long, y = lat, col = log10(fCO2*1e6), size = log10(fCO2*2e6)), shape = 16)+
+  geom_point(data = df, aes(x=long, y = lat, col = log10(pCO2_toc*1e6), size = log10(pCO2_toc*2e6)), shape = 16)+
   labs(col = "fCO2 (uatm), \nlog scale", size = "fCO2 (uatm), \nlog scale") +
   scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
   scale_size(range = c(0.5,2), limits = fCO2_lims)+
@@ -1431,8 +1931,8 @@ ECO2_lims <- c(-2,25)
 
 n1995_ECO2 <- ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
-  geom_point(data = subset(df, ECO2 < 100), aes(x=long, y = lat, col = ECO2, size = ECO2), shape = 16)+
-  geom_point(data = subset(df, ECO2 > 100), aes(x=long, y = lat), col = "firebrick", shape = 16, size = 1.5)+
+  geom_point(data = subset(df, ECO2_toc < 100), aes(x=long, y = lat, col = ECO2_toc, size = ECO2_toc), shape = 16)+
+  geom_point(data = subset(df, ECO2_toc > 100), aes(x=long, y = lat), col = "firebrick", shape = 16, size = 1.5)+
   labs(col = "Evasion rate\n(gC/m2/day)", size = "Evasion rate\n(gC/m2/day)") +
   scale_color_continuous_sequential(rev = F, palette = "Oslo", begin = 0.2, limits = ECO2_lims)+
   scale_size(range = c(0.5,2), limits = ECO2_lims)+
@@ -1449,18 +1949,21 @@ ggarrange(n1995_fCO2, n112_fCO2, cba_fCO2, labels = c("1995","2004","2019"), com
 ggarrange(n1995_ECO2, n112_ECO2,cba_ECO2, labels = c("1995","2004","2019"), common.legend = T, ncol = 3, legend = "bottom")
 ```
 
+
+`r knitr::knit_exit()`
+
 ```{r boxplots-ECO2}
 
 ggplot()+
   geom_boxplot(aes(x = "2004", y = subset(norway, survey == "N112_2004")$ECO2, col = "2004"))+
   geom_boxplot(aes(x = "2019", y = subset(norway, survey =="CBA_2019")$ECO2, col = "2019"))+
-    geom_boxplot(aes(x="1995", y = subset(nlss, nation == "Norway" & lat < 63)$ECO2, col = "1995"))+
+    geom_boxplot(aes(x="1995", y = subset(nlss, nation == "Norway" & lat < 63)$ECO2_toc, col = "1995"))+
     theme_minimal()
 
 ggplot()+
   geom_boxplot(aes(x = "2004", y = with(subset(norway, survey == "N112_2004"),fCO2/TOC), col = "2004"))+
   geom_boxplot(aes(x = "2019", y = with(subset(norway, survey =="CBA_2019"), fCO2/TOC), col = "2019"))+
-    geom_boxplot(aes(x="1995", y = with(subset(nlss, nation == "Norway" & lat < 63),fCO2/TOC), col = "1995"))+
+    geom_boxplot(aes(x="1995", y = with(subset(nlss, nation == "Norway" & lat < 63),pCO2_toc/TOC), col = "1995"))+
   coord_trans(y = "log10")+
     theme_minimal()
 
