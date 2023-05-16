@@ -41,6 +41,12 @@ fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
 fCO2.atm.1995 <- 360.17 * 1e-6
 ```
 
+```{r fig-num-function}
+library(captioner)
+fig_nums <- captioner() 
+tab_nums <- captioner(prefix = "Table")
+```
+
 # Bookdown documentation
 
 <https://bookdown.org/yihui/bookdown/a-single-document.html>
@@ -78,6 +84,8 @@ ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
   theme_minimal()
 ```
 
+*`r fig_nums("map-nls", "Map of TOC in mg/L in the Northern Lake Survey")`*
+
 # Estimation of organic and carbonate alkalinity
 
 ## Carbonate speciation N112 / CBA
@@ -109,18 +117,8 @@ ggplot(norway, aes(x = pH))+
   facet_grid(cols = vars(survey))+
   theme_minimal()+
   theme(legend.position = "bottom")
-
-ggplot(norway, aes(x = pH))+
-  geom_point(aes(y = H2CO3, col = "H2CO3"), alpha = 0.5)+
-  geom_point(aes(y = HCO3, col = "HCO3"), alpha = 0.5)+
-  geom_point(aes(y = CO3, col = "CO3"), alpha = 0.5)+
-  geom_point(aes(y = Ca, col = "Ca"))+
-  labs(y = "Carbonate species (mol/L)", col = "")+
-  scale_color_manual(values = c( "firebrick","black","dodgerblue3","orange"))+
-  facet_grid(cols = vars(survey))+
-  theme_minimal()+
-  theme(legend.position = "bottom")
 ```
+*`r fig_nums("carbonates-norway", "Concentration of carbonate species in mol/L in the CBA and N112 surveys")`*
 
 ```{r fCO2-from-TA}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = ta_fCO2, col = "pCO2 from TA"), alpha = 0.5)+
@@ -132,6 +130,7 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = ta_fCO2, col = "pCO2 from TA"), alp
   theme(legend.position = "bottom")
 
 ```
+*`r fig_nums("map-pCo2", "Measured (red) and calculated (blue) pCO2 in atm for the CBA and N112 surveys")`*
 
 ```{r compare-cba-n112}
 toc_boxplot <- ggplot(norway)+
@@ -142,20 +141,27 @@ toc_boxplot <- ggplot(norway)+
   theme_minimal()+
   theme(legend.position = "bottom")
 
+toc_boxplot
 ```
 
+*`r fig_nums("boxplot-toc-dic", "Boxplot of DIC and TOC in mol/L for the CBA survey (red) and N112 survey (blue)")`*
+
 ## Organic alkalinity as OA = TA - CA
+
+Method also used in @Couturier2022.
 
 ```{r measured-oa}
 norway$OA <- with(norway, TA-CA)
 
-ggplot(norway)+geom_point(aes(x = pH, y = CA))
-ggplot(norway)+geom_point(aes(x = fCO2, y = fCO2))
-ggplot(norway)+geom_point(aes(x = pH, y = OA))+ylim(-1e-4, 1e-4)
-ggplot(norway)+geom_point(aes(x = TOC, y = OA))
-ggplot(norway)+geom_point(aes(x = TA, y = OA))
+ggarrange(
+ggplot(norway)+geom_point(aes(x = pH, y = CA))+theme_bw(),
+ggplot(norway)+geom_point(aes(x = pH, y = OA))+ylim(-1e-4, 1e-4)+theme_bw(),
+ggplot(norway)+geom_point(aes(x = TOC, y = OA))+theme_bw(),
+ggplot(norway)+geom_point(aes(x = TA, y = OA))+theme_bw(), nrow = 2, ncol = 2)
 
 ```
+*`r fig_nums("OA", "OA estimated as TA - CA, in eq/L")`*
+
 
 ## Organic alkalinity according to @Hruska2003
 
@@ -206,6 +212,8 @@ norway$H2CO3_hruska <- with(norway, HCO3_hruska*Hplus/K1)
 norway$fCO2_hruska <- with(norway,H2CO3_hruska/K0)
 ```
 
+*`r fig_nums("OA-Hruska", "OA estimated with triprotic method of Hruska et al., in eq/L")`*
+
 ```{r fCO2-from-hruska}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calculated from Hruska et al"), alpha = 0.5)+
   geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
@@ -215,6 +223,8 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calcu
   theme_minimal(base_size = 15)+
   theme(legend.position = "bottom")
 ```
+
+*`r fig_nums("pco2-hruska", "pCO2 estimated with Hruska method, in atm")`*
 
 ## Organic alkalinity according to @Liu2020
 
@@ -251,67 +261,26 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_Liu, col = "pCO2 from calculat
   theme(legend.position = "bottom")
 ```
 
+*`r fig_nums("pCO2-Liu", "pCO2 estimated with Liu method, in atm")`*
+
 # Model TIC
 
 ## Theory
 
-TIC can be expressed as a function of \$TA\$ , $[H^+]$ and $TOC$. First we have to express it depending on $pCO_2$, $HCO_3^-$ or $CO_3^{2-}$.
+* TIC can be expressed as a function of \$TA\$ , $[H^+]$ and $TOC$. First we have to express it depending on $pCO_2$, $HCO_3^-$ or $CO_3^{2-}$.
 
 $TIC = H_2CO_3 + HCO_3^- + CO_3^{2-}$
 
-$$ K_0 = [H_2CO_3]/ pCO_2 \Leftrightarrow H_2CO_3 = pCO_2 \times K_0$$
+$ K_0 = [H_2CO_3]/ pCO_2 \Leftrightarrow H_2CO_3 = pCO_2 \times K_0$
 
-$$K_1 = \frac{HCO_3^- \times [H^+]}{[H_2CO_3]} \Leftrightarrow [HCO_3^-] = \frac{[H_2CO_3] \times K_1}{[H^+]} $$
+$K_1 = \frac{HCO_3^- \times [H^+]}{[H_2CO_3]} \Leftrightarrow [HCO_3^-] = \frac{[H_2CO_3] \times K_1}{[H^+]} $
 
 $K_2 = \frac{[CO_3^{2-}] \times [H^+]}{[HCO_3^-]} \Leftrightarrow [CO_3^{2-}] = \frac{[HCO_3^-] \times K_2}{[H^+]}$
 
-Therfore
+Therefore
 
 $TIC = pCO_2 \times K_0 \times \left( 1 + \frac{K_1}{H^+} + \frac{K_2K_1}{[H^+]^2} \right)$
 
-$TIC = [HCO_3] \times \left( 1 + \frac{[H^+]}{K_1}+\frac{K_2}{[H^+]} \right) \Leftrightarrow [HCO_3^-] = TIC / K_{tot1}$
-
-$TIC = [CO_3^{2-}] \times \left( 1 + \frac{([H^+]^2}{K_2K_1}+\frac{[H^+]}{K_2} \right) \Leftrightarrow [CO_3^{2-}] = TIC / K_{tot2}$
-
--   TA is expressed as:
-
-$TA = [HCO_3-] + 2 \times [CO_3^{2-}] + [OH] - [H^+] + OA$
-
-$TA = TIC \times (1/K_{tot1} + 2/K_{tot2}) + [OH] - [H^+] + OA$
-
--   Organic alkalinity is proportional to $[TOC]/[H^+]$:
-
-$K_a = \frac{[RCOO^-][H^+]}{[RCOOH]} \Leftrightarrow [RCOO^-]=\frac{K_a \times [RCOOH]}{[H^+]} \Leftrightarrow [RCOOH] = \frac{[RCOO^-][H^+]}{K_a}$
-
-Where $K_a$ is the average, or apparent, dissociation constant for organic acids. The part of TOC that can dissociate is $\alpha \times TOC$ . At all pH:
-
-$\alpha TOC = [RCOO^-]+[RCOOH] = [RCOO^-] + \frac{[RCOO^-][H^+]}{K_a} = [RCOO^-] \left( 1 + \frac{[H^+]}{K_a} \right) \Leftrightarrow [RCOO^-] = \alpha TOC \frac{1}{1 + \frac{[H^+]}{K_a}}$
-
-The organic alkalinity is
-
-$OA - OA_{pH = 4.5} = [RCOO^-]-[RCOOH] - ([RCOO^-]_{pH=4.5} - [RCOOH]_{pH=4.5})$
-
-$= [RCOO^-] \left(1- \frac{[H^+]}{K_a} \right) - [RCOO^-]_{4.5} \left(1- \frac{10^{-4.5}}{K_a} \right) = \alpha TOC \l2eft( \frac{1-\frac{[H^+]}{K_a}}{1+\frac{[H^+]}{K_a}} - \frac{1-\frac{10^{-4.5}}{K_a}}{1+\frac{10^{-4.5}}{K_a}} \right)$
-
-\$=\alpha TOC \left( \frac{K_a - [H^+]}{K_a + [H^+]} -
-
-\frac{K_a - 10^{-4.5}}{K_a + 10^{-4.5}} \right)\$
-
-TIC can be expressed as :
-
-$TIC \propto (TA-[OH]+[H^+]-OA)\times \frac{1}{\frac{1}{1+\frac{[H^+]}{K_1}+\frac{K_2}{[H^+]}}+\frac{2}{1+\frac{[H^+]^2}{K_1K_2}+\frac{[H^+]}{K_2}}}$
-
-$TIC \propto (TA-[OH]+[H^+]-OA) \times \left( \frac{[H^+]^2 + K_1[H^+]+K_1K_2}{3K_1K_2} \right)$
-
-$CA = [HCO_3^-] + 2 \times [CO_3^{2-}]$
-
-$[CO_3^{2-}] = \frac{[HCO_3^-] \times K_2} {[H^+]}$
-
-$CA = [HCO_3^-] \times \left( 1 + \frac{2 \times K_2}{[H^+]} \right) \Leftrightarrow [HCO_3^{-}] = CA / \left( 1 + \frac{2 \times K_2}{[H^+]} \right)$
-
-So
-
-$pCO_2 = [H_2CO_3]/K_0 = \frac{[HCO_3^-] \times [H^+]} {K_1 \times K_0} = \frac{CA \times [H^+]}{ \left( 1 + \frac{2 \times K_2}{[H^+]} \right) \times K_1 \times K_0}$
 
 ## TA
 
@@ -331,25 +300,28 @@ dic.ta.r2 <- with(summary(dic.ta), 1 - deviance/null.deviance) %>% round(2)
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
   annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.ta.r2, ""))+
-    theme_minimal()
+    theme_minimal(base_size = 15)
 
 g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
    coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
-  theme_minimal()
+  theme_minimal(base_size = 15)
 
 norway$pCO2_calc <- with(norway, DIC_pred/(K0*(1+K1*Hplus+K2*K1*Hplus^2)))
-
 
 g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
   geom_point(aes(y = fCO2, col = "Measured pCO2"))+
   labs(y = "pCO2, atm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
-  theme_minimal()+
+  theme_minimal(base_size = 15)+
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA")`*
+
+```{r nlss-pred-ta}
 nlss$dic_pred <- predict(dic.ta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -361,6 +333,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
 
 ```{r glm-pco2-ta, fig.dim = c(10,8), results = T}
 pco2.ta <- glm(formula = fCO2~TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
@@ -394,7 +369,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) predicted (blue) pCO2 vs pH for pCO2~TA")`* 
+
+```{r nlss-pred-pco2-ta}
 nlss$pCO2_pred <- predict(pco2.ta, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -405,6 +384,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("pco2-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ## 1/TA
 
@@ -443,7 +424,12 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme_minimal()+
   theme(legend.position = "bottom")
 
-plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+plot_grid(ggarrange(g1,g2),g3,nrow = 2, rel_heights = c(2,3), title = "test")
+```
+
+*`r fig_nums("dic-invta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~1/TA")`*
+
+```{r nlss-dic-invta}
 
 nlss$invTA <- with(nlss, ifelse(TA == 0, 0, 1/TA))
 
@@ -458,6 +444,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-invta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pco2-invTA, fig.dim = c(10,8), results = T}
 pco2.invTA <- glm(formula = fCO2~invTA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
@@ -491,7 +479,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-invta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) and predicted (blue) pCO2 vs pH for pCO2~1/TA")`*
+
+```{r nlss-pco2-invTA}
 
 nlss$pCO2_pred <- predict(pco2.invTA, newdata = nlss, type = "response")
 
@@ -503,6 +495,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("pco2-invta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ## TOC
 
@@ -540,7 +534,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-toc", "Predicted vs fitted values, Standardized residuals vs fitted values, and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC")`*
+
+```{r nlss-dic-toc}
 nlss$dic_pred <- predict(dic.toc, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -552,6 +550,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+
+*`r fig_nums("dic-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pCO2-toc, fig.dim = c(10,8), results = T}
 
@@ -585,7 +586,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-toc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) and predicted (blue), pCO2 vs pH for DIC~TOC")`* 
+
+```{r nlss-pco2-toc}
 nlss$pCO2_pred <- predict(pco2.toc, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -597,6 +602,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme(legend.position = "top")
 ```
 
+*`r fig_nums("pco2-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
 ```{r for-article}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"), alpha = 0.5)+
   geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
@@ -606,6 +613,8 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model")
   theme_bw(base_size = 15)+
   theme(legend.position = "bottom")
 ```
+
+*`r fig_nums("pco2-toc-article", "Model results for pCO2~TOC")`*
 
 ## TA + TOC
 
@@ -643,7 +652,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-ta-toc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA+TOC")`*
+
+```{r nlss-dic-toc-ta}
 nlss$dic_pred <- predict(dic.toc.ta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -655,6 +668,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-toc-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pCO2-toc-ta, fig.dim = c(10,8),results = T}
 
@@ -688,7 +703,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-toc-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2~TOC+TA")`*
+`
+```{r nlss-pco2-toc-ta}
 nlss$pCO2_pred <- predict(pco2.toc.ta, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -700,7 +719,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme(legend.position = "top")
 ```
 
-## TA\*TOC + Hplus
+*`r fig_nums("pco2-toc-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TA*TOC + Hplus
 
 ```{r glm-dic-toc-ta-hplus, fig.dim = c(10,8), results = T}
 
@@ -736,7 +757,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-tocta-hplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA x TOC + Hplus")`*
+
+```{r nlss-dic-toc-ta-hplus}
 nlss$dic_pred <- predict(dic.tocta.Hplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -748,6 +773,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-tatoc-hplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pCO2-toc-ta-hplus, fig.dim = c(10,8),results = T}
 
@@ -781,7 +808,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-tatoc-hplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2~TA x TOC + Hplus")`*
+
+```{r nlss-pco2-tocta-hplus}
 nlss$pCO2_pred <- predict(pco2.tocta.Hplus, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -792,6 +823,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("pco2-tocta-hplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ## TOC + pH
 
@@ -829,7 +862,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-toc-hplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC+Hplus")`*
+
+```{r nlss-dic-toc-Hplus}
 nlss$dic_pred <- predict(dic.toc.Hplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -841,6 +878,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-toc-hplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pCO2-toc-Hplus, fig.dim = c(10,8),results = T}
 
@@ -874,7 +913,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-toc-hplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2~TOC+Hplus")`* 
+
+```{r nlss-pco2-toc-hplus}
 nlss$pCO2_pred <- predict(pco2.toc.Hplus, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -886,7 +929,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme(legend.position = "top")
 ```
 
-## TA \* TOC
+*`r fig_nums("pco2-toc-hplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TA * TOC
 
 ```{r glm-dic-tocta, fig.dim = c(10,8), results = T}
 
@@ -922,8 +967,12 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
-nlss$dic_pred <- predict(dic.toc.ta, newdata = nlss, type = "response")
+*`r fig_nums("dic-tatoc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA x TOC")`*
+
+```{r nlss-dic-tocta}
+nlss$dic_pred <- predict(dic.tocta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
 ggplot(data = nlss, aes(x = pH))+
@@ -934,6 +983,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-tocta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pCO2-tocta, fig.dim = c(10,8),results = T}
 
@@ -967,7 +1018,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-tatoc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2~TA x TOC")`*
+
+```{r nlss-pco2-tocta}
 nlss$pCO2_pred <- predict(pco2.tocta, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -977,10 +1032,11 @@ ggplot(data = nlss, aes(x = pH))+
   scale_color_manual(values = c("dodgerblue"))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
-
 ```
 
-## TA\*Hplus
+*`r fig_nums("pco2-tocta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TA*Hplus
 
 ```{r glm-dic-taHplus, fig.dim = c(10,8),results = T}
 
@@ -1017,7 +1073,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-taHplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA x Hplus")`*
+
+```{r nlss-dic-taHplus}
 nlss$dic_pred <- predict(dic.taHplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -1029,6 +1089,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-tahplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pco2-tahplus, fig.dim = c(10,8),results = T}
 
@@ -1062,6 +1124,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("pco2-taHplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA")`*
+
+```{r nlss-pco2-tahplus}
 
 nlss$pCO2_pred <- predict(pco2.taHplus, newdata = nlss, type = "response")
 
@@ -1075,7 +1142,117 @@ ggplot(data = nlss, aes(x = pH))+
 
 ```
 
-## TA + TOC\*Hplus
+*`r fig_nums("pco2-taHplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TOC*Hplus
+
+```{r glm-dic-tocHplus, fig.dim = c(10,8),results = T}
+
+dic.TOCHplus <- glm(formula = DIC~TOC*Hplus, data = norway, family = Gamma(link = "identity"))
+
+dic.TOCHplus.sum <- summary(dic.TOCHplus)$coefficients %>% as.data.frame() 
+dic.TOCHplus.sp <- rownames(dic.TOCHplus.sum)[which(dic.TOCHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.TOCHplus.sum <- dic.TOCHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.TOCHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.TOCHplus)
+norway$DIC_pred_res <- residuals(dic.TOCHplus)
+dic.TOCHplus.r2 <- with(summary(dic.TOCHplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.TOCHplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("dic-tochplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC x Hplus")`*
+
+```{r nlss-dic-tochplus}
+nlss$dic_pred <- predict(dic.TOCHplus, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+*`r fig_nums("dic-tochplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+```{r glm-pco2-TOChplus, fig.dim = c(10,8),results = T}
+
+pco2.TOCHplus <- glm(formula = fCO2~TOC*Hplus+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
+pco2.TOCHplus.sum <- summary(pco2.TOCHplus)$coefficients %>% as.data.frame() 
+pco2.TOCHplus.sp <- rownames(pco2.TOCHplus.sum)[which(pco2.TOCHplus.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.TOCHplus.sum <- pco2.TOCHplus.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.TOCHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.TOCHplus)
+norway$pCO2_pred_res <- residuals(pco2.TOCHplus)
+pco2.TOCHplus.r2 <- with(summary(pco2.TOCHplus), 1 - deviance/null.deviance) %>% round(2)
+
+g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.TOCHplus.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("dic-tochplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC x Hplus")`*
+
+```{r nlss-pco2-tochplus}
+
+nlss$pCO2_pred <- predict(pco2.TOCHplus, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+
+```
+
+*`r fig_nums("dic-tochplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TA + TOC*Hplus
 
 ```{r glm-dic-tocHplus-ta, fig.dim = c(10,8),results = T}
 
@@ -1111,7 +1288,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-tochplus-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC ~ TA + TOC x Hplus")`*
+
+```{r nlss-dic-tochplus-ta}
 nlss$dic_pred <- predict(dic.tocHplus.ta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -1123,6 +1304,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("pco2-tochplus-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pco2-tochplus-ta, fig.dim = c(10,8),results = T}
 
@@ -1156,7 +1339,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-tochplus-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC x Hplus + TA")`*
+
+```{r nlss-pco2-tochplus-ta}
 nlss$pCO2_pred <- predict(pco2.tocHplus.ta, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -1166,10 +1353,11 @@ ggplot(data = nlss, aes(x = pH))+
   scale_color_manual(values = c("dodgerblue"))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
-
 ```
 
-## TOC + TA\*Hplus
+*`r fig_nums("pco2-tochplus-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TOC + TA*Hplus
 
 ```{r glm-dic-toc-taHplus, fig.dim = c(10,8),results = T}
 
@@ -1205,7 +1393,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC ~ TOC + TA x Hplus")`*
+
+```{r nlss-dic-toc-tahplus}
 nlss$dic_pred <- predict(dic.toc.taHplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -1217,6 +1409,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("dic-toc-tahplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
 
 ```{r glm-pco2-toc-tahplus, fig.dim = c(10,8),results = T}
 
@@ -1250,8 +1445,12 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
-nlss$pCO2_pred <- predict(pco2.toc.ta, newdata = nlss, type = "response")
+*`r fig_nums("pco2.toc.taHplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2~TOC + TA x Hplus")`*
+
+```{r nlss-pco2-toc-taHplus}
+nlss$pCO2_pred <- predict(pco2.toc.taHplus, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
   geom_point(aes(y = pCO2_pred, col = "Predicted pCO2, NLS"), alpha = 0.5)+
@@ -1263,7 +1462,9 @@ ggplot(data = nlss, aes(x = pH))+
 
 ```
 
-## TOC + TA\*invHplus
+*`r fig_nums("pco2-toc-tahplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TOC + TA*invHplus
 
 ```{r glm-dic-toc-tainvhplus, fig.dim = c(10,8),results = T}
 
@@ -1302,7 +1503,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-toc-tainvHplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC + TA/hplus")`*
+
+```{r nlss-dic-toc-tainvHplus}
 nlss$dic_pred <- predict(dic.toc.tainvHplus, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -1315,15 +1520,7 @@ ggplot(data = nlss, aes(x = pH))+
   theme(legend.position = "top")
 ```
 
-```{r plot-article-2}
-ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 calculated from DIC~TOC + TA/Hplus"), alpha = 0.5)+
-  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
-  labs(y = "pCO2, atm", x = "pH", col = "")+
-  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
-  facet_grid(cols = vars(survey))+
-  theme_minimal(base_size = 15)+
-  theme(legend.position = "bottom")
-```
+*`r fig_nums("dic-toc-tainvHplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pco2-toc-tainvhplus, fig.dim = c(10,8),results = T}
 
@@ -1359,6 +1556,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("dic-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA")`
+
+```{r nlss-pco2-toc-tainvhplus}
 
 nlss$pCO2_pred <- predict(pco2.toc.tainvHplus, newdata = nlss, type = "response")
 
@@ -1372,7 +1574,9 @@ ggplot(data = nlss, aes(x = pH))+
 
 ```
 
-## TA + TOC\*invHplus
+*`r fig_nums("pco2-toc-tainvHplus-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+## TA + TOC*invHplus
 
 ```{r glm-dic-tocinvhplus-ta, fig.dim = c(10,8),results = T}
 
@@ -1410,8 +1614,13 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme_minimal()+
   theme(legend.position = "bottom")
 
-plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+plot_grid(ggarrange(g1,g2),g3+labs(caption = ),nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("dic-tocinvHplus-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC ~ TOC / Hplus + TA")`*
+
+
+```{r nlss-dic-tocinvHplus-ta}
 nlss$dic_pred <- predict(dic.tocinvHplus.ta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
@@ -1423,6 +1632,8 @@ ggplot(data = nlss, aes(x = pH))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 ```
+
+*`r fig_nums("pco2-tocinvhplus-ta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r glm-pco2-tocinvhplus-ta, fig.dim = c(10,8),results = T}
 
@@ -1461,7 +1672,11 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
 
+*`r fig_nums("pco2-tocinvHplus-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for pCO2 ~ TOC / Hplus + TA")`*
+
+```{r nlss-pco2invHplus-ta}
 nlss$pCO2_pred <- predict(pco2.tocinvHplus.ta, newdata = nlss, type = "response")
 
 ggplot(data = nlss, aes(x = pH))+
@@ -1474,7 +1689,11 @@ ggplot(data = nlss, aes(x = pH))+
 
 ```
 
+*`r fig_nums("pco2-tocta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
 ## Tableau recap
+
+*`r tab_nums("summary-models","Summary of DIC and pCO2 models")`*
 
 ```{r table-results,results = T}
 kable(cbind(data.frame(Predictors = c("TA",
@@ -1483,6 +1702,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 "TA + TOC",
                                 "TA*TOC",
                                 "TA*Hplus",
+                                "TOC*Hplus",
                                 "TA*Hplus + TOC", 
                                 "TA + TOC*Hplus",
                                 "TA/Hplus + TOC",
@@ -1493,6 +1713,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                  pco2.toc.ta.r2,
                                pco2.tocta.r2,
                                  pco2.taHplus.r2,
+                               pco2.TOCHplus.r2,
                                  pco2.toc.taHplus.r2,
                                  pco2.tocHplus.ta.r2,
                                  pco2.toc.tainvHplus.r2,
@@ -1503,6 +1724,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                  pco2.toc.ta.sp,
                                  pco2.tocta.sp,
                                  pco2.taHplus.sp,
+                                 pco2.TOCHplus.sp,
                                  pco2.toc.taHplus.sp,
                                  pco2.tocHplus.ta.sp,
                                  pco2.toc.tainvHplus.sp,
@@ -1513,6 +1735,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 dic.toc.ta.r2,
                                 dic.tocta.r2,
                                 dic.taHplus.r2,
+                                dic.TOCHplus.r2,
                                 dic.toc.taHplus.r2,
                                 dic.tocHplus.ta.r2,
                                 dic.toc.tainvHplus.r2,
@@ -1523,6 +1746,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 dic.toc.ta.sp,
                                 dic.tocta.sp,
                                 dic.taHplus.sp,
+                                dic.TOCHplus.sp,
                                 dic.toc.taHplus.sp,
                                 dic.tocHplus.ta.sp,
                                 dic.toc.tainvHplus.sp,
@@ -1531,8 +1755,6 @@ kable(cbind(data.frame(Predictors = c("TA",
   add_header_above(c(" "= 1, "pCO2" = 2, "DIC" = 2),italic = T) %>%
   column_spec(column = c(2,4), bold = T) %>% 
   kable_styling(bootstrap_options = "bordered")
-
-
 ```
 
 # Northern European Lakes Survey
@@ -1643,6 +1865,8 @@ ggplot(test, aes(x=pH))+geom_point(aes(y=H2CO3_1, col = "DIC = 1"))+
 
 # Evasion rate of CO2
 
+## Theory
+
 Wind speed <https://wcrp-cmip.github.io/CMIP6_CVs/docs/CMIP6_institution_id.html>
 
 Data downloaded from Copernicus <https://cds.climate.copernicus.eu/cdsapp#!/dataset/derived-near-surface-meteorological-variables?tab=overview>
@@ -1659,11 +1883,13 @@ According to @Vachon2013:
 
 $$k_{600} = 2.51 + 1.48 \times U_{10} + 0.39 \times U_{10} \times log_{10} (A_{lake})$$
 
-with $A$ in km2 and $U_{10}$ in m/s
+with $k_600$ in $cm/h$, $A$ in km2 and $U_{10}$ in m/s
 
 $k_{CO_2}$ has to be adjusted for temperature. @Vachon2020:
 
 $$k_{600} = k_{CO_2}\times \left( \frac{600}{Sc_{CO_2}} \right) ^{-n}$$ The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
+
+## Compute ECO2
 
 ```{r norway-schmidt}
 
@@ -1735,6 +1961,47 @@ nlss$mgC.m2.day_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011 * 1e3) 
 
 ```
 
+
+## Compare with @Weyhenmeyer2015
+
+```{r compare-weyhenmeyer}
+kCO2 <- filter(nlss, nation == "Sweden")$kCO2 %>% median(na.rm = T)
+K0 <- filter(nlss, nation == "Sweden")$K0 %>% median()
+K1 <- filter(nlss, nation == "Sweden")$K1 %>% median()
+K2 <- filter(nlss, nation == "Sweden")$K2 %>% median()
+
+pCO2_10.5 <- fCO2.atm.1995 + 1.05709*(10.5/12.011*1e-3) #pCO2 for a lake with a concentration of 10.5 mg/L TOC
+ECO2_10.5 <- kCO2*(pCO2_10.5-fCO2.atm.1995)*K0*1e3*12.011 #ECO2 in g/m2/day
+
+print(ECO2_10.5)
+
+filter(nlss, nation == "Sweden")$k600 %>% median(na.rm = T) # 7.43 cm/h
+filter(nlss, nation == "Sweden")$k600 %>% mean(na.rm = T) # 7.56 cm/h
+# median in Weyhenmeyer: < 0.61m/day -> 2.54 cm/h
+
+
+wHplus <- 10^(-6.6) # median pH in W: 6.6
+pCO2_a <- (2.5/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
+pCO2_b <- (2/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
+pCO2_c <- (4.9/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
+pCO2_d <- (4.4/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
+
+ECO2_a <- kCO2*(pCO2_a-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_b <- kCO2*(pCO2_b-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_c <- kCO2*(pCO2_c-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_d <- kCO2*(pCO2_d-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+
+kable(data.frame(lake_type = c("a","b","c","d"), median_DIC_mg.L = c(2.5,2,4.9,4.4), pCO2_atm = c(pCO2_a,pCO2_b,pCO2_c,pCO2_d), ECO2_mgC.m2.day = c(ECO2_a, ECO2_b, ECO2_c, ECO2_d))) %>% kable_styling(bootstrap_options = "bordered" )
+```
+
+*`r tab_nums("weyhenmeyer","ECO2 calculated from median DIC values from @Weyhenmeyer2015, following the same process as in our article")`*
+
+
+
+## Summary table
+
+*`r tab_nums("summary-eco2","Summary statistics for evasion rate of CO2: minimum, median, maximum, mean and standard deviation in gC/m2/day")`*
+
 ```{r summary-evasion, results = T}
 
 df <- subset(norway, survey == "N112_2004")
@@ -1765,15 +2032,20 @@ summary_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm
 
 df <- nlss %>% filter(nation == "Sweden") 
 
-summary_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T))
+summary_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
-summary_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T))
+summary_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Sweden", pH > 5.4, TA > 0) 
+
+summary_swepH_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
 
 df <- nlss %>% filter(nation == "Finland") 
 
-summary_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T))
+summary_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
-summary_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T))
+summary_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
 summary.df <- rbind(summary_n112, summary_cba, summary_nlss_ta, summary_sweden_1995_ta, summary_finland_1995_ta, summary_norway_1995_ta, summary_snorway_1995_ta, summary_nlss_toc, summary_sweden_1995_toc, summary_finland_1995_toc, summary_norway_1995_toc, summary_snorway_1995_toc) %>% as.data.frame()
 
@@ -1781,7 +2053,7 @@ rownames(summary.df) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", 
 
 colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
 
-knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T, font_size = 11) %>% 
+knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T, font_size = 14) %>% 
   group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
   group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
   group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
@@ -1802,10 +2074,8 @@ map1 <- ggplot()+
   scale_color_manual(values = c("firebrick","dodgerblue4"))+
   scale_shape_manual(values = c(1,16))+
   #scale_size(range = c(1,6))+
-  theme_void(base_size = 15)
-```
-
-```{r map-ECO2-norway}
+  theme_void(base_size = 15)+
+  theme(legend.position = "right")
 
 map2 <- ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "white")+xlim(4,13)+ylim(58,63)+
@@ -1815,23 +2085,26 @@ map2 <- ggplot()+
   scale_color_manual(values = c("firebrick","dodgerblue4"))+
   scale_shape_manual(values = c(1,16))+
   #scale_size(range = c(1,6), breaks = c(1000,2000,3000,4000))+
-  theme_void(base_size = 15)
+  theme_void(base_size = 15)+
+  theme(legend.position = "right")
 ```
 
-```{r combine, fig.dim = c(16,8)}
-ggarrange(map1, map2, common.legend = T, ncol = 2)
+```{r combine, fig.dim = c(10,4)}
+ggarrange(map1, map2, common.legend = F, nrow = 2, labels = c("a)","b)"))
 ```
+
+*`r fig_nums("map-norway-compare","a) pCO2 in atm and b) CO2 evasion in gC/m2/day ")`*
 
 ## pCO2
 
-```{r map-CBA, fig.dim = c(8,4)}
+```{r map-CBA, fig.dim = c(10,5)}
 
 fCO2_lims <- c(min(log10(norway$fCO2*1e6)), max(log10(norway$fCO2*1e6)))
 
 cba_fCO2 <- ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
   geom_point(data = subset(norway, survey == "CBA_2019"), aes(x=long, y = lat, col = log10(fCO2*1e6),size = log10(fCO2*1e6)), shape = 16)+
-  labs(col = "fCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
+  labs(col = "pCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
   scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
   scale_size(range = c(0.5,3), limits = fCO2_lims)+
   guides(color = guide_legend())+
@@ -1841,23 +2114,26 @@ cba_fCO2 <- ggplot()+
 n112_fCO2 <- ggplot()+
   borders(region = c("Norway"), fill = "seashell2", col = "seashell2")+xlim(4,13)+ylim(58,63)+
   geom_point(data = subset(norway, survey == "N112_2004"), aes(x=long, y = lat, col = log10(fCO2*1e6),size = log10(fCO2*1e6)), shape = 16)+
-  labs(col = "fCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
+  labs(col = "pCO2 (uatm), log scale", size = "fCO2 (uatm), log scale") +
   scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8, limits = fCO2_lims)+
   scale_size(range = c(0.5,3), limits = fCO2_lims)+
   guides(color = guide_legend())+
   theme_void(base_size = 15)+
   theme(legend.position = "right")
 
-ggarrange(n112_fCO2,cba_fCO2, common.legend = T, ncol = 2, legend = "bottom")
+ggarrange(n112_fCO2,cba_fCO2, common.legend = F, ncol = 2, labels = c("a)","b)"))
 
 ```
+
+*`r fig_nums("map-pCO2-log","pCO2 in atm for a) N112 and b) CBA survey")`*
+
 
 ```{r map-nls-fCO2}
 
 ggplot()+
   borders(region = c("Norway", "Sweden","Finland"), fill = "seashell2", col = "seashell2")+xlim(4,35)+ylim(55,72)+
   geom_point(data = nlss, aes(x=long, y = lat, col = log10(pCO2_toc*1e6)), shape = 16, size = 1)+
-  labs(col = "fCO2 (uatm), \nlog scale") +
+  labs(col = "pCO2 (uatm), \nlog scale") +
   scale_color_continuous_sequential(rev = F, palette = "OrRd", end = 0.8)+
 #  scale_size(range = c(0.5,2), breaks = c(2,3,4,5))+
   guides(color = guide_legend())+
@@ -1865,6 +2141,7 @@ ggplot()+
   theme(legend.position = "right")
 
 ```
+*`r fig_nums("map-pCO2-log","pCO2 in log scale for the Northern Lake Survey")`*
 
 ## ECO2
 
@@ -1893,9 +2170,10 @@ n112_ECO2 <- ggplot()+
   theme_void(base_size = 15)+
   theme(legend.position = "right")
 
-ggarrange(n112_ECO2,cba_ECO2, common.legend = T, ncol = 2, legend = "top")
+ggarrange(n112_ECO2,cba_ECO2, common.legend = T, ncol = 2, legend = "top", labels = c("a)","b)"))
 
 ```
+*`r fig_nums("map-ECO2-norway","Evasion rate of CO2 for a) N112 and b) CBA survey, in gC/m2/day")`*
 
 ```{r map-nls-ECO2}
 
@@ -1910,23 +2188,25 @@ nls_ECO2 <- ggplot()+
   theme(legend.position = "right")
 
 print(nls_ECO2)
-
 ```
+
+*`r fig_nums("map-ECO2-nls","Evasion rate of CO2 for the Northern Lakes Survey in gC/m2/day")`*
 
 ```{r figure-maps, fig.dim = c(8,8)}
 cba_ECO2 <- cba_ECO2 + theme(legend.position = "")
 n112_ECO2 <- n112_ECO2 + theme(legend.position = "")
 nls_ECO2 <- nls_ECO2 + theme(legend.position = "bottom")
-ggarrange(ggarrange(n112_ECO2,cba_ECO2, ncol = 2, labels = c("a) N112, 2004", "b) CBA, 2019")), nls_ECO2, nrow = 2, heights = c(2,3), labels =  c("", "c) NLS, 1995"))
+ggarrange(ggarrange(n112_ECO2,cba_ECO2, ncol = 2, labels = c("a) N112, 2004", "b) CBA, 2019")), nls_ECO2, nrow = 2, heights = c(2,4), labels =  c("", "c) NLS, 1995"))
 
 ```
+
+*`r fig_nums("map-ECO2-full","Evasion rate of CO2 for a) N112, b) CBA and c) NLS survey, in gC/m2/day")`*
 
 ## South Norway
 
 ```{r map-norway-1995}
 
 df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
-
 
 fCO2_lims <- c(min(log10(norway$fCO2*1e6)), max(log10(norway$fCO2*1e6)))
 
@@ -1956,11 +2236,17 @@ n1995_ECO2 <- ggplot()+
 
 ```
 
-```{r map-compare, fig.dim = c(12,4)}
+```{r map-compare-pCO2, fig.dim = c(12,4)}
 ggarrange(n1995_fCO2, n112_fCO2, cba_fCO2, labels = c("1995","2004","2019"), common.legend = T, ncol = 3, legend = "bottom")
+```
 
+*`r fig_nums("pCO2-south-norway","Maps of pCO2 in South Norway, in 1995 (NLS), 2004 (N112 survey) and 2019 (CBA survey)")`*
+
+```{r map-compare-ECO2, fig.dim = c(12,4) }
 ggarrange(n1995_ECO2, n112_ECO2,cba_ECO2, labels = c("1995","2004","2019"), common.legend = T, ncol = 3, legend = "bottom")
 ```
+
+*`r fig_nums("ECO2-south-norway","Maps of ECO2 in South Norway, in 1995 (NLS), 2004 (N112 survey) and 2019 (CBA survey)")`*
 
 `r knitr::knit_exit()`
 
