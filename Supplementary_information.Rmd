@@ -296,6 +296,7 @@ kable(dic.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 norway$DIC_pred <- fitted(dic.ta)
 norway$DIC_pred_res <- residuals(dic.ta)
 dic.ta.r2 <- with(summary(dic.ta), 1 - deviance/null.deviance) %>% round(2)
+dic.ta.aic <- AIC(dic.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -349,6 +350,7 @@ kable(pco2.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 norway$pCO2_pred <- fitted(pco2.ta)
 norway$pCO2_pred_res <- residuals(pco2.ta)
 pco2.ta.r2 <- with(summary(pco2.ta), 1 - deviance/null.deviance) %>% round(2)
+pco2.ta.aic <- AIC(pco2.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   
   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
@@ -403,6 +405,7 @@ kable(dic.invTA.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered
 norway$DIC_pred <- fitted(dic.invTA)
 norway$DIC_pred_res <- residuals(dic.invTA)
 dic.invTA.r2 <- with(summary(dic.invTA), 1 - deviance/null.deviance) %>% round(2)
+dic.invTA.aic <- AIC(dic.invTA)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -459,6 +462,7 @@ kable(pco2.invTA.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordere
 norway$pCO2_pred <- fitted(pco2.invTA)
 norway$pCO2_pred_res <- residuals(pco2.invTA)
 pco2.invTA.r2 <- with(summary(pco2.invTA), 1 - deviance/null.deviance) %>% round(2)
+pco2.invTA.aic <- AIC(pco2.invTA)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   
   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
@@ -512,6 +516,7 @@ kable(dic.toc.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
 norway$DIC_pred <- fitted(dic.toc)
 norway$DIC_pred_res <- residuals(dic.toc)
 dic.toc.r2 <- with(summary(dic.toc), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.aic <- AIC(dic.toc)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -567,6 +572,7 @@ kable(pco2.toc.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered"
 norway$pCO2_pred <- fitted(pco2.toc)
 norway$pCO2_pred_res <- residuals(pco2.toc)
 pco2.toc.r2 <- with(summary(pco2.toc), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.aic <- AIC(pco2.toc)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -630,6 +636,7 @@ kable(dic.toc.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordere
 norway$DIC_pred <- fitted(dic.toc.ta)
 norway$DIC_pred_res <- residuals(dic.toc.ta)
 dic.toc.ta.r2 <- with(summary(dic.toc.ta), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.ta.aic <- AIC(dic.toc.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -684,6 +691,7 @@ kable(pco2.toc.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "border
 norway$pCO2_pred <- fitted(pco2.toc.ta)
 norway$pCO2_pred_res <- residuals(pco2.toc.ta)
 pco2.toc.ta.r2 <- with(summary(pco2.toc.ta), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.ta.aic <- AIC(pco2.toc.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -735,6 +743,7 @@ kable(dic.tocta.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bo
 norway$DIC_pred <- fitted(dic.tocta.Hplus)
 norway$DIC_pred_res <- residuals(dic.tocta.Hplus)
 dic.tocta.Hplus.r2 <- with(summary(dic.tocta.Hplus), 1 - deviance/null.deviance) %>% round(2)
+dic.tocta.Hplus.aic <- AIC(dic.tocta.Hplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -789,6 +798,7 @@ kable(pco2.tocta.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "b
 norway$pCO2_pred <- fitted(pco2.tocta.Hplus)
 norway$pCO2_pred_res <- residuals(pco2.tocta.Hplus)
 pco2.tocta.Hplus.r2 <- with(summary(pco2.tocta.Hplus), 1 - deviance/null.deviance) %>% round(2)
+pco2.tocta.Hplus.aic <- AIC(pco2.tocta.Hplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -840,6 +850,7 @@ kable(dic.toc.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bord
 norway$DIC_pred <- fitted(dic.toc.Hplus)
 norway$DIC_pred_res <- residuals(dic.toc.Hplus)
 dic.toc.Hplus.r2 <- with(summary(dic.toc.Hplus), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.Hplus.aic <- AIC(dic.toc.Hplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -894,6 +905,7 @@ kable(pco2.toc.Hplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bor
 norway$pCO2_pred <- fitted(pco2.toc.Hplus)
 norway$pCO2_pred_res <- residuals(pco2.toc.Hplus)
 pco2.toc.Hplus.r2 <- with(summary(pco2.toc.Hplus), 1 - deviance/null.deviance) %>% round(2)
+pCO2.toc.Hplus.aic <- AIC(pco2.toc.Hplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -945,6 +957,7 @@ kable(dic.tocta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered
 norway$DIC_pred <- fitted(dic.tocta)
 norway$DIC_pred_res <- residuals(dic.tocta)
 dic.tocta.r2 <- with(summary(dic.tocta), 1 - deviance/null.deviance) %>% round(2)
+dic.tocta.aic <- AIC(dic.tocta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -999,6 +1012,7 @@ kable(pco2.tocta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordere
 norway$pCO2_pred <- fitted(pco2.tocta)
 norway$pCO2_pred_res <- residuals(pco2.tocta)
 pco2.tocta.r2 <- with(summary(pco2.tocta), 1 - deviance/null.deviance) %>% round(2)
+pco2.tocta.aic <- AIC(pco2.tocta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1051,6 +1065,7 @@ kable(dic.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "border
 norway$DIC_pred <- fitted(dic.taHplus)
 norway$DIC_pred_res <- residuals(dic.taHplus)
 dic.taHplus.r2 <- with(summary(dic.taHplus), 1 - deviance/null.deviance) %>% round(2)
+dic.taHplus.aic <- AIC(dic.taHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1105,6 +1120,7 @@ kable(pco2.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "borde
 norway$pCO2_pred <- fitted(pco2.taHplus)
 norway$pCO2_pred_res <- residuals(pco2.taHplus)
 pco2.taHplus.r2 <- with(summary(pco2.taHplus), 1 - deviance/null.deviance) %>% round(2)
+pco2.taHplus.aic <- AIC(pco2.taHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1159,6 +1175,7 @@ kable(dic.TOCHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "borde
 norway$DIC_pred <- fitted(dic.TOCHplus)
 norway$DIC_pred_res <- residuals(dic.TOCHplus)
 dic.TOCHplus.r2 <- with(summary(dic.TOCHplus), 1 - deviance/null.deviance) %>% round(2)
+dic.TOCHplus.aic <- AIC(dic.TOCHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1213,6 +1230,7 @@ kable(pco2.TOCHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bord
 norway$pCO2_pred <- fitted(pco2.TOCHplus)
 norway$pCO2_pred_res <- residuals(pco2.TOCHplus)
 pco2.TOCHplus.r2 <- with(summary(pco2.TOCHplus), 1 - deviance/null.deviance) %>% round(2)
+pco2.TOCHplus.aic <- AIC(pco2.TOCHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1266,6 +1284,7 @@ kable(dic.tocHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "bo
 norway$DIC_pred <- fitted(dic.tocHplus.ta)
 norway$DIC_pred_res <- residuals(dic.tocHplus.ta)
 dic.tocHplus.ta.r2 <- with(summary(dic.tocHplus.ta), 1 - deviance/null.deviance) %>% round(2)
+dic.tocHplus.ta.aic <- AIC(dic.tocHplus.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1320,6 +1339,7 @@ kable(pco2.tocHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = "b
 norway$pCO2_pred <- fitted(pco2.tocHplus.ta)
 norway$pCO2_pred_res <- residuals(pco2.tocHplus.ta)
 pco2.tocHplus.ta.r2 <- with(summary(pco2.tocHplus.ta), 1- deviance/null.deviance) %>% round(2)
+pco2.tocHplus.ta.aic <- AIC(pco2.tocHplus.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1371,6 +1391,7 @@ kable(dic.toc.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "bo
 norway$DIC_pred <- fitted(dic.toc.taHplus)
 norway$DIC_pred_res <- residuals(dic.toc.taHplus)
 dic.toc.taHplus.r2 <- with(summary(dic.toc.taHplus), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.taHplus.aic <- AIC(dic.toc.taHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1426,6 +1447,7 @@ kable(pco2.toc.taHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = "b
 norway$pCO2_pred <- fitted(pco2.toc.taHplus)
 norway$pCO2_pred_res <- residuals(pco2.toc.taHplus)
 pco2.toc.taHplus.r2 <- with(summary(pco2.toc.taHplus), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.taHplus.aic <- AIC(pco2.toc.taHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1481,6 +1503,7 @@ kable(dic.toc.tainvHplus.sum, digits = 2) %>% kable_styling(bootstrap_options = 
 norway$DIC_pred <- fitted(dic.toc.tainvHplus)
 norway$DIC_pred_res <- residuals(dic.toc.tainvHplus)
 dic.toc.tainvHplus.r2 <- with(summary(dic.toc.tainvHplus), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.tainvHplus.aic <- AIC(dic.toc.tainvHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1537,6 +1560,7 @@ kable(pco2.toc.tainvHplus.sum, digits = 2) %>% kable_styling(bootstrap_options =
 norway$pCO2_pred <- fitted(pco2.toc.tainvHplus)
 norway$pCO2_pred_res <- residuals(pco2.toc.tainvHplus)
 pco2.toc.tainvHplus.r2 <- with(summary(pco2.toc.tainvHplus), 1 - deviance / null.deviance) %>% round(2)
+pco2.toc.tainvHplus.aic <- AIC(pco2.toc.tainvHplus)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1593,6 +1617,7 @@ kable(dic.tocinvHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options = 
 norway$DIC_pred <- fitted(dic.tocinvHplus.ta)
 norway$DIC_pred_res <- residuals(dic.tocinvHplus.ta)
 dic.tocinvHplus.ta.r2 <- with(summary(dic.tocinvHplus.ta), 1 - deviance/null.deviance) %>% round(2)
+dic.tocinvHplus.ta.aic <- AIC(dic.tocinvHplus.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
   geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
@@ -1651,6 +1676,7 @@ kable(pco2.tocinvHplus.ta.sum, digits = 2) %>% kable_styling(bootstrap_options =
 norway$pCO2_pred <- fitted(pco2.tocinvHplus.ta)
 norway$pCO2_pred_res <- residuals(pco2.tocinvHplus.ta)
 pco2.tocinvHplus.ta.r2 <- with(summary(pco2.tocinvHplus.ta), 1 - deviance/null.deviance) %>% round(2)
+pco2.tocinvHplus.ta.aic <- AIC(pco2.tocinvHplus.ta)
 
 g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
@@ -1708,18 +1734,29 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 "TA/Hplus + TOC",
                                 "TA + TOC/Hplus"),
                         R2 = c(pco2.ta.r2,
-                               pco2.invTA.r2,
-                                 pco2.toc.r2,
-                                 pco2.toc.ta.r2,
-                               pco2.tocta.r2,
-                                 pco2.taHplus.r2,
-                               pco2.TOCHplus.r2,
-                                 pco2.toc.taHplus.r2,
-                                 pco2.tocHplus.ta.r2,
-                                 pco2.toc.tainvHplus.r2,
-                                 pco2.tocinvHplus.ta.r2),
+                              pco2.invTA.r2,
+                              pco2.toc.r2,
+                              pco2.toc.ta.r2,
+                              pco2.tocta.r2,
+                              pco2.taHplus.r2,
+                              pco2.TOCHplus.r2,
+                              pco2.toc.taHplus.r2,
+                              pco2.tocHplus.ta.r2,
+                              pco2.toc.tainvHplus.r2,
+                              pco2.tocinvHplus.ta.r2),
+                       AIC = c(pco2.ta.aic,
+                              pco2.invTA.aic,
+                              pco2.toc.aic,
+                              pco2.toc.ta.aic,
+                              pco2.tocta.aic,
+                              pco2.taHplus.aic,
+                              pco2.TOCHplus.aic,
+                              pco2.toc.taHplus.aic,
+                              pco2.tocHplus.ta.aic,
+                              pco2.toc.tainvHplus.aic,
+                              pco2.tocinvHplus.ta.aic),
                         significant  = c(pco2.ta.sp,
-                                         pco2.invTA.sp,
+                                 pco2.invTA.sp,
                                  pco2.toc.sp,
                                  pco2.toc.ta.sp,
                                  pco2.tocta.sp,
@@ -1730,7 +1767,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                  pco2.toc.tainvHplus.sp,
                                  pco2.tocinvHplus.ta.sp)),
                 data.frame(R2 = c(dic.ta.r2,
-                                  dic.invTA.r2,
+                                dic.invTA.r2,
                                 dic.toc.r2,
                                 dic.toc.ta.r2,
                                 dic.tocta.r2,
@@ -1740,8 +1777,19 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 dic.tocHplus.ta.r2,
                                 dic.toc.tainvHplus.r2,
                                 dic.tocinvHplus.ta.r2),
+                           AIC = c(dic.ta.aic,
+                                dic.invTA.aic,
+                                dic.toc.aic,
+                                dic.toc.ta.aic,
+                                dic.tocta.aic,
+                                dic.taHplus.aic,
+                                dic.TOCHplus.aic,
+                                dic.toc.taHplus.aic,
+                                dic.tocHplus.ta.aic,
+                                dic.toc.tainvHplus.aic,
+                                dic.tocinvHplus.ta.aic),
                       significant  = c(dic.ta.sp,
-                                       dic.invTA.sp,
+                                dic.invTA.sp,
                                 dic.toc.sp,
                                 dic.toc.ta.sp,
                                 dic.tocta.sp,
@@ -1752,7 +1800,7 @@ kable(cbind(data.frame(Predictors = c("TA",
                                 dic.toc.tainvHplus.sp,
                                 dic.tocinvHplus.ta.sp))),
              digits = 2) %>% 
-  add_header_above(c(" "= 1, "pCO2" = 2, "DIC" = 2),italic = T) %>%
+  add_header_above(c(" "= 1, "pCO2" = 3, "DIC" = 3),italic = T) %>%
   column_spec(column = c(2,4), bold = T) %>% 
   kable_styling(bootstrap_options = "bordered")
 ```
@@ -1885,9 +1933,11 @@ $$k_{600} = 2.51 + 1.48 \times U_{10} + 0.39 \times U_{10} \times log_{10} (A_{l
 
 with $k_600$ in $cm/h$, $A$ in km2 and $U_{10}$ in m/s
 
-$k_{CO_2}$ has to be adjusted for temperature. @Vachon2020:
+$k_{CO_2}$ has to be adjusted for temperature. @Crusius2003:
 
-$$k_{600} = k_{CO_2}\times \left( \frac{600}{Sc_{CO_2}} \right) ^{-n}$$ The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
+$$k_{600} = k_{CO_2}\times \left( \frac{600}{Sc_{CO_2}} \right) ^{-n}$$
+
+The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
 
 ## Compute ECO2
 
@@ -1907,9 +1957,9 @@ for(i in 1:length(norway$n)){
 } # adjusted n from Vachon
 
 
-norway$k600 <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake.area already in km2
+norway$k600 <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake.area already in km2, in cm/h
                     
-norway$kCO2 <- with(norway, k600*(600/Sc)^n) #m/day
+norway$kCO2 <- with(norway, k600*(600/Sc)^(n))*24*1e-2 # from cm/h to m/day
 
 norway$FCO2 <- with(norway, lake.area*1e6*kCO2*((fCO2 - fCO2.atm)*K0*1e3)) #-> lake.area in m2, dCO2 in mol/m3, k in m/day -> mol/day. K0 is in mol/L <- mol/1e-3 m3
 
@@ -1938,7 +1988,7 @@ for(i in 1:length(nlss$n)){
 
 nlss$k600 <- with(nlss, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake area in km2
                     
-nlss$kCO2 <- with(nlss, k600*(600/Sc)^n)
+nlss$kCO2 <- with(nlss, k600*(600/Sc)^(n))*24*1e-2
 ```
 
 ```{r evasion-calculated-toc}
@@ -1965,19 +2015,25 @@ nlss$mgC.m2.day_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011 * 1e3) 
 ## Compare with @Weyhenmeyer2015
 
 ```{r compare-weyhenmeyer}
-kCO2 <- filter(nlss, nation == "Sweden")$kCO2 %>% median(na.rm = T)
 K0 <- filter(nlss, nation == "Sweden")$K0 %>% median()
 K1 <- filter(nlss, nation == "Sweden")$K1 %>% median()
 K2 <- filter(nlss, nation == "Sweden")$K2 %>% median()
+Sc <- filter(nlss, nation == "Sweden")$Sc %>% median()
+kCO2 <- filter(nlss, nation == "Sweden")$kCO2 %>% median()
 
 pCO2_10.5 <- fCO2.atm.1995 + 1.05709*(10.5/12.011*1e-3) #pCO2 for a lake with a concentration of 10.5 mg/L TOC
 ECO2_10.5 <- kCO2*(pCO2_10.5-fCO2.atm.1995)*K0*1e3*12.011 #ECO2 in g/m2/day
+
+pCO2_atm <- 360.17 * 1e-6
 
 print(ECO2_10.5)
 
 filter(nlss, nation == "Sweden")$k600 %>% median(na.rm = T) # 7.43 cm/h
 filter(nlss, nation == "Sweden")$k600 %>% mean(na.rm = T) # 7.56 cm/h
 # median in Weyhenmeyer: < 0.61m/day -> 2.54 cm/h
+
+filter(nlss, nation == "Sweden")$kCO2 %>% median(na.rm = T) # 7.43 cm/h
+filter(nlss, nation == "Sweden")$kCO2 %>% mean(na.rm = T) # 7.56 cm/h
 
 
 wHplus <- 10^(-6.6) # median pH in W: 6.6
@@ -1986,19 +2042,79 @@ pCO2_b <- (2/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
 pCO2_c <- (4.9/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
 pCO2_d <- (4.4/12.011*1e-3)/(K0+K0*K1/wHplus+K0*K1*K2/(wHplus^2))
 
-ECO2_a <- kCO2*(pCO2_a-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
-ECO2_b <- kCO2*(pCO2_b-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
-ECO2_c <- kCO2*(pCO2_c-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
-ECO2_d <- kCO2*(pCO2_d-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+pCO2_a_pred <- pCO2_atm + 1.1 * (5 / 12.011*1e-3) # DOC in lakes a converted to mol/L
+pCO2_b_pred <- pCO2_atm + 1.1 * (4 / 12.011*1e-3) # DOC in lakes a converted to mol/L
+pCO2_c_pred <- pCO2_atm + 1.1 * (15 / 12.011*1e-3) # DOC in lakes a converted to mol/L
+pCO2_d_pred <- pCO2_atm + 1.1 * (10 / 12.011*1e-3) # DOC in lakes a converted to mol/L
 
-kable(data.frame(lake_type = c("a","b","c","d"), median_DIC_mg.L = c(2.5,2,4.9,4.4), pCO2_atm = c(pCO2_a,pCO2_b,pCO2_c,pCO2_d), ECO2_mgC.m2.day = c(ECO2_a, ECO2_b, ECO2_c, ECO2_d))) %>% kable_styling(bootstrap_options = "bordered" )
+k600_a <- 2.51+1.48*3.5+0.39*3.5*log10(0.11) # in cm/h
+kCO2_a <- k600_a*(600/Sc)^(2/3)*24*1e-2 # from cm/h to m/day
+k600_b <- 2.51+1.48*3.5+0.39*3.5*log10(0.51) # in cm/h
+kCO2_b <- k600_b*(600/Sc)^(2/3)*24*1e-2 # from cm/h to m/day
+k600_c <- 2.51+1.48*3.5+0.39*3.5*log10(0.14) # in cm/h
+kCO2_c <- k600_c*(600/Sc)^(2/3)*24*1e-2 # from cm/h to m/day
+k600_d <- 2.51+1.48*3.5+0.39*3.5*log10(0.38) # in cm/h
+kCO2_d <- k600_d*(600/Sc)^(2/3)*24*1e-2 # from cm/h to m/day
+
+ECO2_a <- kCO2_a*(pCO2_a_pred-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_b <- kCO2_b*(pCO2_b_pred-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_c <- kCO2_c*(pCO2_c_pred-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+ECO2_d <- kCO2_d*(pCO2_d_pred-fCO2.atm.1995)*K0*1e6*12.011 #ECO2 in mg/m2/day
+
+kable(data.frame(lake_type = c("a","b","c","d"), median_DIC_mg.L = c(2.5,2,4.9,4.4), pCO2_DIC = c(pCO2_a,pCO2_b,pCO2_c,pCO2_d)*1e6, pCO2_pred = c(pCO2_a_pred,pCO2_b_pred,pCO2_c_pred,pCO2_d_pred)*1e6, ECO2_mgC.m2.day = c(ECO2_a, ECO2_b, ECO2_c, ECO2_d), ECO2_weyhemeyer = c(402, 418, 910, 753))) %>% kable_styling(bootstrap_options = "bordered")
 ```
 
 *`r tab_nums("weyhenmeyer","ECO2 calculated from median DIC values from @Weyhenmeyer2015, following the same process as in our article")`*
 
+## Compare with @Lindroth2021
 
+Surface of inland water from @SCB. All numbers converted to MtCO2/year
+
+```{r tranvik-sweden}
+inland.waters <- 4014169.92 * 1e4 # ha to m2, @SCB
+mean.emissions.swe.toc <- nlss %>% filter(nation == "Sweden") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
+mean.emissions.swe.ta <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0) %>% pull(ECO2_ta) %>% mean(na.rm = T) 
+
+data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.swe.toc /12.011 * 43.99* 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "ECO2 from TA" = (inland.waters * mean.emissions.swe.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters * mean.emissions.swe.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 36.9 * 100, #@SEPA2022
+            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc * lake.area*1e6 /12 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
+           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Sweden"), lake.area*1e6))*inland.waters) %>% t()
+           
+
+```
+
+
+```{r tranvik-norway}
+inland.waters <- 20221 * 1e6 # km2 to m2, @SSB
+mean.emissions.nor.toc <- nlss %>% filter(nation == "Norway") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
+mean.emissions.nor.ta <- nlss %>% filter(nation == "Norway") %>% pull(ECO2_ta) %>% mean(na.rm = T) 
+
+
+data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.nor.toc /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "ECO2 from TA" = (inland.waters * mean.emissions.nor.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters * mean.emissions.nor.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 38.7 * 100, # @Bjøness2020
+            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Norway"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
+           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Norway"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Norway"), lake.area*1e6))*inland.waters) %>% t()
+
+
+```
+
+```{r tranvik-finland}
+inland.waters <- 34515 * 1e6 # km2 to m2, @Statfi
+mean.emissions.fin.toc <- nlss %>% filter(nation == "Finland") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
+mean.emissions.fin.ta <- nlss %>% filter(nation == "Finland") %>% pull(ECO2_ta) %>% mean(na.rm = T) 
+
+data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.fin.toc /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "ECO2 from TA" = (inland.waters * mean.emissions.fin.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters * mean.emissions.fin.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 58.4 * 100, # @Forsell2022
+            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Finland"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
+           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Finland"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Finland"), lake.area*1e6))*inland.waters) %>% t()
+```
 
 ## Summary table
+
+For pCO2 calculated with TA: remove all values inferior to 0 as it is impossible. (Values coming from the approximation that TA ~ DIC, but TA can be negative at low pH). 
 
 *`r tab_nums("summary-eco2","Summary statistics for evasion rate of CO2: minimum, median, maximum, mean and standard deviation in gC/m2/day")`*
 
@@ -2008,9 +2124,17 @@ df <- subset(norway, survey == "N112_2004")
 
 summary_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
 
+df <- subset(norway, survey == "N112_2004" & ta_fCO2 >= 0)
+
+summary2_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
 df <- subset(norway, survey == "CBA_2019")
 
 summary_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df2 <- subset(norway, survey == "CBA_2019" & ta_fCO2 >= 0)
+
+summary2_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
 
 df <- nlss
 
@@ -2018,11 +2142,23 @@ summary_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T
 
 summary_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
 
+df <- nlss %>% filter(pCO2_ta >= 0)
+
+summary2_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
 df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
 
 summary_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
 summary_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0) %>% filter(lat < 63)
+
+summary2_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
 
 df <- nlss %>% filter(nation == "Norway")
 
@@ -2030,16 +2166,23 @@ summary_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na
 
 summary_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
 
+df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0)
+
+summary2_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
 df <- nlss %>% filter(nation == "Sweden") 
 
 summary_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
 summary_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
-df <- nlss %>% filter(nation == "Sweden", pH > 5.4, TA > 0) 
+df <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0) 
 
-summary_swepH_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+summary2_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
+summary2_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
 df <- nlss %>% filter(nation == "Finland") 
 
@@ -2047,13 +2190,32 @@ summary_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, n
 
 summary_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
 
+df <- nlss %>% filter(nation == "Finland" & pCO2_ta >= 0) 
+
+summary2_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
 summary.df <- rbind(summary_n112, summary_cba, summary_nlss_ta, summary_sweden_1995_ta, summary_finland_1995_ta, summary_norway_1995_ta, summary_snorway_1995_ta, summary_nlss_toc, summary_sweden_1995_toc, summary_finland_1995_toc, summary_norway_1995_toc, summary_snorway_1995_toc) %>% as.data.frame()
 
 rownames(summary.df) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
 
 colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
 
-knitr::kable(summary.df, digits = 2) %>% kable_styling(full_width= T, font_size = 14) %>% 
+knitr::kable(summary.df, digits = 2, caption = "All pCO2") %>% kable_styling(full_width= T, font_size = 14) %>% 
+  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  column_spec(column = c(3,5), bold = T) 
+
+
+summary.df2 <- rbind(summary2_n112, summary2_cba, summary2_nlss_ta, summary2_sweden_1995_ta, summary2_finland_1995_ta, summary2_norway_1995_ta, summary2_snorway_1995_ta, summary2_nlss_toc, summary2_sweden_1995_toc, summary2_finland_1995_toc, summary2_norway_1995_toc, summary2_snorway_1995_toc) %>% as.data.frame()
+
+rownames(summary.df2) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
+
+colnames(summary.df2) <- c("Min", "Median","Max","Mean","Sd")
+
+knitr::kable(summary.df2, digits = 2, caption = "Excluding pCO2_ta < 0") %>% kable_styling(full_width= T, font_size = 14) %>% 
   group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
   group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
   group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
