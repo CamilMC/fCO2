@@ -1942,6 +1942,7 @@ The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
 ## Compute ECO2
 
 ```{r norway-schmidt}
+norway$pCO2_pred <- predict(pco2.toc, newdata = norway)
 
 norway$Sc <- with(norway, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
 
@@ -1961,11 +1962,22 @@ norway$k600 <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # l
                     
 norway$kCO2 <- with(norway, k600*(600/Sc)^(n))*24*1e-2 # from cm/h to m/day
 
-norway$FCO2 <- with(norway, lake.area*1e6*kCO2*((fCO2 - fCO2.atm)*K0*1e3)) #-> lake.area in m2, dCO2 in mol/m3, k in m/day -> mol/day. K0 is in mol/L <- mol/1e-3 m3
+norway$k600_low <- with(norway, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
+                    
+norway$kCO2_low <- with(norway, k600_low*(600/Sc)^(n))*24*1e-2
 
 norway$ECO2 <- with(norway, kCO2*(fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
-norway$mgC.m2.day <- with(norway, kCO2*(fCO2-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
+norway$ECO2_low <- with(norway, kCO2_low*(fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+norway$ECO2_toc <- with(norway, kCO2*(pCO2_pred-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+norway$ECO2_toc_low <- with(norway, kCO2_low*(pCO2_pred-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+
+norway$ECO2_ta <- with(norway, kCO2*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+norway$ECO2_ta_low <- with(norway, kCO2_low*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
 
 ```
@@ -1989,32 +2001,364 @@ for(i in 1:length(nlss$n)){
 nlss$k600 <- with(nlss, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake area in km2
                     
 nlss$kCO2 <- with(nlss, k600*(600/Sc)^(n))*24*1e-2
-```
 
-```{r evasion-calculated-toc}
-
-nlss$FCO2_toc <- with(nlss, lake.area*1e6*kCO2*((pCO2_toc - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
+nlss$k600_low <- with(nlss, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
+nlss$kCO2_low <- with(nlss, k600_low*(600/Sc)^(n))*24*1e-2
 
 nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
-
-nlss$mgC.m2.day_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
-
-```
-
-```{r evasion-calculated-ta}
-
-nlss$FCO2_ta <- with(nlss, lake.area*1e6*kCO2*((pCO2_ta - fCO2.atm)*K0*1e3)) #-> mol/day, lake.area in m2, dfCO2 in mol/day
+nlss$ECO2_toc_low <- with(nlss, kCO2_low*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011)
 
 nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
-
-nlss$mgC.m2.day_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011 * 1e3) # in mgC/m2/day
+nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
 ```
 
+```{r summary-eco2, results = T}
+no <- norway %>% 
+  dplyr::select(c("survey", "fCO2" , "ECO2", "ECO2_low")) 
+  
+summary_eco2 <- no %>% group_by(survey) %>% summarize_all(median, na.rm = T) 
+kable(summary_eco2, caption = "Median of all variables") %>% kable_styling()
+```
 
-## Compare with @Weyhenmeyer2015
+```{r summary-eco2-toc, results = T}
+no <- norway %>% 
+  dplyr::select(c("survey", "fCO2" ,"pCO2_pred", "ECO2_toc", "ECO2_toc_low")) %>% 
+  mutate(nation = "Norway") %>% 
+  setNames(c("survey","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low","nation"))  %>% 
+  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
 
-```{r compare-weyhenmeyer}
+fns <- nlss %>% as_data_frame() %>%
+  dplyr::select(c("nation", "pCO2_toc", "ECO2_toc", "ECO2_toc_low")) %>% 
+  mutate(fCO2 = NA, survey = "nls_1995") %>% 
+  setNames(c("nation","pCO2_toc","ECO2_high", "ECO2_low","measured_pCO2","survey")) %>% 
+  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
+
+summary_eco2 <- rbind(no,fns) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
+kable(summary_eco2, caption = "Median of all variables") %>% kable_styling()
+```
+
+```{r summary-eco2_ta, results = T}
+no <- norway %>% 
+  dplyr::select(c("survey", "pH", "fCO2", "ta_fCO2", "ECO2_ta", "ECO2_ta_low")) %>% 
+  mutate(nation = "Norway") %>% 
+  setNames(c("survey","pH","measured_pCO2","pCO2_ta","ECO2_high","ECO2_low","nation"))  %>%
+  dplyr::select(c("survey","nation","pH","measured_pCO2","pCO2_ta","ECO2_high","ECO2_low"))
+
+fns <- nlss %>% as_data_frame() %>%
+  dplyr::select(c("nation", "pH","pCO2_ta","ECO2_ta", "ECO2_ta_low")) %>% 
+  mutate(fCO2 = NA, survey = "nls_1995") %>% 
+  setNames(c("nation","pH","pCO2_ta","ECO2_high", "ECO2_low","measured_pCO2","survey")) %>% 
+  dplyr::select(c("survey","nation","pH","measured_pCO2","pCO2_ta","ECO2_high","ECO2_low"))
+
+summary_eco2_ta <- rbind(no,fns) %>% filter(pH > 5.4) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
+kable(summary_eco2_ta, caption = "Median of all variables, pH > 5.4") %>% kable_styling()
+
+nlss %>% filter(pH > 5.4) %>% pull(ECO2_ta) %>% median(na.rm = T)
+median(nlss$ECO2_toc, na.rm = T)
+nlss %>% filter(pH > 5.4) %>% pull(ECO2_ta_low) %>% median(na.rm = T)
+median(nlss$ECO2_toc_low, na.rm = T)
+```
+
+```{r summary_bin_toc}
+options(knitr.kable.NA = '')
+
+p0 <- median(nlss$pCO2_toc, na.rm = T)*1e6
+A0 <- sum(nlss$ake.area)
+k0 <- nlss$kCO2 %>% median(na.rm = T) 
+k0_low <- nlss$kCO2_low %>% median(na.rm = T)
+E0 <- median(nlss$ECO2_toc * 365, na.rm = T) # gC/m2/y
+E0_low <- median(nlss$ECO2_toc_low * 365, na.rm = T) # gC/m2/y
+
+F0_realsum <-  with(nlss, sum(ECO2_toc * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F0_sumfrommedian <- with(nlss, E0*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+F0_low_realsum <-  with(nlss, sum(ECO2_toc_low * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F0_low_sumfrommedian <- with(nlss, E0_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+# Lake size < 0.1 km2
+
+p1 <- nlss %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% median()*1e6
+A1 <- nlss %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
+
+k1 <- with(subset(nlss, lake.area < 0.1), median(kCO2, na.rm = T)) 
+E1 <- with(subset(nlss, lake.area < 0.1), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F1_realsum <- with(subset(nlss, lake.area < 0.1), sum(ECO2_toc * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F1_sumfrombin <- with(subset(nlss, lake.area < 0.1), E1*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+  
+k1_low <- with(subset(nlss, lake.area < 0.1), median(kCO2_low, na.rm = T)) 
+E1_low <- with(subset(nlss, lake.area < 0.1), median(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F1_low_realsum <- with(subset(nlss, lake.area < 0.1), sum(ECO2_toc_low * 365/12.011 * 43.99  * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F1_low_sumfrombin <- with(subset(nlss, lake.area < 0.1), E1_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+W1 <- 38.17*1e12/(208008*1e6) # gC/m2/year in Weyhenmeyer
+W1_sum <- with(subset(nlss, lake.area < 0.1), W1*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 0.1 < Lake size < 1 km2
+
+p2 <- nlss %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% median()*1e6
+
+k2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(kCO2, na.rm = T)) 
+E2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F2_realsum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), sum(ECO2_toc * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F2_sumfrombin <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), E2*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+k2_low <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(kCO2_low, na.rm = T)) 
+E2_low <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F2_low_realsum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), sum(ECO2_toc_low * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F2_low_sumfrombin <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), E2_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+
+W2 <- 52.36*1e12/(282434*1e6) # gC/m2/year in W
+W2_sum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), W2*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 1 < Lake size < 10 km2
+
+p3 <- nlss %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% median()*1e6
+
+k3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(kCO2, na.rm = T)) 
+E3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F3_realsum <- with(subset(nlss, lake.area > 1 & lake.area < 10), sum(ECO2_toc * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F3_sumfrombin <- with(subset(nlss, lake.area > 1 & lake.area < 10), E3*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+k3_low <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(kCO2_low, na.rm = T)) 
+E3_low <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F3_low_realsum <- with(subset(nlss, lake.area > 1 & lake.area < 10), sum(ECO2_toc_low * 365/12.011 * 43.99  * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F3_low_sumfrombin <- with(subset(nlss, lake.area > 1 & lake.area < 10), E3_low*sum(lake.area*1e6)/12.011 * 43.99  * 1e-12)
+
+
+W3 <- 22.80*1e12/(286624*1e6) # gC/m2/year in W
+W3_sum <- with(subset(nlss, lake.area > 1 & lake.area < 10), W3*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 1 < Lake size < 10 km2
+
+p4 <- nlss %>% subset(lake.area > 10) %>% pull(pCO2_toc) %>% median()*1e6
+
+k600_4 <- with(subset(nlss, lake.area > 10), median(k600*24*1e-2, na.rm = T))
+k600_4_low <- with(subset(nlss, lake.area > 10), median(k600_low*24*1e-2, na.rm = T))
+
+k4 <- with(subset(nlss, lake.area > 10), median(kCO2, na.rm = T)) 
+E4 <- with(subset(nlss, lake.area > 10), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F4_realsum <- with(subset(nlss, lake.area > 10), sum(ECO2_toc* 365*lake.area*1e6/12.011 * 43.99  * 1e-12, na.rm = T)) #MtCO2/y
+F4_sumfrombin <- with(subset(nlss, lake.area > 10), E4*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+
+k4_low <- with(subset(nlss, lake.area > 10), median(kCO2_low, na.rm = T)) 
+E4_low <- with(subset(nlss, lake.area > 10), median(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F4_low_realsum <- with(subset(nlss, lake.area > 10), sum(ECO2_toc_low* 365*lake.area*1e6/12.011 * 43.99  * 1e-12, na.rm = T)) #MtCO2/y
+F4_low_sumfrombin <- with(subset(nlss, lake.area > 10), E4_low*sum(lake.area*1e6)/12.011 * 43.99  * 1e-12)
+
+
+W4 <- 53.96*1e12/(570583*1e6) # gC/m2/year in W
+W4_sum <- with(subset(nlss, lake.area > 10), W4*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10","sum"," "), 
+           pCO2 = c(p1,p2,p3,p4,NA,p0), 
+           kCO2_low = c(k1_low,k2_low,k3_low,k4_low,NA,k0_low), 
+           E_low = c(E1_low,E2_low,E3_low,E4_low,NA,E0_low),
+           FCO2_low_bin = c(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin, sum(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin),F0_low_sumfrommedian),
+            FCO2_low = c(F1_low_realsum, F2_low_realsum, F3_low_realsum, F4_low_realsum,sum(F1_low_realsum,F2_low_realsum,F3_low_realsum,F4_low_realsum),F0_low_realsum),
+           kCO2_high = c(k1,k2,k3,k4, NA,K0),
+           E_high = c(E1,E2,E3,E4, NA,E0),
+           FCO2_high_bin = c(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin, sum(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin),F0_sumfrommedian),
+          FCO2_high = c(F1_realsum, F2_realsum, F3_realsum, F4_realsum, sum(F1_realsum, F2_realsum, F3_realsum, F4_realsum),F0_realsum),
+           Wey = c(W1,W2,W3,W4, NA,NA),
+           Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
+
+
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Weyhenmeyer" = 2)) %>%
+  group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
+  column_spec(column = c(5,6,9,10,12), bold = T)
+
+  
+
+# add a column for FCO2 from median ECO2
+```
+
+## Summary table
+
+For pCO2 calculated with TA: remove all values inferior to 0 as it is impossible. (Values coming from the approximation that TA ~ DIC, but TA can be negative at low pH). 
+
+*`r tab_nums("summary-eco2","Summary statistics for evasion rate of CO2: minimum, median, maximum, mean and standard deviation in gC/m2/day")`*
+
+```{r summary-evasion, results = T}
+
+df <- subset(norway, survey == "N112_2004")
+
+summary_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- subset(norway, survey == "N112_2004" & ta_fCO2 >= 0)
+
+summary2_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- subset(norway, survey == "N112_2004" & pH >= 5.4)
+
+summary3_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- subset(norway, survey == "CBA_2019")
+
+summary_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+df <- subset(norway, survey == "CBA_2019" & ta_fCO2 >= 0)
+
+summary2_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+
+df <- subset(norway, survey == "CBA_2019" & pH >= 5.4)
+
+summary3_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
+
+
+df <- nlss
+
+summary_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(pCO2_ta >= 0)
+
+summary2_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(pH > 5.4)
+
+summary3_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary3_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
+
+summary_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0) %>% filter(lat < 63)
+
+summary2_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway" & pH > 5.4) %>% filter(lat < 63)
+
+summary3_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary3_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway")
+
+summary_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0)
+
+summary2_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+df <- nlss %>% filter(nation == "Norway" & pH >= 5.4)
+
+summary3_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary3_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
+
+
+
+df <- nlss %>% filter(nation == "Sweden") 
+
+summary_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0) 
+
+summary2_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Sweden" & pH >= 5.4) 
+
+summary3_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary3_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Finland") 
+
+summary_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Finland" & pCO2_ta >= 0) 
+
+summary2_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary2_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+df <- nlss %>% filter(nation == "Finland" & pH >= 5.4) 
+
+summary3_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary3_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
+
+summary.df <- rbind(summary_n112, summary_cba, summary_nlss_ta, summary_sweden_1995_ta, summary_finland_1995_ta, summary_norway_1995_ta, summary_snorway_1995_ta, summary_nlss_toc, summary_sweden_1995_toc, summary_finland_1995_toc, summary_norway_1995_toc, summary_snorway_1995_toc) %>% as.data.frame()
+
+rownames(summary.df) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
+
+colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
+
+knitr::kable(summary.df, digits = 2, caption = "All pCO2") %>% kable_styling(full_width= T, font_size = 14) %>% 
+  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  column_spec(column = c(3,5), bold = T) 
+
+
+summary.df2 <- rbind(summary2_n112, summary2_cba, summary2_nlss_ta, summary2_sweden_1995_ta, summary2_finland_1995_ta, summary2_norway_1995_ta, summary2_snorway_1995_ta, summary2_nlss_toc, summary2_sweden_1995_toc, summary2_finland_1995_toc, summary2_norway_1995_toc, summary2_snorway_1995_toc) %>% as.data.frame()
+
+rownames(summary.df2) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
+
+colnames(summary.df2) <- c("Min", "Median","Max","Mean","Sd")
+
+knitr::kable(summary.df2, digits = 2, caption = "Excluding pCO2_ta < 0") %>% kable_styling(full_width= T, font_size = 14) %>% 
+  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  column_spec(column = c(3,5), bold = T) 
+
+summary.df3 <- rbind(summary3_n112, summary3_cba, summary3_nlss_ta, summary3_sweden_1995_ta, summary3_finland_1995_ta, summary3_norway_1995_ta, summary3_snorway_1995_ta, summary3_nlss_toc, summary2_sweden_1995_toc, summary2_finland_1995_toc, summary2_norway_1995_toc, summary2_snorway_1995_toc) %>% as.data.frame()
+
+rownames(summary.df3) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
+
+colnames(summary.df3) <- c("Min", "Median","Max","Mean","Sd")
+
+knitr::kable(summary.df3, digits = 2, caption = "Excluding pH < 5.4") %>% kable_styling(full_width= T, font_size = 14) %>% 
+  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  column_spec(column = c(3,5), bold = T) 
+```
+
+## Compare with @Creed2018
+
+Paper from Weyhenmeyer, in which the median pCO2 and CO2 evasion rates are compared. 
+
+```{r compare-weyhenmeyer, results = T}
 K0 <- filter(nlss, nation == "Sweden")$K0 %>% median()
 K1 <- filter(nlss, nation == "Sweden")$K1 %>% median()
 K2 <- filter(nlss, nation == "Sweden")$K2 %>% median()
@@ -2066,160 +2410,253 @@ kable(data.frame(lake_type = c("a","b","c","d"), median_DIC_mg.L = c(2.5,2,4.9,4
 
 *`r tab_nums("weyhenmeyer","ECO2 calculated from median DIC values from @Weyhenmeyer2015, following the same process as in our article")`*
 
+
 ## Compare with @Lindroth2021
 
-Surface of inland water from @SCB. All numbers converted to MtCO2/year
+All numbers converted to MtCO2/year
 
-```{r tranvik-sweden}
-inland.waters <- 4014169.92 * 1e4 # ha to m2, @SCB
-mean.emissions.swe.toc <- nlss %>% filter(nation == "Sweden") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
-mean.emissions.swe.ta <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0) %>% pull(ECO2_ta) %>% mean(na.rm = T) 
+```{r tranvik-norway, results = T}
+inland.waters.nor <- 20221 * 1e6 # km2 to m2, @SSB
+land <- 323806 * 1e6 # km2 to m2, @SSB
+mean.emissions.nor.toc <- nlss %>% filter(nation == "Norway") %>% pull(ECO2_toc) %>% median(na.rm = T)  #gC/m2/day
+mean.emissions.nor.ta <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0 & pH > 5.4) %>% pull(ECO2_ta) %>% median(na.rm = T) 
 
-data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.swe.toc /12.011 * 43.99* 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
-           "ECO2 from TA" = (inland.waters * mean.emissions.swe.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
-           "Percent of NIR" = (inland.waters * mean.emissions.swe.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 36.9 * 100, #@SEPA2022
-            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc * lake.area*1e6 /12 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
-           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Sweden"), lake.area*1e6))*inland.waters) %>% t()
-           
 
+data.frame("FCO2 from TOC" = (inland.waters.nor * mean.emissions.nor.toc /12.011 * 43.99 * 365 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year
+           "FCO2 from TA" = (inland.waters.nor * mean.emissions.nor.ta /12.011 * 43.99 * 365 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters.nor * mean.emissions.nor.toc /12.011 * 43.99 * 365 * 1e-12) / 38.7 * 100, # @Bjøness2020
+           "Percent area lakes included in survey" = sum(subset(nlss, nation == "Norway")$lake.area*1e6) / inland.waters.nor * 100,
+          "ECO2 per m2 land" = (inland.waters.nor * mean.emissions.nor.toc * 365 )/land # gC/m2 land/year
+           ) %>% t() %>% as.data.frame() %>% kable(digits = 2)
+```
+
+```{r tranvik-sweden, results = T}
+inland.waters.swe <- 4014169.92 * 1e4 # ha to m2, @SCB
+land <- 444435 * 1e6 # km2 to m2
+mean.emissions.swe.toc <- nlss %>% filter(nation == "Sweden") %>% pull(ECO2_toc) %>% median(na.rm = T) 
+mean.emissions.swe.ta <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0 & pH > 5.4) %>% pull(ECO2_ta) %>% median(na.rm = T) 
+
+low.eco2.toc.swe <- nlss %>% filter(nation == "Sweden") %>% pull(ECO2_toc_low) %>% median(na.rm = T) 
+low.eco2.ta.swe <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0 & pH > 5.4) %>% pull(ECO2_ta_low) %>% median(na.rm = T) 
+
+high <- data.frame("FCO2 from TOC" = (inland.waters.swe * mean.emissions.swe.toc /12.011 * 43.99 * 365 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "FCO2 from TA" = (inland.waters.swe * mean.emissions.swe.ta /12.011 * 43.99 * 365 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters.swe * mean.emissions.swe.toc /12.011 * 43.99 * 365 * 1e-12) / 36.9 * 100, #@SEPA2022
+            "FCO2 NLS" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc * lake.area*1e6 /12 * 43.99 * 364 * 1e-12), na.rm = T),
+           "Percent area lakes included in survey" = sum(subset(nlss, nation == "Sweden")$lake.area*1e6) / inland.waters.swe * 100,
+            "ECO2 per m2 land" = (inland.waters.swe * mean.emissions.swe.toc * 365)/land # gC/m2 land/year
+           ) %>% t() %>% as.data.frame() %>% setNames("High") 
+
+low <- data.frame("FCO2 from TOC" = (inland.waters.swe * low.eco2.toc.swe /12.011 * 43.99 * 365 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "FCO2 from TA" = (inland.waters.swe * low.eco2.ta.swe /12.011 * 43.99 * 365 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters.swe * low.eco2.toc.swe /12.011 * 43.99 * 365 * 1e-12) / 36.9 * 100, #@SEPA2022
+            "FCO2 NLS" = sum(with(filter(nlss, nation == "Sweden"), ECO2_toc_low * lake.area*1e6 /12 * 43.99 * 364 * 1e-12), na.rm = T),
+           "Percent area lakes included in survey" = sum(subset(nlss, nation == "Sweden")$lake.area*1e6) / inland.waters.swe * 100,
+            "ECO2 per m2 land" = (inland.waters.swe * low.eco2.toc.swe * 365)/land # gC/m2 land/year
+           ) %>% t() %>% as.data.frame() %>% setNames("Low")
+
+both <- cbind(high,low)
+
+kable(both, digits = 2) %>% kable_styling()
 ```
 
 
-```{r tranvik-norway}
+
+```{r tranvik-finland, results = T}
+inland.waters.fin <- 34515 * 1e6 # km2 to m2, @Statfi
+land <- 338478 * 1e6 # km2 to m2
+mean.emissions.fin.toc <- nlss %>% filter(nation == "Finland") %>% pull(ECO2_toc) %>% median(na.rm = T) 
+mean.emissions.fin.ta <- nlss %>% filter(nation == "Finland"& pCO2_ta >= 0 & pH > 5.4) %>% pull(ECO2_ta) %>% median(na.rm = T) 
+
+data.frame("FCO2 from TOC, MtCo2eq/y" = (inland.waters.fin * mean.emissions.fin.toc /12.011 * 43.99 * 365 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
+           "FCO2 from TA, MtCo2eq/y" = (inland.waters.fin * mean.emissions.fin.ta /12.011 * 43.99 * 365 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
+           "Percent of NIR" = (inland.waters.fin * mean.emissions.fin.toc /12.011 * 43.99 * 365 * 1e-12) / 58.4 * 100, # @Forsell2022
+            "FCO2 NLS MtCO2eq/y" = with(filter(nlss, nation == "Finland"), sum(ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 365 * 1e-12, na.rm = T)),
+            "Percent area lakes included in survey" = sum(subset(nlss, nation == "Finland")$lake.area*1e6) / inland.waters.fin*100,
+            "ECO2 per m2 land" = (inland.waters.fin * mean.emissions.fin.toc * 365 )/land # gC/m2 water / year * m2 water / m2 land ->  gC/m2 land/year
+           ) %>% t() %>% as.data.frame() %>% kable(digits = 2)
+```
+
+## Binned estimations
+
+```{r bin-area}
+nlss$log.lake.area <- nlss$lake.area %>% log10()
+cut(nlss$log.lake.area, breaks = 4) %>% unique()
+nlss$class.lake <- cut(nlss$log.lake.area, breaks = 4, labels = F)
+ggplot(nlss)+geom_point(aes(x = class.lake, y = log.lake.area))
+ggplot(nlss)+geom_point(aes(x = log.lake.area, y = pCO2_toc, col = as.factor(class.lake)))
+ggplot(nlss)+geom_point(aes(x = log.lake.area, y = ECO2_toc, col = as.factor(class.lake)))
+
+
+bin_nlss <- nlss %>% group_by(class.lake) %>% 
+  summarise(median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_toc)*1e6,
+            median_ECO2 = median(ECO2_toc, na.rm = T), 
+            actual_FCO2_Mt= sum(ECO2_toc*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
+
+bin_nlss <- dplyr::select(bin_nlss, c(class.lake, median_area, total_area, prop_area, median_pCO2,median_ECO2, bin_FCO2_Mt, actual_FCO2_Mt))
+
+sum_table <- c(0, median(nlss$lake.area), sum(nlss$lake.area), sum(bin_nlss$prop_area),
+               median(nlss$pCO2_toc)*1e6, median(nlss$ECO2_toc, na.rm = T), 
+               sum(bin_nlss$bin_FCO2_Mt),
+               sum(bin_nlss$actual_FCO2_Mt))
+
+
+kable(rbind(bin_nlss, sum_table), digits = 2, caption = paste("NLSS. FCO2 as median(ECO2) * total_area = ", round(with(nlss, median(ECO2_toc, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% kable_styling()
+
+test.ta <- nlss %>% subset(pH>5.4) %>% group_by(class.lake) %>% summarise(median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_ta)*1e6,
+            median_ECO2 = median(ECO2_ta, na.rm = T), 
+            actual_FCO2_Mt= sum(ECO2_ta*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
+test.ta <- dplyr::select(test.ta, c(class.lake, median_area, total_area, prop_area, median_pCO2,median_ECO2, bin_FCO2_Mt, actual_FCO2_Mt))
+
+sum_table_ta <- c(0, median(subset(nlss, pH>5.4)$lake.area), sum(subset(nlss, pH > 5.4)$lake.area), sum(test.ta$prop_area),
+               median(subset(nlss, pH > 5.4)$pCO2_ta)*1e6, median(subset(nlss, pH > 5.4)$ECO2_ta, na.rm = T), 
+               sum(test.ta$bin_FCO2_Mt),
+               sum(test.ta$actual_FCO2_Mt))
+
+
+kable(rbind(test.ta, sum_table_ta), digits = 2, caption = paste("NLSS. FCO2 as median(ECO2) * total_area = ", round(with(subset(nlss, pH > 5.4), median(ECO2_ta, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% kable_styling()
+```
+
+```{r bin-area-norway, results = T}
+nor <- filter(nlss, nation == "Norway")
 inland.waters <- 20221 * 1e6 # km2 to m2, @SSB
-mean.emissions.nor.toc <- nlss %>% filter(nation == "Norway") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
-mean.emissions.nor.ta <- nlss %>% filter(nation == "Norway") %>% pull(ECO2_ta) %>% mean(na.rm = T) 
+
+nor$log.lake.area <- nor$lake.area %>% log10()
+cut(nor$log.lake.area, breaks = 15) %>% unique()
+nor$class.lake <- cut(nor$log.lake.area, breaks = 15, labels = F)
 
 
-data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.nor.toc /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
-           "ECO2 from TA" = (inland.waters * mean.emissions.nor.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
-           "Percent of NIR" = (inland.waters * mean.emissions.nor.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 38.7 * 100, # @Bjøness2020
-            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Norway"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
-           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Norway"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Norway"), lake.area*1e6))*inland.waters) %>% t()
+bin_nor <- nor %>% group_by(class.lake) %>% 
+  summarise(median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_toc)*1e6,
+            median_ECO2 = median(ECO2_toc, na.rm = T),
+            median_k600 = median(k600, na.rm = T)*24*1e-2,
+            actual_FCO2_Mt= sum(ECO2_toc*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12,
+         bin_FCO2_NOR = inland.waters * prop_area / 100 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
 
+bin_nor <- dplyr::select(bin_nor, c(class.lake, median_area, total_area, prop_area, median_pCO2,median_k600, median_ECO2, actual_FCO2_Mt, bin_FCO2_Mt, bin_FCO2_NOR))
+
+sum_table <- c(0, median(nor$lake.area), sum(nor$lake.area), sum(bin_nor$prop_area),
+               median(nor$pCO2_toc)*1e6, median(nor$k600, na.rm = T)*24*1e-2, median(nor$ECO2_toc, na.rm = T), 
+               sum(bin_nor$actual_FCO2_Mt),
+               sum(bin_nor$bin_FCO2_Mt),
+               sum(bin_nor$bin_FCO2_NOR))
+
+
+kable(rbind(bin_nor, sum_table), digits = 2, 
+      caption = paste("Norway. FCO2 in sampled lakes as median(ECO2) * total_area = ", 
+                      round(with(nor, median(ECO2_toc, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y; FCO2 in total Norway as median(ECO2) * inland water =",
+                      round(with(nor, median(ECO2_toc, na.rm = T)*inland.waters/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% 
+  kable_styling()
+
+```
+```{r bin-area-sweden, results  = T}
+swe <- filter(nlss, nation == "Sweden")
+inland.waters <- 4014169.92 * 1e4
+
+swe$log.lake.area <- swe$lake.area %>% log10()
+swe$class.lake <- cut(swe$log.lake.area, breaks = 4, labels = F)
+
+
+bin_swe <- swe %>% group_by(class.lake) %>% 
+  summarise(n = n(),
+            median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_toc)*1e6,
+            median_ECO2 = median(ECO2_toc, na.rm = T), 
+            actual_FCO2_Mt= sum(ECO2_toc*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12,
+         bin_FCO2_swe = inland.waters * prop_area / 100 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
+
+bin_swe <- dplyr::select(bin_swe, c(class.lake, n, median_area, total_area, prop_area, median_pCO2,median_ECO2, actual_FCO2_Mt, bin_FCO2_Mt, bin_FCO2_swe))
+
+sum_table <- c(0, sum(bin_swe$n), median(swe$lake.area), sum(swe$lake.area), sum(bin_swe$prop_area),
+               median(swe$pCO2_toc)*1e6, median(swe$ECO2_toc, na.rm = T), 
+               sum(bin_swe$actual_FCO2_Mt),
+               sum(bin_swe$bin_FCO2_Mt),
+               sum(bin_swe$bin_FCO2_swe))
+
+
+kable(rbind(bin_swe, sum_table), digits = 2, 
+      caption = paste("Sweden. FCO2 in sampled lakes as median(ECO2) * total_area = ", 
+                      round(with(swe, median(ECO2_toc, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y; FCO2 in total sweway as median(ECO2) * inland water =",
+                      round(with(swe, median(ECO2_toc, na.rm = T)*inland.waters/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% 
+  kable_styling()
 
 ```
 
-```{r tranvik-finland}
+```{r bin-area-sweden-low, results  = T}
+swe <- filter(nlss, nation == "Sweden")
+inland.waters <- 4014169.92 * 1e4
+
+swe$log.lake.area <- swe$lake.area %>% log10()
+swe$class.lake <- cut(swe$log.lake.area, breaks = 4, labels = F)
+
+
+bin_swe <- swe %>% group_by(class.lake) %>% 
+  summarise(n = n(),
+            median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_toc)*1e6,
+            median_ECO2 = median(ECO2_toc_low, na.rm = T), 
+            actual_FCO2_Mt= sum(ECO2_toc_low*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12,
+         bin_FCO2_swe = inland.waters * prop_area / 100 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
+
+bin_swe <- dplyr::select(bin_swe, c(class.lake, n, median_area, total_area, prop_area, median_pCO2,median_ECO2, actual_FCO2_Mt, bin_FCO2_Mt, bin_FCO2_swe))
+
+sum_table <- c(0, sum(bin_swe$n), median(swe$lake.area), sum(swe$lake.area), sum(bin_swe$prop_area),
+               median(swe$pCO2_toc)*1e6, median(swe$ECO2_toc, na.rm = T), 
+               sum(bin_swe$actual_FCO2_Mt),
+               sum(bin_swe$bin_FCO2_Mt),
+               sum(bin_swe$bin_FCO2_swe))
+
+
+kable(rbind(bin_swe, sum_table), digits = 2, 
+      caption = paste("Sweden. FCO2 in sampled lakes as median(ECO2) * total_area = ", 
+                      round(with(swe, median(ECO2_toc_low, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y; FCO2 in total sweway as median(ECO2) * inland water =",
+                      round(with(swe, median(ECO2_toc_low, na.rm = T)*inland.waters/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% 
+  kable_styling()
+
+```
+
+
+```{r bin-area-finland, results = T}
+fin <- filter(nlss, nation == "Finland")
 inland.waters <- 34515 * 1e6 # km2 to m2, @Statfi
-mean.emissions.fin.toc <- nlss %>% filter(nation == "Finland") %>% pull(ECO2_toc) %>% mean(na.rm = T) 
-mean.emissions.fin.ta <- nlss %>% filter(nation == "Finland") %>% pull(ECO2_ta) %>% mean(na.rm = T) 
 
-data.frame("ECO2 from TOC" = (inland.waters * mean.emissions.fin.toc /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/day to gCO2/day to Mton CO2eq/year, assuming the rate if valid half of the year
-           "ECO2 from TA" = (inland.waters * mean.emissions.fin.ta /12.011 * 43.99 * 30 * 6 * 1e-12), # from gC/year to gCO2/year to Mton CO2eq/year
-           "Percent of NIR" = (inland.waters * mean.emissions.fin.toc /12.011 * 43.99 * 30 * 6 * 1e-12) / 58.4 * 100, # @Forsell2022
-            "Sum ECO2 NLS" = sum(with(filter(nlss, nation == "Finland"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T),
-           "Total ECO2 from sum ECO2" = sum(with(filter(nlss, nation == "Finland"), ECO2_toc * lake.area*1e6 /12.011 * 43.99 * 30 * 6 * 1e-12), na.rm = T)/sum(with(filter(nlss, nation == "Finland"), lake.area*1e6))*inland.waters) %>% t()
-```
-
-## Summary table
-
-For pCO2 calculated with TA: remove all values inferior to 0 as it is impossible. (Values coming from the approximation that TA ~ DIC, but TA can be negative at low pH). 
-
-*`r tab_nums("summary-eco2","Summary statistics for evasion rate of CO2: minimum, median, maximum, mean and standard deviation in gC/m2/day")`*
-
-```{r summary-evasion, results = T}
-
-df <- subset(norway, survey == "N112_2004")
-
-summary_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
-
-df <- subset(norway, survey == "N112_2004" & ta_fCO2 >= 0)
-
-summary2_n112 <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
-
-df <- subset(norway, survey == "CBA_2019")
-
-summary_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
-
-df2 <- subset(norway, survey == "CBA_2019" & ta_fCO2 >= 0)
-
-summary2_cba <- c(min(df$ECO2), median(df$ECO2), max(df$ECO2), mean(df$ECO2), sd(df$ECO2))
-
-df <- nlss
-
-summary_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(pCO2_ta >= 0)
-
-summary2_nlss_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T), max(df$ECO2_toc, na.rm = T),  mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary2_nlss_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T), max(df$ECO2_ta, na.rm = T),  mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(nation == "Norway") %>% filter(lat < 63)
-
-summary_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0) %>% filter(lat < 63)
-
-summary2_snorway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary2_snorway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(nation == "Norway")
-
-summary_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(nation == "Norway" & pCO2_ta >= 0)
-
-summary2_norway_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary2_norway_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_ta, na.rm = T))
-
-df <- nlss %>% filter(nation == "Sweden") 
-
-summary_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-df <- nlss %>% filter(nation == "Sweden" & pCO2_ta >= 0) 
-
-summary2_sweden_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary2_sweden_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-df <- nlss %>% filter(nation == "Finland") 
-
-summary_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-df <- nlss %>% filter(nation == "Finland" & pCO2_ta >= 0) 
-
-summary2_finland_1995_toc <- c(min(df$ECO2_toc, na.rm = T), median(df$ECO2_toc, na.rm = T),  max(df$ECO2_toc, na.rm = T), mean(df$ECO2_toc, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary2_finland_1995_ta <- c(min(df$ECO2_ta, na.rm = T), median(df$ECO2_ta, na.rm = T),  max(df$ECO2_ta, na.rm = T), mean(df$ECO2_ta, na.rm = T), sd(df$ECO2_toc, na.rm = T))
-
-summary.df <- rbind(summary_n112, summary_cba, summary_nlss_ta, summary_sweden_1995_ta, summary_finland_1995_ta, summary_norway_1995_ta, summary_snorway_1995_ta, summary_nlss_toc, summary_sweden_1995_toc, summary_finland_1995_toc, summary_norway_1995_toc, summary_snorway_1995_toc) %>% as.data.frame()
-
-rownames(summary.df) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
-
-colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
-
-knitr::kable(summary.df, digits = 2, caption = "All pCO2") %>% kable_styling(full_width= T, font_size = 14) %>% 
-  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
-  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
-  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
-  column_spec(column = c(3,5), bold = T) 
+fin$log.lake.area <- fin$lake.area %>% log10()
+cut(fin$log.lake.area, breaks = 4) %>% unique()
+fin$class.lake <- cut(fin$log.lake.area, breaks = 4, labels = F)
 
 
-summary.df2 <- rbind(summary2_n112, summary2_cba, summary2_nlss_ta, summary2_sweden_1995_ta, summary2_finland_1995_ta, summary2_norway_1995_ta, summary2_snorway_1995_ta, summary2_nlss_toc, summary2_sweden_1995_toc, summary2_finland_1995_toc, summary2_norway_1995_toc, summary2_snorway_1995_toc) %>% as.data.frame()
+bin_fin <- fin %>% group_by(class.lake) %>% 
+  summarise(n = n(),
+            median_area = median(lake.area), total_area = sum(lake.area), median_pCO2 = median(pCO2_toc)*1e6,
+            median_ECO2 = median(ECO2_toc, na.rm = T), 
+            actual_FCO2_Mt= sum(ECO2_toc*lake.area*1e6/ 12.011 * 43.99 * 365 * 1e-12, na.rm = T)) %>%
+  mutate(prop_area = total_area / sum(total_area) * 100,
+         bin_FCO2_Mt = total_area *1e6 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12,
+         bin_FCO2_fin = inland.waters * prop_area / 100 * median_ECO2 / 12.011 * 43.99 * 365 * 1e-12)
 
-rownames(summary.df2) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", "Sweden, TA", "Finland, TA", "Norway, TA", "South Norway, TA", "Northern Lake Survey, TOC", "Sweden, TOC", "Finland, TOC", "Norway, TOC", "South Norway, TOC")
+bin_fin <- dplyr::select(bin_fin, c(class.lake, n, median_area, total_area, prop_area, median_pCO2,median_ECO2, actual_FCO2_Mt, bin_FCO2_Mt, bin_FCO2_fin))
 
-colnames(summary.df2) <- c("Min", "Median","Max","Mean","Sd")
+sum_table <- c(0, sum(bin_fin$n), median(fin$lake.area), sum(fin$lake.area), sum(bin_fin$prop_area),
+               median(fin$pCO2_toc)*1e6, median(fin$ECO2_toc, na.rm = T), 
+               sum(bin_fin$actual_FCO2_Mt),
+               sum(bin_fin$bin_FCO2_Mt),
+               sum(bin_fin$bin_FCO2_fin))
 
-knitr::kable(summary.df2, digits = 2, caption = "Excluding pCO2_ta < 0") %>% kable_styling(full_width= T, font_size = 14) %>% 
-  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
-  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
-  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
-  column_spec(column = c(3,5), bold = T) 
+
+kable(rbind(bin_fin, sum_table), digits = 2, 
+      caption = paste("Finland. FCO2 in sampled lakes as median(ECO2) * total_area = ", 
+                      round(with(fin, median(ECO2_toc, na.rm = T)*sum(lake.area)*1e6/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y; FCO2 in total finway as median(ECO2) * inland water =",
+                      round(with(fin, median(ECO2_toc, na.rm = T)*inland.waters/ 12.011 * 43.99 * 365 * 1e-12),2), "MtCO2_eq/y", sep = " ")) %>% 
+  kable_styling()
+
 ```
 
 # Maps
@@ -2354,7 +2791,7 @@ print(nls_ECO2)
 
 *`r fig_nums("map-ECO2-nls","Evasion rate of CO2 for the Northern Lakes Survey in gC/m2/day")`*
 
-```{r figure-maps, fig.dim = c(8,8)}
+```{r figure-maps, fig.dim = c(8,10)}
 cba_ECO2 <- cba_ECO2 + theme(legend.position = "")
 n112_ECO2 <- n112_ECO2 + theme(legend.position = "")
 nls_ECO2 <- nls_ECO2 + theme(legend.position = "bottom")

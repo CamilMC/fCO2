@@ -59,8 +59,24 @@ ggplot(cba.all)+geom_point(aes(x = pH_Kje, y = as.character(Lake_ID)))+
 #cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 0.7) 
 
 bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+#bdg.niva.sf <- sf::st_geometry(bdg.niva, "geometry") 
 
 cba <- merge(cba.all,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
+```
+
+```{r cba-windspeed}
+
+nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
+nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
+nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
+saveRDS(nws.list.means, "cba.nws.list.mean.rds")
+
+#<- nws.files %>% raster::stack()  
+nws.2019.mean <- raster::mean(nws.2019, na.rm = T)
+annual.nws.2019 <- mean(nws.2019, na.rm = T)
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat")], proj4string = CRS("+proj=longlat +datum=WGS84"))
+annual.nws.cba <- raster::extract(annual.nws.2019, cba.spdf)
+
 
 nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
 cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data =  cba[,c("Long","Lat")]) 
@@ -104,6 +120,19 @@ nws.n112 <- raster::extract(nws.oct.2004, n112.spdf.wgs)
 
 n112$nws_m.s <- nws.n112
 ```
+
+```{r annual-wind-speed}
+
+nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2004", full.names = T)
+nws.2004 <- nws.files %>% raster::stack(band = 1) %>% mean()
+annual.nws.2004 <- mean(nws.2004, na.rm = T)
+n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
+annual.nws.n112 <- raster::extract(annual.nws.2004, n112.spdf.wgs)
+
+saveRDS(annual.nws.n112, "annual.nws.n112.rds")
+```
+
 
 ```{r norway}
 norway <- data.frame(survey = c(rep("CBA_2019", dim(cba)[1]),rep("N112_2004",dim(n112)[1])))
@@ -369,11 +398,7 @@ saveRDS(nls,"nls.rds")
 ```{r selected-df}
 nls <- readRDS("nls.rds")
 
-nlss <- data.frame(survey = rep("nls", dim(nls)[1]))
-
-nlss$row.nb <- rownames(nlss)
-
-nlss$lake.id <- nls$ebint
+nlss <- data.frame(lake.id = nls$ebint)
 
 nlss$pH <- nls$ph
 nlss$Hplus <- 10^(-nlss$pH)
@@ -392,15 +417,6 @@ nlss$lake.area <- nls$area * 1e-6 # m2 to km2
 
 nlss$nation <- nls$nation
 
-nlss$ndvi <- nls$ndvi.value
-
-nlss$arable <- nls$arable
-
-nlss$bog <- nls$bog
-
-nlss$runoff <- nls$runoff
-
-nlss$tndep <- nls$tndep
 
 ```
 
@@ -418,8 +434,14 @@ nlss$OH <- with(nlss, Kw/Hplus)
 
 ## Save NLS
 
+```{r remove-duplicate}
+duplicated.id <- nlss$lake.id[which(duplicated(nlss$lake.id) == T)]
+nlss[nlss$lake.id %in% duplicated.id, ]
+unique.nlss <- nlss %>% group_by(lake.id, nation) %>% summarise_all(median)
+```
+
 ```{r save-nlss, eval = F}
-saveRDS(nlss, "nlss.rds")
+saveRDS(unique.nlss, "nlss.rds")
 
 ```
 
