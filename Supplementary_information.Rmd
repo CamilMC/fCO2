@@ -2060,7 +2060,7 @@ nlss %>% filter(pH > 5.4) %>% pull(ECO2_ta_low) %>% median(na.rm = T)
 median(nlss$ECO2_toc_low, na.rm = T)
 ```
 
-```{r summary_bin_toc}
+```{r summary_bin_toc_median, results = T}
 options(knitr.kable.NA = '')
 
 p0 <- median(nlss$pCO2_toc, na.rm = T)*1e6
@@ -2101,6 +2101,7 @@ W1_sum <- with(subset(nlss, lake.area < 0.1), W1*sum(lake.area*1e6)/12.011 * 43.
 # 0.1 < Lake size < 1 km2
 
 p2 <- nlss %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% median()*1e6
+A2 <- nlss %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
 
 k2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(kCO2, na.rm = T)) 
 E2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
@@ -2123,6 +2124,7 @@ W2_sum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), W2*sum(lake.area*1
 # 1 < Lake size < 10 km2
 
 p3 <- nlss %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% median()*1e6
+A3 <- nlss %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
 
 k3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(kCO2, na.rm = T)) 
 E3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), median(ECO2_toc*365, na.rm = T)) #gC/m2/y
@@ -2144,6 +2146,7 @@ W3_sum <- with(subset(nlss, lake.area > 1 & lake.area < 10), W3*sum(lake.area*1e
 # 1 < Lake size < 10 km2
 
 p4 <- nlss %>% subset(lake.area > 10) %>% pull(pCO2_toc) %>% median()*1e6
+A4 <- nlss %>% subset(lake.area > 10) %>% pull(lake.area) %>% sum()
 
 k600_4 <- with(subset(nlss, lake.area > 10), median(k600*24*1e-2, na.rm = T))
 k600_4_low <- with(subset(nlss, lake.area > 10), median(k600_low*24*1e-2, na.rm = T))
@@ -2167,6 +2170,7 @@ W4 <- 53.96*1e12/(570583*1e6) # gC/m2/year in W
 W4_sum <- with(subset(nlss, lake.area > 10), W4*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
 
 bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10","sum"," "), 
+          lake.area = c(A1, A2, A3, A4, A0),
            pCO2 = c(p1,p2,p3,p4,NA,p0), 
            kCO2_low = c(k1_low,k2_low,k3_low,k4_low,NA,k0_low), 
            E_low = c(E1_low,E2_low,E3_low,E4_low,NA,E0_low),
@@ -2180,16 +2184,139 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Weyhenmeyer" = 2)) %>%
+  group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
+  column_spec(column = c(5,6,9,10,12), bold = T)
+
+```
+
+```{r summary_bin_toc_mean, results = T}
+options(knitr.kable.NA = '')
+
+p0 <- mean(nlss$pCO2_toc, na.rm = T)*1e6
+A0 <- sum(nlss$ake.area)
+k0 <- nlss$kCO2 %>% mean(na.rm = T) 
+k0_low <- nlss$kCO2_low %>% mean(na.rm = T)
+E0 <- mean(nlss$ECO2_toc * 365, na.rm = T) # gC/m2/y
+E0_low <- mean(nlss$ECO2_toc_low * 365, na.rm = T) # gC/m2/y
+
+F0_realsum <-  with(nlss, sum(ECO2_toc * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F0_sumfrommean <- with(nlss, E0*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+F0_low_realsum <-  with(nlss, sum(ECO2_toc_low * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F0_low_sumfrommean <- with(nlss, E0_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+# Lake size < 0.1 km2
+
+p1 <- nlss %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A1 <- nlss %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
+
+k1 <- with(subset(nlss, lake.area < 0.1), mean(kCO2, na.rm = T)) 
+E1 <- with(subset(nlss, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F1_realsum <- with(subset(nlss, lake.area < 0.1), sum(ECO2_toc * 365 *lake.area*1e6/12.011 * 43.99 * 1e-12, na.rm = T)) #MtCO2/y
+F1_sumfrombin <- with(subset(nlss, lake.area < 0.1), E1*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+  
+k1_low <- with(subset(nlss, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
+E1_low <- with(subset(nlss, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F1_low_realsum <- with(subset(nlss, lake.area < 0.1), sum(ECO2_toc_low * 365/12.011 * 43.99  * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F1_low_sumfrombin <- with(subset(nlss, lake.area < 0.1), E1_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+W1 <- 38.17*1e12/(208008*1e6) # gC/m2/year in Weyhenmeyer
+W1_sum <- with(subset(nlss, lake.area < 0.1), W1*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 0.1 < Lake size < 1 km2
+
+p2 <- nlss %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+
+k2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
+E2 <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F2_realsum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), sum(ECO2_toc * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F2_sumfrombin <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), E2*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+k2_low <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
+E2_low <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F2_low_realsum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), sum(ECO2_toc_low * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F2_low_sumfrombin <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), E2_low*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+
+W2 <- 52.36*1e12/(282434*1e6) # gC/m2/year in W
+W2_sum <- with(subset(nlss, lake.area < 1 & lake.area > 0.1), W2*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 1 < Lake size < 10 km2
+
+p3 <- nlss %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
+
+k3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
+E3 <- with(subset(nlss, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F3_realsum <- with(subset(nlss, lake.area > 1 & lake.area < 10), sum(ECO2_toc * 365/12.011 * 43.99 * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F3_sumfrombin <- with(subset(nlss, lake.area > 1 & lake.area < 10), E3*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+k3_low <- with(subset(nlss, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
+E3_low <- with(subset(nlss, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F3_low_realsum <- with(subset(nlss, lake.area > 1 & lake.area < 10), sum(ECO2_toc_low * 365/12.011 * 43.99  * 1e-12*lake.area*1e6, na.rm = T)) #MtCO2/y
+F3_low_sumfrombin <- with(subset(nlss, lake.area > 1 & lake.area < 10), E3_low*sum(lake.area*1e6)/12.011 * 43.99  * 1e-12)
+
+
+W3 <- 22.80*1e12/(286624*1e6) # gC/m2/year in W
+W3_sum <- with(subset(nlss, lake.area > 1 & lake.area < 10), W3*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+# 1 < Lake size < 10 km2
+
+p4 <- nlss %>% subset(lake.area > 10) %>% pull(pCO2_toc) %>% mean()*1e6
+
+k600_4 <- with(subset(nlss, lake.area > 10), mean(k600*24*1e-2, na.rm = T))
+k600_4_low <- with(subset(nlss, lake.area > 10), mean(k600_low*24*1e-2, na.rm = T))
+
+k4 <- with(subset(nlss, lake.area > 10), mean(kCO2, na.rm = T)) 
+E4 <- with(subset(nlss, lake.area > 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F4_realsum <- with(subset(nlss, lake.area > 10), sum(ECO2_toc* 365*lake.area*1e6/12.011 * 43.99  * 1e-12, na.rm = T)) #MtCO2/y
+F4_sumfrombin <- with(subset(nlss, lake.area > 10), E4*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12)
+
+
+
+k4_low <- with(subset(nlss, lake.area > 10), mean(kCO2_low, na.rm = T)) 
+E4_low <- with(subset(nlss, lake.area > 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+
+F4_low_realsum <- with(subset(nlss, lake.area > 10), sum(ECO2_toc_low* 365*lake.area*1e6/12.011 * 43.99  * 1e-12, na.rm = T)) #MtCO2/y
+F4_low_sumfrombin <- with(subset(nlss, lake.area > 10), E4_low*sum(lake.area*1e6)/12.011 * 43.99  * 1e-12)
+
+
+W4 <- 53.96*1e12/(570583*1e6) # gC/m2/year in W
+W4_sum <- with(subset(nlss, lake.area > 10), W4*sum(lake.area*1e6)/12.011 * 43.99 * 1e-12) # MtCO2/y
+
+bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10","sum"," "), 
+           pCO2 = c(p1,p2,p3,p4,NA,p0), 
+           kCO2_low = c(k1_low,k2_low,k3_low,k4_low,NA,k0_low), 
+           E_low = c(E1_low,E2_low,E3_low,E4_low,NA,E0_low),
+           FCO2_low_bin = c(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin, sum(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin),F0_low_sumfrommean),
+            FCO2_low = c(F1_low_realsum, F2_low_realsum, F3_low_realsum, F4_low_realsum,sum(F1_low_realsum,F2_low_realsum,F3_low_realsum,F4_low_realsum),F0_low_realsum),
+           kCO2_high = c(k1,k2,k3,k4, NA,K0),
+           E_high = c(E1,E2,E3,E4, NA,E0),
+           FCO2_high_bin = c(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin, sum(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin),F0_sumfrommean),
+          FCO2_high = c(F1_realsum, F2_realsum, F3_realsum, F4_realsum, sum(F1_realsum, F2_realsum, F3_realsum, F4_realsum),F0_realsum),
+           Wey = c(W1,W2,W3,W4, NA,NA),
+           Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
+
+
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Weyhenmeyer" = 2)) %>%
   group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
-  
-
-# add a column for FCO2 from median ECO2
 ```
-
 ## Summary table
 
 For pCO2 calculated with TA: remove all values inferior to 0 as it is impossible. (Values coming from the approximation that TA ~ DIC, but TA can be negative at low pH). 

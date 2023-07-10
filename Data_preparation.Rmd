@@ -64,25 +64,24 @@ bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_are
 cba <- merge(cba.all,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
 ```
 
-```{r cba-windspeed}
+```{r cba-windspeed, eval = F}
 
 nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
 nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
 nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
 saveRDS(nws.list.means, "cba.nws.list.mean.rds")
+nws.2019 <- nws.list.means %>% raster::stack() %>% raster::mean()
 
-#<- nws.files %>% raster::stack()  
-nws.2019.mean <- raster::mean(nws.2019, na.rm = T)
-annual.nws.2019 <- mean(nws.2019, na.rm = T)
-cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat")], proj4string = CRS("+proj=longlat +datum=WGS84"))
-annual.nws.cba <- raster::extract(annual.nws.2019, cba.spdf)
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=longlat +datum=WGS84"))
+annual.nws.cba <- raster::extract(nws.2019, cba.spdf, sp = T)
 
+saveRDS(annual.nws.cba, "annual.nws.cba.rds")
 
-nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
-cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data =  cba[,c("Long","Lat")]) 
-nws.cba <- raster::extract(nws.oct.2019, cba.spdf)
-
-cba$nws_m.s <- nws.cba
+# nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
+# cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data =  cba[,c("Long","Lat")]) 
+# nws.cba <- raster::extract(nws.oct.2019, cba.spdf)
+# 
+# cba$nws_m.s <- nws.cba
 ```
 
 
@@ -101,10 +100,13 @@ ndep.cba <- readRDS("Ndep/ndep.df.cba.rds")
 annual.temp.cba <- readRDS("annual.temp.cba.rds")
 annual.prec.cba <- readRDS("annual.prec.cba.rds")
 
+annual.nws.cba <- readRDS("annual.nws.cba.rds")@data %>% select(c("Lake_ID","layer")) %>% setNames(c("Lake_ID","nws_m.s"))
+
 cba <- cba %>% merge(cba.summer.ndvi.2015, by = "Lake_ID") %>% merge(runoff.cba, by = "Lake_ID") %>%
   merge(bogs.cba, by = "Lake_ID") %>% merge(arable.cba, by = "Lake_ID") %>% merge(forest.cba, by = "Lake_ID") %>%
   merge(bare.cba, by = "Lake_ID") %>% merge(ndep.cba, by = "Lake_ID") %>% 
-  merge(annual.prec.cba, by = "Lake_ID") %>% merge(annual.temp.cba, by = "Lake_ID")
+  merge(annual.prec.cba, by = "Lake_ID") %>% merge(annual.temp.cba, by = "Lake_ID") %>% 
+  merge(annual.nws.cba, by = "Lake_ID")
 ```
 
 ```{r N112}
@@ -113,29 +115,44 @@ n112.all <- read.table("Larsen/N112_subset_110909.txt", sep="", header = TRUE,na
 n112 <- n112.all %>% subset(ykoord > 6e6) %>% subset(is.na(TIC.ug) == F) %>% subset(is.na(alkendpoint) == F)
 names(n112)
 
-nws.oct.2004 <- "NWS/Wind_WFDE5_CRU_200410_v2.1.nc" %>% raster::raster()
 n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
 n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
-nws.n112 <- raster::extract(nws.oct.2004, n112.spdf.wgs)
 
-n112$nws_m.s <- nws.n112
+# nws.oct.2004 <- "NWS/Wind_WFDE5_CRU_200410_v2.1.nc" %>% raster::raster()
+
+# 
+# nws.n112 <- raster::extract(nws.oct.2004, n112.spdf.wgs)
+# 
+# n112$nws_m.s <- nws.n112
 ```
 
-```{r annual-wind-speed}
+```{r n112-annual-wind-speed, eval = F}
 
-nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2004", full.names = T)
-nws.2004 <- nws.files %>% raster::stack(band = 1) %>% mean()
-annual.nws.2004 <- mean(nws.2004, na.rm = T)
-n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
-n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
-annual.nws.n112 <- raster::extract(annual.nws.2004, n112.spdf.wgs)
+nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2004", full.names = T) 
+nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
+nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
+saveRDS(nws.list.means, "n112.nws.list.mean.rds")
+
+nws.list.mean <- readRDS("n112.nws.list.mean.rds")
+nws.2004 <- nws.list.mean %>% raster::stack() %>% raster::mean()
+
+n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord","Vatnlnr")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+
+annual.nws.n112 <- raster::extract(nws.2004, n112.spdf, sp = T)
 
 saveRDS(annual.nws.n112, "annual.nws.n112.rds")
+```
+
+```{r merge-n112}
+annual.nws.n112 <- readRDS("annual.nws.n112.rds")@data %>% dplyr::select(c("Vatnlnr","layer")) %>% setNames(c("Vatnlnr","nws_m.s"))
+
+n112 <- merge(n112, annual.nws.n112, by = "Vatnlnr")
 ```
 
 
 ```{r norway}
 norway <- data.frame(survey = c(rep("CBA_2019", dim(cba)[1]),rep("N112_2004",dim(n112)[1])))
+
 
 norway$lake.id <- c(cba$Lake_ID,
                     n112$Vatnlnr)
@@ -353,28 +370,23 @@ sum(ion$ph < 4.01)
 
 Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2
 
-```{r nws, eval = T}
-library(sp)
-ion <- readRDS("ion.rds")
+```{r nws, eval = F}
 lakes <- readRDS("lakes.rds")
 
-nws.oct.1995 <- "NWS/Wind_WFDE5_CRU_199510_v2.1.nc" %>% raster::raster()
-plot(nws.oct.1995)
+nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_1995", full.names = T) 
+nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
+nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
+saveRDS(nws.list.means, "nlss.nws.list.mean.rds")
 
-ion.spdf <- SpatialPointsDataFrame(coords = ion[,c("longitude","latitude")], data =  ion[,c("longitude","latitude")]) 
-ion.nws <- raster::extract(nws.oct.1995, ion.spdf)
+nws.list.mean <- readRDS("nlss.nws.list.mean.rds")
+nws.1995 <- nws.list.mean %>% raster::stack() %>% raster::mean()
 
-ion$nws_m.s <- ion.nws
+annual.nws.1995 <- raster::extract(nws.1995, lakes,fun = mean, na.rm = T, df = T)
+annual.nws.1995$ebint <- lakes$ebint
 
-saveRDS(ion,"ion.rds")
-
-# 
-# lakes.nws <- raster::extract(nws.oct.1995, lakes, sp = F, df = F, na.rm = T, fun = mean)
-# saveRDS(lakes.nws, "lakes.nws.rds")
-# 
-# lakes$nws <- cbind(lakes,unlist(lakes.nws))
-
+saveRDS(annual.nws.1995, "annual.nws.nls.rds")
 ```
+
 
 ## Merge dfs
 
@@ -382,8 +394,9 @@ saveRDS(ion,"ion.rds")
 
 ion <- readRDS("ion.rds")
 lakes <- readRDS("lakes.rds")
+nws <- readRDS("annual.nws.nls.rds") %>% setNames(c("ID","nws_m.s","gid","ebint"))
 
-nls <- merge(ion, lakes, by = "ebint")
+nls <- merge(ion, lakes, by = "ebint") %>% merge(nws, by= "ebint")
 
 nls$uncertain <- ifelse(nls$dist_closest_ebint/nls$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
 nls$uncertain[which(is.na(nls$uncertain)==TRUE)] <- FALSE
