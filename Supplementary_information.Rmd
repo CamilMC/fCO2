@@ -2016,6 +2016,8 @@ nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in
 
 ## Compare ECO2 from TOC and ECO2 from TA
  
+Comparison of the ECO2 obtained by calculation pCO2 from TOC or TA (in that case, we remove samples in which pH < 5.4).  
+ 
 ```{r summary-eco2-toc, results = T}
 no <- norway %>% 
   dplyr::select(c("survey", "fCO2" ,"pCO2_pred", "ECO2_toc", "ECO2_toc_low")) %>% 
@@ -2049,10 +2051,6 @@ fns <- nlss %>% as_data_frame() %>%
 summary_eco2_ta <- rbind(no,fns) %>% filter(pH > 5.4) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
 kable(summary_eco2_ta, caption = "Median of all variables, pH > 5.4") %>% kable_styling()
 
-nlss %>% filter(pH > 5.4) %>% pull(ECO2_ta) %>% median(na.rm = T)
-median(nlss$ECO2_toc, na.rm = T)
-nlss %>% filter(pH > 5.4) %>% pull(ECO2_ta_low) %>% median(na.rm = T)
-median(nlss$ECO2_toc_low, na.rm = T)
 ```
 
 ## Summary table with median and mean, TOC
@@ -2095,12 +2093,11 @@ kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/y
   add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) %>%
   save_kable(file = "compare.eco2.measured.png",zoom = 5)
 
-ggplot(norway)+geom_histogram(aes(x=log10(lake.area)))+facet_grid(rows = vars(survey))
-ggplot(norway)+geom_histogram(aes(x=ECO2))+facet_grid(rows = vars(survey))
-ggplot(nlss)+geom_histogram(aes(x=log10(lake.area)))
-ggplot(nlss)+geom_histogram(aes(x= ECO2_toc))
 ```
+
 ## Compare total emissions calculated from bins, with total emissions calculated from median and mean
+
+We also compare with the efflux calculated by @Hastie2018 by class of area. The efflux is given in TgC/year. We convert it to gC/m2/year for each country. 
 
 ```{r summary_bin_toc_median, results = T}
 options(knitr.kable.NA = '')
@@ -2226,8 +2223,9 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Weyhenmeyer" = 2)) %>%
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y"),
+      caption = "Norway, Sweden, Finland, median value") %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
   group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
@@ -2352,8 +2350,9 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Weyhenmeyer" = 2)) %>%
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y"),
+      caption = "Norway, Sweden, Finland; mean value") %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
   group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
@@ -2681,14 +2680,14 @@ kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uat
   group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
 
 ```
-```{r early-exit}
-knitr::knit_exit()
-```
+
 
 
 ## Compare with @Raymond2013
 
-```{r raymond}
+@Raymond2013 estimate the CO2 emissions as gC/m2 land/year. We convert our estimated median CO2 evasion rate from gC/m2/year to gC/m2 land/year by multiplying it by the water area in a given region, and then dividing it by the land area. 
+
+```{r raymond, results = T}
 inland.waters.nor <- 20221 * 1e6 # km2 to m2, @SSB
 land.nor <- land <- 323806 * 1e6 # km2 to m2, @SSB
 inland.waters.swe <- 4014169.92 * 1e4 # ha to m2, @SCB
@@ -2699,7 +2698,44 @@ land.fin <- 338478 * 1e6 # km2 to m2
 tot.water <- inland.waters.nor + inland.waters.swe + inland.waters.fin
 tot.land <- land.nor + land.swe + land.fin
 
+mean.eco2.high <- c(median(nlss$ECO2_toc, na.rm = T)*365, #NLSS # in gC/m2/year
+                    with(subset(nlss, nation == "Norway"), median(ECO2_toc, na.rm = T)*365),
+                    with(subset(nlss, nation == "Sweden"), median(ECO2_toc, na.rm = T)*365),
+                    with(subset(nlss, nation == "Finland"), median(ECO2_toc, na.rm = T)*365))
 
+mean.eco2.low <- c(median(nlss$ECO2_toc_low, na.rm = T)*365, #NLSS # in gC/m2/year
+                    with(subset(nlss, nation == "Norway"), median(ECO2_toc_low, na.rm = T)*365),
+                    with(subset(nlss, nation == "Sweden"), median(ECO2_toc_low, na.rm = T)*365),
+                    with(subset(nlss, nation == "Finland"), median(ECO2_toc_low, na.rm = T)*365))                    
+                    
+land.eco2.high <- c(mean.eco2.high[1]*tot.water/tot.land,
+                    mean.eco2.high[2]*inland.waters.nor/land.nor,
+                    mean.eco2.high[3]*inland.waters.swe/land.swe,
+                    mean.eco2.high[4]*inland.waters.fin/land.fin)
+
+land.eco2.low <- c(mean.eco2.low[1]*tot.water/tot.land,
+                    mean.eco2.low[2]*inland.waters.nor/land.nor,
+                    mean.eco2.low[3]*inland.waters.swe/land.swe,
+                    mean.eco2.low[4]*inland.waters.fin/land.fin)
+                    
+
+kable(tibble("Country" = c("All 3", "Norway", "Sweden", "Finland"),
+            "Water"= c(tot.water, inland.waters.nor, inland.waters.swe, inland.waters.fin),
+            "Land" = c(tot.land, land.nor, land.swe, land.fin),
+            mean.eco2.high,
+            land.eco2.high,
+            mean.eco2.low,
+            land.eco2.low),
+      col.names = c("Country","Water area, km2", "Land area, km2", "Median ECO2, gC/m2/year", "Median ECO2, gC/m2 land/year", "Median ECO2, gC/m2/year", "Median ECO2, gC/m2 land/year"),
+      digits = 2) %>% kable_styling() %>%
+  add_header_above(c(" ","Area" = 2, "High estimate" = 2, "Low estimate" = 2))
+
+```
+
+
+
+```{r early-exit}
+knitr::knit_exit()
 ```
 
 ## Summary table
@@ -2868,7 +2904,16 @@ knitr::kable(summary.df3, digits = 2, caption = "Excluding pH < 5.4") %>% kable_
 
 ## Compare with @Creed2018
 
-Paper from Weyhenmeyer, in which the median pCO2 and CO2 evasion rates are compared. 
+Paper from Weyhenmeyer, in which the median pCO2 and CO2 evasion rates are compared.
+
+(Weyhenmeyer et al. 2015) estimated ECO2 in mgC/m2/day in small boreal lakes. Using the characteristics of the 4 example lakes they describe, we computed pCO2 based on DOC concentration and subsequently the CO2 emission. They computed CO2 concentration based on 5 118 swedish lakes, using the carbonate equilibrium, but removing samples for which pH < 5.4. Even though we used a different formula to calculate the gas transfer coefficient k600, we obtain comparable evasion rates for the 4 example lakes provided in their survey. We used the DOC concentration in each lake to predict pCO2. We computed k600 using the formula from (Vachon and Prairie 2013), as in this article, including the lake area and a wind speed of 3.5 m/s as in Weyhenmeyer et al. (2015). 
+Lake type	ECO2 Weyhenmeyer (gC/m2/day)	ECO2 predicted (gC/m2/day)
+A (short retention time, short ice-free season)	0.402	0.309
+B (long water retention time, short ice-free season)	0.418	0.282
+C (short water retention time, long ice-free season)	0.910	0.946
+D (long water retention time, long ice-free season)	0.688	0.753
+
+
 
 ```{r compare-weyhenmeyer, results = T}
 K0 <- filter(nlss, nation == "Sweden")$K0 %>% median()
