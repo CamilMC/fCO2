@@ -4,7 +4,7 @@ author: "Camille Crapart"
 date: "2023-02-21"
 output: 
    bookdown::html_document2:
-     code_folding: show
+     code_folding: hide
      toc: true
      toc_float: true
      number_sections: true
@@ -39,30 +39,35 @@ fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
 fCO2.atm.1995 <- 360.17 * 1e-6 # 1995
 ```
 
-atm concentration of CO2: <https://climate.nasa.gov/vital-signs/carbon-dioxide/>, dataset on <https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt>
+Atmospheric concentration of CO2 is retrieved from: <https://climate.nasa.gov/vital-signs/carbon-dioxide/>, dataset on <https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt>
 
 
 # Data from CBA and N112 surveys
 
 TOC was analysed by infrared CO2 detection after catalytic high temperature combustion (Shimadzu TOC-VWP analyzer) at the Department of Biosciences at the University of Oslo. pH and alkalinity (end-point titration to pH 4.5) were measured at the Chemistry Department of the University of Oslo.  
 
+## Data from CBA survey
+
+The data is available at @CBA2019. Lake area and catchment area were provided by NIVA. 
 
 ```{r cba-data}
 cba.all <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 
-ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)
-ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)
+ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)+labs(y="Lake ID")+theme_bw()
+ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)+labs(y="Lake ID")+theme_bw()
 ggplot(cba.all)+geom_point(aes(x = pH_Kje, y = as.character(Lake_ID)))+
-  geom_vline(xintercept = 5)
-
-
-#cba <- subset(cba.all, TOC < 40) %>% subset(Alkalinity < 0.7) 
+  geom_vline(xintercept = 5)+labs(x = "pH", y="Lake ID")+theme_bw()
 
 bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
-#bdg.niva.sf <- sf::st_geometry(bdg.niva, "geometry") 
 
 cba <- merge(cba.all,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
 ```
+
+The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling.
+
+
+Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2
+
 
 ```{r cba-windspeed, eval = F}
 
@@ -76,55 +81,31 @@ cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c
 annual.nws.cba <- raster::extract(nws.2019, cba.spdf, sp = T)
 
 saveRDS(annual.nws.cba, "annual.nws.cba.rds")
-
-# nws.oct.2019 <- "NWS/Wind_WFDE5_CRU_201910_v2.1.nc" %>% raster::raster()
-# cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data =  cba[,c("Long","Lat")]) 
-# nws.cba <- raster::extract(nws.oct.2019, cba.spdf)
-# 
-# cba$nws_m.s <- nws.cba
 ```
 
+The CBA dataset was then merged with the wind speed. 
 
-```{r cba-catchment-data}
-cba.summer.ndvi.2015 <- readRDS("cba.summer.ndvi.2015.rds")
-
-runoff.cba <- readRDS("runoff.cba.rds")
-
-bogs.cba <- readRDS("CLC/bogs.cba.rds")
-arable.cba <- readRDS("CLC/arable.cba.rds")
-forest.cba <- readRDS("CLC/forest.cba.rds")
-bare.cba <- readRDS("CLC/bare.cba.rds")
-
-ndep.cba <- readRDS("Ndep/ndep.df.cba.rds")
-
-annual.temp.cba <- readRDS("annual.temp.cba.rds")
-annual.prec.cba <- readRDS("annual.prec.cba.rds")
-
+```{r merge-cba}
 annual.nws.cba <- readRDS("annual.nws.cba.rds")@data %>% select(c("Lake_ID","layer")) %>% setNames(c("Lake_ID","nws_m.s"))
-
-cba <- cba %>% merge(cba.summer.ndvi.2015, by = "Lake_ID") %>% merge(runoff.cba, by = "Lake_ID") %>%
-  merge(bogs.cba, by = "Lake_ID") %>% merge(arable.cba, by = "Lake_ID") %>% merge(forest.cba, by = "Lake_ID") %>%
-  merge(bare.cba, by = "Lake_ID") %>% merge(ndep.cba, by = "Lake_ID") %>% 
-  merge(annual.prec.cba, by = "Lake_ID") %>% merge(annual.temp.cba, by = "Lake_ID") %>% 
-  merge(annual.nws.cba, by = "Lake_ID")
+cba <- cba %>%  merge(annual.nws.cba, by = "Lake_ID")
 ```
+
+# N112 data
+
+This survey was first published in @Larsen2011. 
 
 ```{r N112}
 n112.all <- read.table("Larsen/N112_subset_110909.txt", sep="", header = TRUE,na.strings = c(".", "NA"))
 
 n112 <- n112.all %>% subset(ykoord > 6e6) %>% subset(is.na(TIC.ug) == F) %>% subset(is.na(alkendpoint) == F)
-names(n112)
 
 n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+119
+ 
 n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
-
-# nws.oct.2004 <- "NWS/Wind_WFDE5_CRU_200410_v2.1.nc" %>% raster::raster()
-
-# 
-# nws.n112 <- raster::extract(nws.oct.2004, n112.spdf.wgs)
-# 
-# n112$nws_m.s <- nws.n112
 ```
+
+Similarly, the wind speed was aquired from @C3S2020.
 
 ```{r n112-annual-wind-speed, eval = F}
 
@@ -143,16 +124,20 @@ annual.nws.n112 <- raster::extract(nws.2004, n112.spdf, sp = T)
 saveRDS(annual.nws.n112, "annual.nws.n112.rds")
 ```
 
+Then the original dataset was merged with the wind speed. 
+
 ```{r merge-n112}
 annual.nws.n112 <- readRDS("annual.nws.n112.rds")@data %>% dplyr::select(c("Vatnlnr","layer")) %>% setNames(c("Vatnlnr","nws_m.s"))
 
 n112 <- merge(n112, annual.nws.n112, by = "Vatnlnr")
 ```
 
+## Join CBA and N112 data
+
+Both dataset were merged in one. Concentration of TOC, TIC and other elements were converted in mol/L. 
 
 ```{r norway}
 norway <- data.frame(survey = c(rep("CBA_2019", dim(cba)[1]),rep("N112_2004",dim(n112)[1])))
-
 
 norway$lake.id <- c(cba$Lake_ID,
                     n112$Vatnlnr)
@@ -213,31 +198,9 @@ norway$catchment.area <- c(cba$basin_area_km2,
 
 norway$nws_m.s <- c(cba$nws_m.s,
                     n112$nws_m.s)
-
-norway$ndvi <- c(cba$NDVI,
-                 n112$NDVI)
-
-norway$runoff <- c(cba$Runoff,
-                 n112$runoff)
-
-norway$bog <- c(cba$Bog,
-                 n112$bog)
-
-norway$arable <- c(cba$Arable,
-                 n112$arable)
-
-norway$forest <- c(cba$Forest,
-                 n112$forest)
-
-norway$Ndep <- c(cba$TNdep,
-                 n112$Ndep)
-
-norway$temp.annual <- c(cba$temp,
-                 n112$temp.ann)
-
-norway$prec.annual <- c(cba$precip,
-                 rep(NA,dim(n112)[1]))
 ```
+
+We calculated the dissociation constants for the carbonate equilibrium based on @Dickson1979, @Harned1941, @Harned1943 and @Weiss1974.
 
 ```{r constants}
 
@@ -251,6 +214,10 @@ norway$K2 <- with(norway, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Ha
 ```
 
 ## Carbonate speciation from measured CO2
+
+Our datasets contain CO2 concentration calculated from total inorganic carbon, following the methods suggested by @Sobek2003 (N112 survey) and @Aberg2014 (CBA survey).
+
+The concentration of each carbonate species was calculated based on this value.
 
 ```{r carbonate-speciation-from-measured-CO2}
 norway$H2CO3 <- norway$CO2 # in mol/L
@@ -273,16 +240,6 @@ ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3", size = DIC)
   geom_point(aes(y = CO3, col = "CO3", size = DIC))+
   scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
   theme_minimal()
-
-ggplot(norway, aes(x = TA))+geom_point(aes(y = H2CO3, col = "H2CO3", size = DIC))+
-  geom_point(aes(y = HCO3, col = "HCO3", size = DIC))+
-  geom_point(aes(y = CO3, col = "CO3", size = DIC))+
-  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
-  coord_trans(y= "log10")+
-  theme_minimal()
-
-ggplot(norway)+geom_point(aes(x = TIC, y = HCO3))+ylim(0,0.00025)
-
 ```
 
 ```{r plot-fCO2}
@@ -299,6 +256,8 @@ ggplot(norway, aes(x = TOC, y = fCO2, col = survey))+
 
 ## Carbonate speciation from TA
 
+The concentration of each carbonate species is then calculated based on total alkalinity as a proxy for $HCO_3^- + 2 \times CO_3^{2-}$. The resulting pCO2 is also calculated. 
+
 ```{r carbonate-speciation-from-TA}
 
 norway$ta_CO3 <- with(norway,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
@@ -311,19 +270,21 @@ norway$ta_DIC <- with(norway, ta_H2CO3 + ta_HCO3 + ta_CO3)
 
 ## Save norway
 
+The dataset is saved under the name "norway".
+
 ```{r save-norway}
 saveRDS(norway,"norway.rds")
-
 ```
 
 # Northern Lakes Survey
 
+The dataset from the Northern Europeal Lakes Survey @Henriksen1998 is used as a training dataset. Additionnaly, it constitutes the basis for calculating national evasion rates in Norway, Sweden and Finland. 
+
 ## Download from NOFA database
 
-Measurements methods for the Northern Lakes Survey are detailed in @Henriksen1996.
+THe data is available in the NOFA database @ninanor, including catchment polygons. 
 
-Alkalinity, detailed in Annex 3. 
-"alk_e" is a the variable corresponding to the alkalinity calibrated, taking into account the account the different methods used in Norway, Sweden and Finland. 
+Measurements methods for the Northern Lakes Survey are detailed in @Henriksen1996. Alkalinity is detailed in Annex 3. "alk_e" is a the variable corresponding to the alkalinity calibrated, taking into account the account the different methods used in Norway, Sweden and Finland. 
 
 
 ```{r load-data, eval = F}
@@ -343,32 +304,9 @@ saveRDS(catchment.poly,"catchment.poly.rds")
 catchment.poly.corine <- st_transform(catchment.poly, crs = st_crs("EPSG:3035")) # converts to EU extended referential ETRS89-extended
 saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
 ```
-
-
-```{r model-fco2-4D, eval = F}
-ion <- readRDS("ion.rds")
-lakes <- readRDS("lakes.rds")
-
-
-#ion$alk_l <- with(ion, ifelse(nation == "Norway", alk - 32, alk))
-#ion$alk_e <- with(ion, ifelse(nation == "Norway", alk_l + sqrt(0.646*alk_l), alk_l))
-
-sum(ion$alk < 0) #153 lakes
-sum(ion$alk == 0) #272 lakes
-sum(ion$ph == 0) #2 lakes
-sum(ion$ph < 4.01)
-
-# ion.alk <- subset(ion, alk > 0)
-# ion.alk <- subset(ion.alk, ph > 4.01)
-
-# saveRDS(ion.alk, "ion.alk.rds")
-```
-
 ## Near surface wind speed
 
-<https://cds.climate.copernicus.eu/cdsapp#!/dataset/10.24381/cds.6c68c9bb?tab=overview>
-
-Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2
+Wind speed data is acquired from @C3S2020. Lakes from the NLS survey are larger than for the CBA and N112 survey. Therefore, we averaged the wind speed for the year and for the total area of the lakes.
 
 ```{r nws, eval = F}
 lakes <- readRDS("lakes.rds")
@@ -388,7 +326,9 @@ saveRDS(annual.nws.1995, "annual.nws.nls.rds")
 ```
 
 
-## Merge dfs
+## Merge data for NLS
+
+We merged the different datasets related to the NLS. Lakes with TOC and TP concentration inferior to 0 were removed (we assumed measurement errors in these lakes).
 
 ```{r merge-df, eval = F}
 
@@ -407,6 +347,8 @@ nls <- nls %>% filter(toc >= 0) %>% filter(tp > 0) %>% filter(uncertain == FALSE
 
 saveRDS(nls,"nls.rds")
 ```
+
+A simplified dataframe is created, with a selection of variables matching the variables used in the CBA and N112 survey. TOC and alkalinity are converted in mol/L.
 
 ```{r selected-df}
 nls <- readRDS("nls.rds")
@@ -433,6 +375,8 @@ nlss$nation <- nls$nation
 
 ```
 
+The dissociation constants are calculated as previously. 
+
 ```{r dissociation-constants, eval = F}
 nlss$Kw = with(nlss, exp(148.9802 - 13847.26/temp_k - 23.6521*log(temp_k))) # Dickson and Riley, 1979
 
@@ -446,6 +390,8 @@ nlss$OH <- with(nlss, Kw/Hplus)
 ```
 
 ## Save NLS
+
+The final dataframe is saved under the name "nlss".
 
 ```{r remove-duplicate}
 duplicated.id <- nlss$lake.id[which(duplicated(nlss$lake.id) == T)]
