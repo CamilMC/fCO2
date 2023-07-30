@@ -15,6 +15,8 @@ bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
 link-citations: yes
 ---
 
+html version: [Supplementary information](https://camilmc.github.io/fCO2/Supplementary_information.html)
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = T, message = F, warning = F, results = F)
 options(knitr.kable.NA = '')
@@ -48,11 +50,11 @@ fig_nums <- captioner()
 tab_nums <- captioner(prefix = "Table")
 ```
 
-# Bookdown documentation
 
-<https://bookdown.org/yihui/bookdown/a-single-document.html>
 
 # Import data
+
+The data was prepared in [Data preparation](https://camilmc.github.io/fCO2/Data_preparation.html)
 
 ```{r import-data}
 
@@ -88,6 +90,8 @@ ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
 *`r fig_nums("map-nls", "Map of TOC in mg/L in the Northern Lake Survey")`*
 
 # Estimation of organic and carbonate alkalinity
+
+In this section, we investigate several ways of estimating the share of organic alkalinity in our samples.
 
 ## Carbonate speciation N112 / CBA
 
@@ -149,7 +153,7 @@ toc_boxplot
 
 ## Organic alkalinity as OA = TA - CA
 
-Method also used in @Couturier2022.
+A simple method to estimate the organic alkalinity would be to substract the carbonate alkalinity, known thanks to the DIC measurement, to the total alkalinity. In a second step, one can investigate the link between the TOC concentration and this calculated organic alkalinity. This method is used in @Couturier2022.
 
 ```{r measured-oa}
 norway$OA <- with(norway, TA-CA)
@@ -163,10 +167,11 @@ ggplot(norway)+geom_point(aes(x = TA, y = OA))+theme_bw(), nrow = 2, ncol = 2)
 ```
 *`r fig_nums("OA", "OA estimated as TA - CA, in eq/L")`*
 
+In our samples, there is no link between organic alkalinity calculated that way and the concentration of TOC. This might result from other sources of alkalinity in our samples.
 
 ## Organic alkalinity according to @Hruska2003
 
-Hruska et al. suggest that the organic alkalinity (OA) can be computed as a triprotic model. OA is the defined as the concentration of organic bases $[RCOO^-]$ in the solution, minus the concentration of organic bases at pH = 4.5, as for an end-point titration. $[RCOO^-]$ depends on three $pK_a$ that were measured in @Hruska2003:
+@Hruska2003 suggested that the organic alkalinity (OA) can be computed as a triprotic model. OA is the defined as the concentration of organic bases $[RCOO^-]$ in the solution, minus the concentration of organic bases at pH = 4.5, as for an end-point titration. $[RCOO^-]$ depends on three $pK_a$ that were measured in @Hruska2003:
 
 $$[RCOO^-]=\alpha_1 \times \frac{m \times [TOC]}{3}+ \alpha_2 \times \frac{m \times [TOC]}{3} + \alpha_3 \times \frac{m \times [TOC]}{3}$$
 
@@ -201,6 +206,7 @@ norway$OA_hruska <- with(norway, RCOO-RCOO_4.5)
 ggplot(norway)+
   geom_point(aes(x = pH, y = RCOO, col = survey))+
   scale_color_manual(values = c("firebrick","dodgerblue3"))+
+  labs(y="[RCOO-], mol/L")+
   theme_minimal()+
   theme(legend.position = "bottom")
 
@@ -226,6 +232,8 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calcu
 ```
 
 *`r fig_nums("pco2-hruska", "pCO2 estimated with Hruska method, in atm")`*
+
+This method results in an overestimation of organic alkalinity in samples with high concentration of total organic carbon. The calculated carbonate alkalinity, and in turn the partial pressure of CO2, is then negative, which is impossible.
 
 ## Organic alkalinity according to @Liu2020
 
@@ -264,24 +272,17 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_Liu, col = "pCO2 from calculat
 
 *`r fig_nums("pCO2-Liu", "pCO2 estimated with Liu method, in atm")`*
 
-# Model TIC
+Once again, the organic alkalinity is overestimated in samples with high concentration of TOC, resulting in negative pCO2.
 
-## Theory
+# Model DIC and pCO2
 
-* TIC can be expressed as a function of \$TA\$ , $[H^+]$ and $TOC$. First we have to express it depending on $pCO_2$, $HCO_3^-$ or $CO_3^{2-}$.
+Since the different methods to adjust the total alkalinity by removing the share of organic alkalinity, we tried different models aiming at estimating either the concentration of dissolved inorganic carbon (DIC), in order to calculate pCO2 with the carbonate equilibrium, or directly the partial pressure of CO2.
 
-$TIC = H_2CO_3 + HCO_3^- + CO_3^{2-}$
+For each set of predictors, we fitted a model for DIC, then calculated the resulting pCO2; and fitted a model for pCO2. 
 
-$ K_0 = [H_2CO_3]/ pCO_2 \Leftrightarrow H_2CO_3 = pCO_2 \times K_0$
+The models used here are generalized linear model, allowing the use of the Gamma distribution. 
 
-$K_1 = \frac{HCO_3^- \times [H^+]}{[H_2CO_3]} \Leftrightarrow [HCO_3^-] = \frac{[H_2CO_3] \times K_1}{[H^+]} $
-
-$K_2 = \frac{[CO_3^{2-}] \times [H^+]}{[HCO_3^-]} \Leftrightarrow [CO_3^{2-}] = \frac{[HCO_3^-] \times K_2}{[H^+]}$
-
-Therefore
-
-$TIC = pCO_2 \times K_0 \times \left( 1 + \frac{K_1}{H^+} + \frac{K_2K_1}{[H^+]^2} \right)$
-
+We added a fixed intercept in the pCO2 models corresponding to the atmospheric concentration of CO2. 
 
 ## TA
 
@@ -428,7 +429,7 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
   theme_minimal()+
   theme(legend.position = "bottom")
 
-plot_grid(ggarrange(g1,g2),g3,nrow = 2, rel_heights = c(2,3), title = "test")
+plot_grid(ggarrange(g1,g2),g3,nrow = 2, rel_heights = c(2,3))
 ```
 
 *`r fig_nums("dic-invta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~1/TA")`*
@@ -973,7 +974,7 @@ norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
 
 
 g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
-  geom_point(aes(y = fCO2, col = "Measured pCO2", size = DIC))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
   labs(y = "pCO2, atm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
@@ -990,7 +991,7 @@ nlss$dic_pred <- predict(dic.tocta, newdata = nlss, type = "response")
 nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
 
 ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS", size = dic_pred), alpha = 0.5)+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
   labs(x = "pH", col = "", y = "pCO2, atm")+
   scale_color_manual(values = c("dodgerblue"))+
@@ -1665,7 +1666,7 @@ ggplot(data = nlss, aes(x = pH))+
 
 norway$invHplus <- with(norway, 1/Hplus)
 
-pco2.tocinvHplus.ta <- glm(formula = fCO2~TOC*invHplus+TA+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+pco2.tocinvHplus.ta <- glm(formula = fCO2~TOC*invHplus+TA+0+offset(fCO2.atm), data = norway, start = c(0,0,0,0), family = Gamma(link = "identity"))
 
 pco2.tocinvHplus.ta.sum <- summary(pco2.tocinvHplus.ta)$coefficients %>% as.data.frame() 
 pco2.tocinvHplus.ta.sp <- rownames(pco2.tocinvHplus.ta.sum)[which(pco2.tocinvHplus.ta.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
@@ -1718,7 +1719,7 @@ ggplot(data = nlss, aes(x = pH))+
 
 *`r fig_nums("pco2-tocta-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
-## Tableau recap
+## Summary of all models
 
 *`r tab_nums("summary-models","Summary of DIC and pCO2 models")`*
 
@@ -1833,6 +1834,8 @@ g3 <- ggplot()+geom_boxplot(data = nlss, aes(x="pH\nNorthern European Lakes Surv
 ggarrange(g1,g2,g3, common.legend = T, nrow = 3)
 ```
 
+*`r fig_nums("boxplot-compare", "Comparison of the distribution of TA, TOC and pH in the CBA, N112 and NLS surveys")`*
+
 ```{r nls-pCO2-TA}
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
 nlss$ta_HCO3 <- with(nlss, ta_CO3*Hplus/K2)
@@ -1845,7 +1848,10 @@ g1 <- ggplot(data = nlss, aes(x = pH))+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
   facet_zoom(y = pCO2_ta > 0, zoom.size = 1)+
   theme_bw(base_size = 15)
+
+print(g1)
 ```
+*`r fig_nums("pCO2-from-TA-NLS", "pCO2 calculated from TA in the NLS surveys")`*
 
 ```{r nls-pCO2-toc, fid.dim = c(15,13)}
 
@@ -1874,43 +1880,7 @@ g2 <- ggplot(data = nlss, aes(x = pH))+
 
 ggarrange(g2,g1, common.legend = T)
 ```
-
-```{r can-there-be-h2co3-at-high-pH}
-
-temp_k <- 4+273.5 # temperature 4 degrees
-
-K0 <- exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100)) # Weiss 1974
-K1 <- 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k) # Harned and Davis, 1943
-K2 <- 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k) # Harned and Scholes, 1941
-
-test <- data.frame(pH = seq(from = 3, to = 10, by = 0.1))
-test$Hplus <- 10^(-test$pH)
-DIC_1 <- rep(1,71) # mol/L
-test$pCO2_1 <- with(test,DIC_1/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
-test$H2CO3_1 <- with(test,pCO2_1*K0)
-test$HCO3_1 <- with(test, K1*H2CO3_1/Hplus)
-test$CO3_1 <- with(test,K2*HCO3_1/Hplus)
-
-DIC_2 <- rep(2,71) # mol/L
-test$pCO2_2 <- with(test,DIC_2/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
-test$H2CO3_2 <- with(test,pCO2_2*K0)
-test$HCO3_2 <- with(test, K1*H2CO3_2/Hplus)
-test$CO3_2 <- with(test,K2*HCO3_2/Hplus)
-
-DIC_3 <- rep(3,71) # mol/L
-test$pCO2_3 <- with(test,DIC_3/(K0+K1*K0/Hplus+K0*K1*K2/(Hplus^2)))
-test$H2CO3_3 <- with(test,pCO2_3*K0)
-test$HCO3_3 <- with(test, K1*H2CO3_3/Hplus)
-test$CO3_3 <- with(test,K2*HCO3_3/Hplus)
-
-ggplot(test, aes(x=pH))+geom_point(aes(y=H2CO3_1, col = "DIC = 1"))+
-  geom_point(aes(y=H2CO3_2, col = "DIC = 2"))+
-  geom_point(aes(y=H2CO3_3, col = "DIC = 3"))+
-  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
-  geom_vline(xintercept = -log10(K1))+
-  geom_vline(xintercept = -log10(K2))+
-  theme_minimal()
-```
+*`r fig_nums("pCO2-TA-TOC-NLS", "pCO2 calculated from TA, compared to pCO2 predicted with TOC, for the NLS surveys")`*
 
 # Evasion rate of CO2
 
@@ -1924,7 +1894,7 @@ See part 1
 
 Theory from @Hastie2018
 
-$$FCO_2 = A_{lake}*k*\Delta CO_2$$
+$$FCO_2 = A_{lake} \times k \times \Delta CO_2$$
 
 $FCO_2$ in mol/day, $A_{lake}$ = lake area in m2, $\Delta CO_2$ in mol/m3 is the difference between water and air pCO2.
 
@@ -1934,13 +1904,23 @@ $$k_{600} = 2.51 + 1.48 \times U_{10} + 0.39 \times U_{10} \times log_{10} (A_{l
 
 with $k_600$ in $cm/h$, $A$ in km2 and $U_{10}$ in m/s
 
-$k_{CO_2}$ has to be adjusted for temperature. @Crusius2003:
+Another widely used equation for k600 was introduced by @Cole1998 and only uses the wind speed:
+
+$$ k_{600} = 2.07 + 0.215 \times U_{10}^{1.7}$$
+
+
+$k_{CO_2}$ has to be adjusted for temperature [@Crusius2003] via the Schmidt number:
 
 $$k_{600} = k_{CO_2}\times \left( \frac{600}{Sc_{CO_2}} \right) ^{-n}$$
 
-The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014.
+The Schmidt $Sc_{CO_2}$ number is calculated from @Wanninkhof2014:
+
+$$S_c = 1923.6 - 125.06 \times T + 4.3773 \times T^2 - 0.085681 \times T^3$$
+
 
 ## Compute ECO2
+
+We calculate the gas transfer coefficient kCO2, based on the normalised gas transfer coefficient k600 and the Schmidt number. 
 
 ```{r norway-schmidt}
 norway$pCO2_pred <- predict(pco2.toc, newdata = norway)
@@ -2018,6 +1998,8 @@ nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in
  
 Comparison of the ECO2 obtained by calculation pCO2 from TOC or TA (in that case, we remove samples in which pH < 5.4).  
  
+ *`r tab_nums("summary-eco2-toc","Median of pCO2 and ECO2, pCO2 predicted from TOC")`*
+ 
 ```{r summary-eco2-toc, results = T}
 no <- norway %>% 
   dplyr::select(c("survey", "fCO2" ,"pCO2_pred", "ECO2_toc", "ECO2_toc_low")) %>% 
@@ -2032,9 +2014,11 @@ fns <- nlss %>% as_data_frame() %>%
   dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
 
 summary_eco2 <- rbind(no,fns) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
-kable(summary_eco2, caption = "Median of all variables") %>% kable_styling()
+kable(summary_eco2) %>% kable_styling()
 ```
 
+ *`r tab_nums("summary-eco2-ta","Median of pCO2 and ECO2, pCO2 calculated from TA (excluding samples with pH < 5.4)")`*
+ 
 ```{r summary-eco2_ta, results = T}
 no <- norway %>% 
   dplyr::select(c("survey", "pH", "fCO2", "ta_fCO2", "ECO2_ta", "ECO2_ta_low")) %>% 
@@ -2049,11 +2033,13 @@ fns <- nlss %>% as_data_frame() %>%
   dplyr::select(c("survey","nation","pH","measured_pCO2","pCO2_ta","ECO2_high","ECO2_low"))
 
 summary_eco2_ta <- rbind(no,fns) %>% filter(pH > 5.4) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
-kable(summary_eco2_ta, caption = "Median of all variables, pH > 5.4") %>% kable_styling()
+kable(summary_eco2_ta) %>% kable_styling()
 
 ```
 
 ## Summary table with median and mean, TOC
+
+ *`r tab_nums("summary-eco2","Median and mean of pCO2 and ECO2, pCO2 predicted from TOC, by survey")`*
 
 ```{r summary-eco2, results = T}
 no <- norway %>% 
@@ -2099,11 +2085,13 @@ kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/y
 
 We also compare with the efflux calculated by @Hastie2018 by class of area. The efflux is given in TgC/year. We convert it to gC/m2/year for each country. 
 
+ *`r tab_nums("summary-FCO2-median","Total efflux of CO2 computed from the median for each lake category, compared to efflux calculated for all lakes (Norway, Sweden, Finland)")`*
+
 ```{r summary_bin_toc_median, results = T}
 options(knitr.kable.NA = '')
 
 p0 <- median(nlss$pCO2_toc, na.rm = T)*1e6
-A0 <- sum(nlss$ake.area)
+A0 <- sum(nlss$lake.area)
 k0 <- nlss$kCO2 %>% median(na.rm = T) 
 k0_low <- nlss$kCO2_low %>% median(na.rm = T)
 E0 <- median(nlss$ECO2_toc * 365, na.rm = T) # gC/m2/y
@@ -2215,7 +2203,7 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            E_low = c(E1_low,E2_low,E3_low,E4_low,NA,E0_low),
            FCO2_low_bin = c(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin, sum(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin),F0_low_sumfrommedian),
             FCO2_low = c(F1_low_realsum, F2_low_realsum, F3_low_realsum, F4_low_realsum,sum(F1_low_realsum,F2_low_realsum,F3_low_realsum,F4_low_realsum),F0_low_realsum),
-           kCO2_high = c(k1,k2,k3,k4, NA,K0),
+           kCO2_high = c(k1,k2,k3,k4, NA,k0),
            E_high = c(E1,E2,E3,E4, NA,E0),
            FCO2_high_bin = c(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin, sum(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin),F0_sumfrommedian),
           FCO2_high = c(F1_realsum, F2_realsum, F3_realsum, F4_realsum, sum(F1_realsum, F2_realsum, F3_realsum, F4_realsum),F0_realsum),
@@ -2223,13 +2211,14 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y"),
-      caption = "Norway, Sweden, Finland, median value") %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
   group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
 ```
+
+ *`r tab_nums("summary-FCO2-mean","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes (Norway, Sweden, Finland)")`*
 
 ```{r summary_bin_toc_mean, results = T}
 
@@ -2342,7 +2331,7 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            E_low = c(E1_low,E2_low,E3_low,E4_low,NA,E0_low),
            FCO2_low_bin = c(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin, sum(F1_low_sumfrombin, F2_low_sumfrombin, F3_low_sumfrombin, F4_low_sumfrombin),F0_low_sumfrommean),
             FCO2_low = c(F1_low_realsum, F2_low_realsum, F3_low_realsum, F4_low_realsum,sum(F1_low_realsum,F2_low_realsum,F3_low_realsum,F4_low_realsum),F0_low_realsum),
-           kCO2_high = c(k1,k2,k3,k4, NA,K0),
+           kCO2_high = c(k1,k2,k3,k4, NA,k0),
            E_high = c(E1,E2,E3,E4, NA,E0),
            FCO2_high_bin = c(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin, sum(F1_sumfrombin, F2_sumfrombin, F3_sumfrombin, F4_sumfrombin),F0_sumfrommean),
           FCO2_high = c(F1_realsum, F2_realsum, F3_realsum, F4_realsum, sum(F1_realsum, F2_realsum, F3_realsum, F4_realsum),F0_realsum),
@@ -2350,18 +2339,36 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
            Wey_sum = c(W1_sum, W2_sum, W3_sum, W4_sum, sum(W1_sum, W2_sum, W3_sum, W4_sum),NA))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y"),
-      caption = "Norway, Sweden, Finland; mean value") %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
   group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
 ```
-## Bin estimation by country
+
+## Bin estimation by country for all inland waters 
+
+We estimated the share of inland waters belonging to a given category of lakes (depending on area in km2) based on the proportion represented by each category in the total of the lakes sampled during the Northern European Lakes Survey. 
+
+The largest lakes of Norway, Sweden and Finland account for a large part of the total inland waters. Therefore, we included them as a separated category. We assumed that all the lakes with an area larger than 100 km2 were samples in the NLS. Therefore, the CO2 efflux for these big lakes were simply added to the efflux calculated for the rest of the inland water.   
+
+```{r lake-area-distribution}
+
+ggplot(nlss)+geom_boxplot(aes(x=nation, y = lake.area, col = nation))+coord_trans(y = "log10")+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue3"))+
+  geom_hline(yintercept = 100)+
+  labs(y = "Lake area, km2", x = "")+
+  scale_y_continuous(breaks = c(0.1,1,10,100))+
+  theme_minimal()
+
+```
+
+ *`r tab_nums("summary-FCO2-norway","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Norway")`*
 
 ```{r bin-area-norway, results = T}
 
 nor <- filter(nlss, nation == "Norway")
+
 inland.waters <- 20221 * 1e6 # km2 to m2, @SSB
 
 p0 <- mean(nor$pCO2_toc, na.rm = T)*1e6
@@ -2422,7 +2429,7 @@ k3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm
 E3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
 F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
 
-# 1 < Lake size < 10 km2
+# 10 < Lake size < 100 km2
 
 p4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
 A4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
@@ -2436,14 +2443,14 @@ k4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.
 E4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
 F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
 
-# Big lakes
+# Big lakes > 100 km2
 p5 <- nor %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
 A5 <- nor %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
 
 k5 <- with(subset(nor, lake.area > 100), mean(kCO2, na.rm = T)) 
 E5 <- with(subset(nor, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
 F5 <- E5*A5/12.011 * 43.99 * 1e-12
-F
+
 k5_low <- with(subset(nor, lake.area > 100), mean(kCO2_low, na.rm = T)) 
 E5_low <- with(subset(nor, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
 F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
@@ -2460,15 +2467,17 @@ bin_FCO2 <- data.frame(
            FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y"), caption = "Norway") %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
   group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
 
 ```
 
+
+ *`r tab_nums("summary-FCO2-sweden","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Sweden")`*
+ 
 ```{r bin-area-sweden, results = T}
 swe <- filter(nlss, nation == "Sweden")
-boxplot(swe$lake.area)
 
 inland.waters <- 4014169.92 * 1e4 # ha to m2, @SCB
 
@@ -2551,7 +2560,7 @@ A5 <- swe %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to
 k5 <- with(subset(swe, lake.area > 100), mean(kCO2, na.rm = T)) 
 E5 <- with(subset(swe, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
 F5 <- E5*A5/12.011 * 43.99 * 1e-12
-F
+
 k5_low <- with(subset(swe, lake.area > 100), mean(kCO2_low, na.rm = T)) 
 E5_low <- with(subset(swe, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
 F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
@@ -2568,14 +2577,16 @@ bin_FCO2 <- data.frame(
            FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y"), caption = "Sweden") %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
   group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
 
 ```
+
+ *`r tab_nums("summary-FCO2-finland","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Finland")`*
+ 
 ```{r bin-area-finland, results = T}
 fin <- filter(nlss, nation == "Finland")
-boxplot(fin$lake.area)
 
 inland.waters <- 34515 * 1e6 # km2 to m2, @Statfi
 
@@ -2658,7 +2669,7 @@ A5 <- fin %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to
 k5 <- with(subset(fin, lake.area > 100), mean(kCO2, na.rm = T)) 
 E5 <- with(subset(fin, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
 F5 <- E5*A5/12.011 * 43.99 * 1e-12
-F
+
 k5_low <- with(subset(fin, lake.area > 100), mean(kCO2_low, na.rm = T)) 
 E5_low <- with(subset(fin, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
 F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
@@ -2675,7 +2686,7 @@ bin_FCO2 <- data.frame(
            FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
 
 
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y"), caption = "Finland") %>% kable_styling() %>% 
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
   add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
   group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
 
@@ -2686,6 +2697,8 @@ kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uat
 ## Compare with @Raymond2013
 
 @Raymond2013 estimate the CO2 emissions as gC/m2 land/year. We convert our estimated median CO2 evasion rate from gC/m2/year to gC/m2 land/year by multiplying it by the water area in a given region, and then dividing it by the land area. 
+
+ *`r tab_nums("summary-FCO2-land","Evasion rate of CO2 per unit of area (gC/m2/year) and per unit of land area (gC/m2 land/year), low and high estimates")`*
 
 ```{r raymond, results = T}
 inland.waters.nor <- 20221 * 1e6 # km2 to m2, @SSB
@@ -2717,7 +2730,6 @@ land.eco2.low <- c(mean.eco2.low[1]*tot.water/tot.land,
                     mean.eco2.low[2]*inland.waters.nor/land.nor,
                     mean.eco2.low[3]*inland.waters.swe/land.swe,
                     mean.eco2.low[4]*inland.waters.fin/land.fin)
-                    
 
 kable(tibble("Country" = c("All 3", "Norway", "Sweden", "Finland"),
             "Water"= c(tot.water, inland.waters.nor, inland.waters.swe, inland.waters.fin),
@@ -2729,10 +2741,7 @@ kable(tibble("Country" = c("All 3", "Norway", "Sweden", "Finland"),
       col.names = c("Country","Water area, km2", "Land area, km2", "Median ECO2, gC/m2/year", "Median ECO2, gC/m2 land/year", "Median ECO2, gC/m2/year", "Median ECO2, gC/m2 land/year"),
       digits = 2) %>% kable_styling() %>%
   add_header_above(c(" ","Area" = 2, "High estimate" = 2, "Low estimate" = 2))
-
 ```
-
-
 
 ```{r early-exit}
 knitr::knit_exit()
@@ -3017,8 +3026,6 @@ both <- cbind(high,low)
 kable(both, digits = 2) %>% kable_styling()
 ```
 
-
-
 ```{r tranvik-finland, results = T}
 inland.waters.fin <- 34515 * 1e6 # km2 to m2, @Statfi
 land <- 338478 * 1e6 # km2 to m2
@@ -3183,8 +3190,6 @@ kable(rbind(bin_fin, sum_table, caption = "Finland"), digits = 2,
 
 ```
 
-
-`r knitr::knit_exit()`
 
 # Maps
 

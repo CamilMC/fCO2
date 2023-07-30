@@ -14,6 +14,8 @@ bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
 link-citations: yes
 ---
 
+html version: [Data preparation](https://camilmc.github.io/fCO2/Data_preparation.html)
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache.lazy = F)
 options(knitr.kable.NA="", knitr.table.format = "html")
@@ -63,10 +65,7 @@ bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_are
 cba <- merge(cba.all,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
 ```
 
-The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling.
-
-
-Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2
+The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling. (Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2)
 
 
 ```{r cba-windspeed, eval = F}
@@ -90,7 +89,7 @@ annual.nws.cba <- readRDS("annual.nws.cba.rds")@data %>% select(c("Lake_ID","lay
 cba <- cba %>%  merge(annual.nws.cba, by = "Lake_ID")
 ```
 
-# N112 data
+## N112 data
 
 This survey was first published in @Larsen2011. 
 
@@ -132,7 +131,7 @@ annual.nws.n112 <- readRDS("annual.nws.n112.rds")@data %>% dplyr::select(c("Vatn
 n112 <- merge(n112, annual.nws.n112, by = "Vatnlnr")
 ```
 
-## Join CBA and N112 data
+## Merge CBA and N112 data
 
 Both dataset were merged in one. Concentration of TOC, TIC and other elements were converted in mol/L. 
 
@@ -198,6 +197,8 @@ norway$catchment.area <- c(cba$basin_area_km2,
 
 norway$nws_m.s <- c(cba$nws_m.s,
                     n112$nws_m.s)
+
+norway <- filter(norway, !is.na(TA))
 ```
 
 We calculated the dissociation constants for the carbonate equilibrium based on @Dickson1979, @Harned1941, @Harned1943 and @Weiss1974.
@@ -215,7 +216,7 @@ norway$K2 <- with(norway, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Ha
 
 ## Carbonate speciation from measured CO2
 
-Our datasets contain CO2 concentration calculated from total inorganic carbon, following the methods suggested by @Sobek2003 (N112 survey) and @Aberg2014 (CBA survey).
+Our datasets contain CO2 concentration calculated from total inorganic carbon, following the methods suggested by @Sobek2003 for the N112 survey and @Aberg2014 for the CBA survey.
 
 The concentration of each carbonate species was calculated based on this value.
 
@@ -239,6 +240,7 @@ ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3", size = DIC)
   geom_point(aes(y = HCO3, col = "HCO3", size = DIC))+
   geom_point(aes(y = CO3, col = "CO3", size = DIC))+
   scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(y= "Concentration in mol/L", col = "Carbonate species", size = "DIC in mol/L")+
   theme_minimal()
 ```
 
@@ -248,8 +250,9 @@ ggplot(norway, aes(x = TOC, y = fCO2, col = survey))+
   geom_hline(yintercept = fCO2.atm.2019, col = "firebrick")+
   geom_hline(yintercept = fCO2.atm.2004, col = "dodgerblue3")+
   scale_color_manual(values = c("firebrick","dodgerblue3"))+
-  coord_trans(x = "log10")+
+  #coord_trans(x = "log10")+
   geom_point()+
+  labs(y = "pCO2, atm", x = "TOC, mol/L")+
   theme_minimal()
 
 ```
@@ -268,7 +271,7 @@ norway$ta_fCO2 <- with(norway,ta_H2CO3/K0)
 norway$ta_DIC <- with(norway, ta_H2CO3 + ta_HCO3 + ta_CO3)
 ```
 
-## Save norway
+## Save test dataset
 
 The dataset is saved under the name "norway".
 
@@ -282,7 +285,7 @@ The dataset from the Northern Europeal Lakes Survey @Henriksen1998 is used as a 
 
 ## Download from NOFA database
 
-THe data is available in the NOFA database @ninanor, including catchment polygons. 
+The data is available in the NOFA database [@ninanor], including catchment polygons. 
 
 Measurements methods for the Northern Lakes Survey are detailed in @Henriksen1996. Alkalinity is detailed in Annex 3. "alk_e" is a the variable corresponding to the alkalinity calibrated, taking into account the account the different methods used in Norway, Sweden and Finland. 
 
