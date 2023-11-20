@@ -72,11 +72,13 @@ norway$Hplus_umol <- norway$Hplus *1e6
 norway$invHplus_umol <- 1/norway$Hplus *1e6
 norway$invHplus <- 1/norway$Hplus
 
-ggplot(norway)+geom_point(aes(x=long, y = lat, col = survey, size = TOC_mg))+
+ggplot()+
+   geom_point(data = filter(norway, fCO2 > 2500*1e-6),aes(x=long, y = lat), col = "gray20", size = 6)+
+  geom_point(data = filter(norway, fCO2 < 2500*1e-6),aes(x=long, y = lat, col = survey, size = fCO2*1e6))+
   borders(regions = c("Norway"))+ylim(57,63)+xlim(4,13)+
   scale_color_manual(values = c("firebrick","dodgerblue3"))+
  # scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 30, rev = T)+ 
-  labs(col="Survey", size = "TOC, mg/L")+
+  labs(col="Survey", size = "pCO2, uatm")+
   theme_void()
 
 ```
@@ -87,10 +89,11 @@ nlss <- readRDS("nlss.rds")
 nlss$invHplus <- 1/nlss$Hplus
 nlss$TOC_mg <- nlss$TOC*12.011*1e3
 
-ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC))+
+ggplot(nlss)+geom_point(aes(x=long, y = lat, col = TOC_mg))+
   borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
-  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 0.001, rev = T)+ 
-  theme_minimal()
+  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 10, rev = T)+
+  labs(x="TOC, mg/L")+
+  theme_void()
 ```
 
 *`r fig_nums("map-nls", "Map of TOC in mg/L in the Northern Lake Survey")`*
@@ -2008,6 +2011,13 @@ ggarrange(g2,g1, common.legend = T)
 ```
 *`r fig_nums("pCO2-TA-TOC-NLS", "pCO2 calculated from TA, compared to pCO2 predicted with TOC, for the NLS surveys")`*
 
+```{r map-pco2-nlss}
+ggplot(nlss)+geom_point(aes(x=long, y = lat, col = pCO2_toc*1e6))+
+  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
+  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 1000, rev = T)+
+  labs(col="pCO2, uatm")+
+  theme_void()
+```
 # Evasion rate of CO2
 
 ## Theory
@@ -3398,6 +3408,7 @@ ggplot()+
   theme(legend.position = "right")
 
 ```
+
 *`r fig_nums("map-pCO2-log","pCO2 in log scale for the Northern Lake Survey")`*
 
 ## ECO2
