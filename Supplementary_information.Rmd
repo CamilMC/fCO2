@@ -72,6 +72,12 @@ norway$Hplus_umol <- norway$Hplus *1e6
 norway$invHplus_umol <- 1/norway$Hplus *1e6
 norway$invHplus <- 1/norway$Hplus
 
+ggplot(norway)+geom_point(aes(x=long, y = lat, col = survey, size = TOC_mg))+
+  borders(regions = c("Norway"))+ylim(57,63)+xlim(4,13)+
+  scale_color_manual(values = c("firebrick","dodgerblue3"))+
+ # scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 30, rev = T)+ 
+  labs(col="Survey", size = "TOC, mg/L")+
+  theme_void()
 
 ```
 
@@ -613,6 +619,126 @@ ggplot(data = nlss, aes(x = pH))+
 *`r fig_nums("pco2-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r for-article}
+ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"), alpha = 0.5)+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "bottom")
+```
+
+*`r fig_nums("pco2-toc-article", "Model results for pCO2~TOC")`*
+
+## TOC + temp
+
+```{r glm-dic-toc-temp, fig.dim = c(10,8), results = T}
+
+dic.toc.temp <- glm(formula = DIC~TOC+temp_k, data = norway, family = Gamma(link = "identity"))
+dic.toc.temp.sum <- summary(dic.toc.temp)$coefficients %>% as.data.frame() 
+dic.toc.temp.sp <- rownames(dic.toc.temp.sum)[which(dic.toc.temp.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+dic.toc.temp.sum <- dic.toc.temp.sum %>% format(scientific = T, digits = 2)
+
+kable(dic.toc.temp.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$DIC_pred <- fitted(dic.toc.temp)
+norway$DIC_pred_res <- residuals(dic.toc.temp)
+dic.toc.temp.r2 <- with(summary(dic.toc.temp), 1 - deviance/null.deviance) %>% round(2)
+dic.toc.temp.aic <- AIC(dic.toc.temp)
+
+g1 <- ggplot(norway)+geom_point(aes(x=DIC,y=DIC_pred))+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",dic.toc.temp.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=DIC_pred,y=DIC_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+norway$pCO2_calc <- with(norway, DIC_pred/(K0+K0*K1/Hplus+K0*K1*K2/(Hplus^2)))
+
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("dic-toc", "Predicted vs fitted values, Standardized residuals vs fitted values, and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC")`*
+
+```{r nlss-dic-toc-temp}
+nlss$dic_pred <- predict(dic.toc.temp, newdata = nlss, type = "response")
+nlss$pCO2_calc <- with(nlss, dic_pred/(K0+K0*K1/Hplus+K0*K1*K2/Hplus))
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_calc, col = "pCO2 from predicted DIC, NLS"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+
+*`r fig_nums("dic-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+```{r glm-pCO2-toc-temp, fig.dim = c(10,8), results = T}
+
+pco2.toc.temp <- glm(formula = fCO2~TOC+temp_k+0+offset(fCO2.atm), data = norway, family = Gamma(link = "identity"))
+
+pco2.toc.temp.sum <- summary(pco2.toc.temp)$coefficients %>% as.data.frame() 
+pco2.toc.temp.sp <- rownames(pco2.toc.temp.sum)[which(pco2.toc.temp.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.temp.sum <- pco2.toc.temp.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.temp.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+norway$pCO2_pred <- fitted(pco2.toc.temp)
+norway$pCO2_pred_res <- residuals(pco2.toc.temp)
+pco2.toc.temp.r2 <- with(summary(pco2.toc.temp), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.temp.aic <- AIC(pco2.toc.temp)
+
+g1 <- ggplot(norway)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.toc.temp.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(norway)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+*`r fig_nums("pco2-toc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) and predicted (blue), pCO2 vs pH for DIC~TOC")`* 
+
+```{r nlss-pco2-toc-temp}
+nlss$pCO2_pred <- predict(pco2.toc.temp, newdata = nlss, type = "response")
+
+ggplot(data = nlss, aes(x = pH))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2"), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+*`r fig_nums("pco2-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+```{r for-article-temp}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"), alpha = 0.5)+
   geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
   labs(y = "pCO2, atm", x = "pH", col = "")+
