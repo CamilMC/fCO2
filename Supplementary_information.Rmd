@@ -73,7 +73,7 @@ norway$invHplus_umol <- 1/norway$Hplus *1e6
 norway$invHplus <- 1/norway$Hplus
 
 ggplot()+
-   geom_point(data = filter(norway, fCO2 > 2500*1e-6),aes(x=long, y = lat), col = "gray20", size = 6)+
+   geom_point(data = filter(norway, fCO2 > 2500*1e-6),aes(x=long, y = lat, col = survey), size = 6, shape = 1)+
   geom_point(data = filter(norway, fCO2 < 2500*1e-6),aes(x=long, y = lat, col = survey, size = fCO2*1e6))+
   borders(regions = c("Norway"))+ylim(57,63)+xlim(4,13)+
   scale_color_manual(values = c("firebrick","dodgerblue3"))+
