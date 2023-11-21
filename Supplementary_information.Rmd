@@ -2173,6 +2173,15 @@ kable(summary_eco2_ta) %>% kable_styling()
 
 ```
 
+
+```{r map-eco2-nlss}
+ggplot(nlss)+geom_point(aes(x=long, y = lat, col = ECO2_toc_low))+
+  borders(regions = c("Norway","Sweden","Finland"))+ylim(55,72)+xlim(4,32)+
+  scale_fill_continuous_divergingx(palette = "RdYlBu", aesthetics = c("fill","col"), mid = 0.5,rev = T)+
+  labs(col="ECO2, gC/m2/day")+
+  theme_void()
+```
+
 ## Summary table with median and mean, TOC
 
  *`r tab_nums("summary-eco2","Median and mean of pCO2 and ECO2, pCO2 predicted from TOC, by survey")`*
