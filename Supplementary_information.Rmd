@@ -2059,7 +2059,8 @@ $$S_c = 1923.6 - 125.06 \times T + 4.3773 \times T^2 - 0.085681 \times T^3$$
 We calculate the gas transfer coefficient kCO2, based on the normalised gas transfer coefficient k600 and the Schmidt number. 
 
 ```{r norway-schmidt}
-norway$pCO2_pred <- predict(pco2.toc, newdata = norway)
+norway$pCO2_pred <- fitted(pco2.toc)
+norway$pCO2_pred_res <- residuals(pco2.toc)
 
 norway$Sc <- with(norway, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
 
@@ -2096,7 +2097,35 @@ norway$ECO2_ta <- with(norway, kCO2*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/
 
 norway$ECO2_ta_low <- with(norway, kCO2_low*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
+ggplot(norway, aes(x = TOC * 12.011 / 1e-3)) + geom_point(aes(y = fCO2*1e-6, col = "Measured"), alpha = 0.8, shape = 1) +
+  geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
+  labs(x = "TOC in mg/L", y = "pCO2 in uatm")+
+  facet_zoom(x = TOC < 0.002, y = fCO2 < 4.3e-4)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
 
+
+ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"))+
+  geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"))+
+    labs(x = "Measured pCO2 in uatm", y = "pCO2 in uatm")+
+  geom_abline(slope = 1, intercept = 0)+
+#  facet_zoom(x = TOC < 0.002, y = fCO2 < 4.3e-4)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = k600, col = "Vachon and Prairie"))+
+          geom_point(aes(y = k600_low, col = "Cole and Caraco")) + 
+          scale_x_continuous(trans = "log10") + theme_bw()
+ 
+  ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = ECO2, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
+          geom_point(aes(y = ECO2_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
+          scale_color_manual(values = c("dodgerblue3","firebrick"))+
+    labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
+          scale_x_continuous(trans = "log10") + theme_bw() +
+    theme(legend.position = "bottom")
 ```
 
 ```{r NLSS-schmidt-number}
@@ -2128,6 +2157,13 @@ nlss$ECO2_toc_low <- with(nlss, kCO2_low*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011)
 nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
+
+  ggplot(nlss, aes(x = lake.area)) + geom_point(aes(y = ECO2_toc, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
+          geom_point(aes(y = ECO2_toc_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
+          scale_color_manual(values = c("dodgerblue3","firebrick"))+
+    labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
+          scale_x_continuous(trans = "log10") + theme_bw() +
+    theme(legend.position = "bottom")
 ```
 
 ## Compare ECO2 from TOC and ECO2 from TA

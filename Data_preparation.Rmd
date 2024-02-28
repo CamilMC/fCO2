@@ -309,7 +309,7 @@ saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
 ```
 ## Near surface wind speed
 
-Wind speed data is acquired from @C3S2020. Lakes from the NLS survey are larger than for the CBA and N112 survey. Therefore, we averaged the wind speed for the year and for the total area of the lakes.
+Wind speed data is acquired from the AgERA5 dataset, thqt aggregates hourly data to monthly data from ERA5 reanalysis @C3S2020. Lakes from the NLS survey are larger than for the CBA and N112 survey, in which we considered only the wind speed at the sampling location to calculate the gas transfer velocity. Here, we averaged the wind speed for the year and for the total area of the lakes.
 
 ```{r nws, eval = F}
 lakes <- readRDS("lakes.rds")
