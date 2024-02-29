@@ -605,6 +605,8 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
+
+
 *`r fig_nums("pco2-toc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) and predicted (blue), pCO2 vs pH for DIC~TOC")`* 
 
 ```{r nlss-pco2-toc}
@@ -631,7 +633,129 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model")
   theme(legend.position = "bottom")
 ```
 
+```{r glm-pCO2-toc-cba, fig.dim = c(10,8), results = T}
+
+cba <- subset(norway, survey == "CBA_2019")
+
+pco2.toc.cba <- glm(formula = fCO2~TOC+0+offset(fCO2.atm), data = cba, family = Gamma(link = "identity"))
+
+pco2.toc.cba.sum <- summary(pco2.toc.cba)$coefficients %>% as.data.frame() 
+pco2.toc.cba.sp <- rownames(pco2.toc.cba.sum)[which(pco2.toc.cba.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.cba.sum <- pco2.toc.cba.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.cba.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+cba$pCO2_pred <- fitted(pco2.toc.cba)
+cba$pCO2_pred_res <- residuals(pco2.toc.cba)
+pco2.toc.cba.r2 <- with(summary(pco2.toc.cba), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.cba.aic <- AIC(pco2.toc.cba)
+
+g1 <- ggplot(cba)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.toc.cba.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(cba)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(cba,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+```{r glm-pCO2-toc-n112, fig.dim = c(10,8), results = T}
+
+n112 <- subset(norway, survey == "N112_2004")
+
+pco2.toc.n112 <- glm(formula = fCO2~TOC+0+offset(fCO2.atm), data = n112, family = Gamma(link = "identity"))
+
+pco2.toc.n112.sum <- summary(pco2.toc.n112)$coefficients %>% as.data.frame() 
+pco2.toc.n112.sp <- rownames(pco2.toc.n112.sum)[which(pco2.toc.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.n112.sum <- pco2.toc.n112.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.n112.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+n112$pCO2_pred <- fitted(pco2.toc.n112)
+n112$pCO2_pred_res <- residuals(pco2.toc.n112)
+pco2.toc.n112.r2 <- with(summary(pco2.toc.n112), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc.n112.aic <- AIC(pco2.toc.n112)
+
+g1 <- ggplot(n112)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.toc.n112.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(n112)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(n112,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
+  labs(y = "pCO2, atm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3"))+
+  facet_grid(cols = vars(survey))+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+```
+
+```{r try-cba-model-on-n112}
+n112$pCO2_pred <- predict(pco2.toc.cba, newdata = n112, type = "response")
+
+ggplot(data = n112, aes(x = fCO2))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2 for N112 based on model fitted on CBA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  coord_trans(x="log10",y="log10")+
+  annotate(x = 0.0005, y = 0.0015, geom = "label", label = paste("r = ",round(cor(n112$fCO2, n112$pCO2_pred, use = "pairwise.complete"),2)))+
+  labs(x = "Measured pCO2", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+```{r try-n112-model-on-cba}
+cba$pCO2_pred <- predict(pco2.toc.n112, newdata = cba, type = "response")
+
+ggplot(data = cba, aes(x = fCO2))+
+  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2 for CBA based on model fitted on N112"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  coord_trans(x="log10",y="log10")+
+  annotate(x = 0.0005, y = 0.005, geom = "label", label = paste("r = ",round(cor(cba$fCO2, cba$pCO2_pred, use = "pairwise.complete"),2)))+
+  labs(x = "Measured pCO2", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
 *`r fig_nums("pco2-toc-article", "Model results for pCO2~TOC")`*
+
+```{r boxplot-n112-cba}
+
+ggarrange(
+ ggplot(norway)+geom_boxplot(aes(x = "", y = TOC * 12.011 / 1e-3, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "Total organic carbon, mgC/L")+
+  coord_trans(y="log10")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+,
+ ggplot(norway)+geom_boxplot(aes(x = "", y = fCO2 * 1e6, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "pCO2, uatm")+
+  theme_minimal()+
+  theme(legend.position = "bottom"),
+common.legend = T,
+ncol = 1, nrow = 2)
+```
+
 
 ## TOC + temp
 
@@ -1938,6 +2062,8 @@ kable(cbind(data.frame(Predictors = c("TA",
 
 # Northern European Lakes Survey
 
+## Boxplots
+
 ```{r compare-boxplots, fig.dim = c(10,10)}
 g1 <- ggplot()+geom_boxplot(data = nlss, aes(x="TA\nNorthern European Lakes Survey, 1995", y=TA, col = "NLS_1995"))+
   geom_boxplot(data = norway, aes(x = "TA\n CBA (2019) and N112 (2004) surveys", y = TA, col = survey))+
@@ -2096,6 +2222,9 @@ norway$ECO2_toc_low <- with(norway, kCO2_low*(pCO2_pred-fCO2.atm)*K0*1e3 * 12.01
 norway$ECO2_ta <- with(norway, kCO2*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 
 norway$ECO2_ta_low <- with(norway, kCO2_low*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+```
+
+```{r a-lot-of-plots}
 
 ggplot(norway, aes(x = TOC * 12.011 / 1e-3)) + geom_point(aes(y = fCO2*1e-6, col = "Measured"), alpha = 0.8, shape = 1) +
   geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
@@ -2107,7 +2236,7 @@ ggplot(norway, aes(x = TOC * 12.011 / 1e-3)) + geom_point(aes(y = fCO2*1e-6, col
   theme(legend.position = "bottom")
 
 
-ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"))+
+ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "Calculated from TA"))+
   geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"))+
     labs(x = "Measured pCO2 in uatm", y = "pCO2 in uatm")+
   geom_abline(slope = 1, intercept = 0)+
@@ -2126,6 +2255,260 @@ ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "With 
     labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
           scale_x_continuous(trans = "log10") + theme_bw() +
     theme(legend.position = "bottom")
+  
+ggplot(norway)+geom_point(aes(x=fCO2, y = pCO2_pred))  
+
+ggplot(norway, aes(x = fCO2*1e-6)) + geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  labs(x = "TOC in mg/L", y = "pCO2 in uatm")+
+  facet_grid(col = vars(survey))+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot()+ geom_point(data = subset(norway, TOC < 30/12.011*1e-3), aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(data = subset(norway, TOC > 30/12.011*1e-3), aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  facet_zoom(x = fCO2 < 2000e-6, y = ta_fCO2 < 5000e-6)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+  ggplot(norway)+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+  
+ggplot(subset(norway, TOC < 30 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC < 10 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC > 20 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "TOC > 25 mg/L, spearman")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ggplot(subset(norway, pH < 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2500, y = 20000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2500, y = 22000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH < 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH > 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ggplot(subset(norway, pH > 5.4 & TOC < 0.004))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 48 mgC/L")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH > 5.4 & TOC < 0.0025))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 30 mgC/L")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "CBA_2019"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "everything"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "everything"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, pearson correlation coefficient")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "N112_2004"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+  
+
+ggplot(subset(norway, survey == "CBA_2019" & pH < 5.4))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019 & pH < 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "CBA_2019"))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, spearman correlation coefficient")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "N112_2004"))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(norway)+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = 3)+
+  geom_smooth(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = survey, group = survey))+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot()+geom_point(data = subset(norway, pH < 5.4), aes(x = fCO2, y = pCO2_pred, col = "pH < 5.4 : predicted with TOC"))+
+  geom_point(data = subset(norway, TOC > 30 / 12.011 * 1e-3), aes(x = fCO2, y = ta_fCO2, col = "TOC > 25 : predicted with TA"))+
+   labs(x = "Measured pC02 ", y = "Predicted pCO2", title = "")+
+  geom_abline(slope = 1, intercept = 0, linetype = 3)+
+  geom_hline(yintercept = fCO2.atm.2004)+
+    geom_hline(yintercept = fCO2.atm.2019)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(norway, aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH < 5.4), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC > 15 / 12.011 * 1e-3), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ggarrange(
+  plotlist = list(
+ggplot(subset(norway, survey == "CBA_2019"))+geom_density(aes(x = ECO2, fill = "High estimate, measured"), alpha = 0.3, col = NA)+
+  geom_density(aes(x=ECO2_toc, fill = "High estimate, TOC"), alpha = 0.3, col = NA) +
+  geom_vline(aes(xintercept = median(subset(norway, survey == "CBA_2019")$ECO2), col = "High estimate, measured", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "CBA_2019")$ECO2), col = "High estimate, measured", linetype = "mean"))+
+  geom_vline(aes(xintercept = median(subset(norway, survey == "CBA_2019")$ECO2_toc), col = "High estimate, TOC", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "CBA_2019")$ECO2_toc), col = "High estimate, TOC", linetype = "mean"))+
+ scale_color_manual(values = c("dodgerblue3","firebrick","dodgerblue3","firebrick"))+
+   scale_fill_manual(values = c("dodgerblue3","firebrick"))+
+  labs(x = "ECO2 in gC/m2/day", col = "",linetype = "", title = "CBA, 2019", fill = "")+
+  theme_minimal()
+,
+ggplot(subset(norway, survey == "N112_2004"))+geom_density(aes(x = ECO2, fill = "High estimate, measured"), alpha = 0.3, col = NA)+
+ geom_density(aes(x=ECO2_toc, fill = "High estimate, TOC"), alpha = 0.3, col = NA) +
+  geom_vline(aes(xintercept = median(subset(norway, survey == "N112_2004")$ECO2), col = "High estimate, measured", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "N112_2004")$ECO2), col = "High estimate, measured", linetype = "mean"))+
+    geom_vline(aes(xintercept = median(subset(norway, survey == "N112_2004")$ECO2_toc), col = "High estimate, TOC", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "N112_2004")$ECO2_toc), col = "High estimate, TOC", linetype = "mean"))+
+  scale_color_manual(values = c("dodgerblue3","firebrick","dodgerblue3","firebrick"))+
+   scale_fill_manual(values = c("dodgerblue3","firebrick"))+
+  labs(x = "ECO2 in gC/m2/day", col = "", linetype = "", title = "N112, 2004", fill = "")+
+  theme_minimal()
+),
+  common.legend = T, legend = "bottom")
+
+ggarrange(
+  plotlist = list(
+ggplot(subset(norway, survey == "CBA_2019"))+geom_density(aes(x = ECO2_low, fill = "Low estimate, measured"), alpha = 0.3, col = NA)+
+  geom_density(aes(x=ECO2_toc_low, fill = "Low estimate, TOC"), alpha = 0.3, col = NA) +
+  geom_vline(aes(xintercept = median(subset(norway, survey == "CBA_2019")$ECO2_low), col = "Low estimate, measured", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "CBA_2019")$ECO2_low), col = "Low estimate, measured", linetype = "mean"))+
+  geom_vline(aes(xintercept = median(subset(norway, survey == "CBA_2019")$ECO2_toc_low), col = "Low estimate, TOC", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "CBA_2019")$ECO2_toc_low), col = "Low estimate, TOC", linetype = "mean"))+
+ scale_color_manual(values = c("dodgerblue3","firebrick","dodgerblue3","firebrick"))+
+   scale_fill_manual(values = c("dodgerblue3","firebrick"))+
+  labs(x = "ECO2 in gC/m2/day", col = "",linetype = "", title = "CBA, 2019", fill = "")+
+  theme_minimal()
+,
+ggplot(subset(norway, survey == "N112_2004"))+geom_density(aes(x = ECO2_low, fill = "Low estimate, measured"), alpha = 0.3, col = NA)+
+ geom_density(aes(x=ECO2_toc_low, fill = "Low estimate, TOC"), alpha = 0.3, col = NA) +
+  geom_vline(aes(xintercept = median(subset(norway, survey == "N112_2004")$ECO2_low), col = "Low estimate, measured", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "N112_2004")$ECO2_low), col = "Low estimate, measured", linetype = "mean"))+
+    geom_vline(aes(xintercept = median(subset(norway, survey == "N112_2004")$ECO2_toc_low), col = "Low estimate, TOC", linetype = "median"))+
+  geom_vline(aes(xintercept = mean(subset(norway, survey == "N112_2004")$ECO2_toc_low), col = "Low estimate, TOC", linetype = "mean"))+
+  scale_color_manual(values = c("dodgerblue3","firebrick","dodgerblue3","firebrick"))+
+   scale_fill_manual(values = c("dodgerblue3","firebrick"))+
+  labs(x = "ECO2 in gC/m2/day", col = "", linetype = "", title = "N112, 2004", fill = "")+
+  theme_minimal()
+),
+  common.legend = T, legend = "bottom")
+
+ 
 ```
 
 ```{r NLSS-schmidt-number}
@@ -2164,6 +2547,8 @@ nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in
     labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
           scale_x_continuous(trans = "log10") + theme_bw() +
     theme(legend.position = "bottom")
+
+  
 ```
 
 ## Compare ECO2 from TOC and ECO2 from TA
