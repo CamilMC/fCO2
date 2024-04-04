@@ -2646,6 +2646,17 @@ kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/y
   save_kable(file = "compare.eco2.measured.png",zoom = 5)
 
 ```
+## Monte Carlo for confidence intervals, all nlss
+
+```{r mcuq}
+library(mnonr)
+
+ma1 <- nlss %>% subset(select = c(pCO2_toc,nws_m.s,lake.area)) %>% mardia()
+covma <- cov(subset(nlss,select = c(pCO2_toc,nws_m.s,lake.area)), use = "complete.obs")
+
+new.nlss <- mnonr(n=nrow(nlss), p = 3, ms = ma1$multivariate[1,2], mk = ma1$multivariate[2,2], Sigma = covma)
+
+```
 
 ## Compare total emissions calculated from bins, with total emissions calculated from median and mean
 
@@ -2930,6 +2941,10 @@ ggplot(nlss)+geom_boxplot(aes(x=nation, y = lake.area, col = nation))+coord_tran
 ```
 
  *`r tab_nums("summary-FCO2-norway","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Norway")`*
+
+CAN BE RECODED WITH AN EXTRA COLUMN INDICATING LAKE CATEGORY + summarise
+That would help for calculating uncertainty on each resulting number
+
 
 ```{r bin-area-norway, results = T}
 
