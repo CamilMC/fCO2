@@ -23,7 +23,7 @@ options(knitr.kable.NA = '')
 ```
 
 ```{r libraries}
-library(dplyr)
+
 
 library(ggplot2)
 library(ggforce)
@@ -37,6 +37,10 @@ library(gamlss)
 library(kableExtra)
 
 library(rsq)
+
+library(sp)
+
+library(dplyr)
 
 fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
 fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
@@ -82,6 +86,8 @@ ggplot()+
   theme_void()
 
 ```
+
+*`r fig_nums("map-norway", "Lakes sampled during the CBA survey (in red) and during the N112 survey (in red). ")`*
 
 ```{r map-nls}
 
@@ -132,6 +138,7 @@ ggplot(norway, aes(x = pH))+
   theme_minimal()+
   theme(legend.position = "bottom")
 ```
+
 *`r fig_nums("carbonates-norway", "Concentration of carbonate species in mol/L in the CBA and N112 surveys")`*
 
 ```{r fCO2-from-TA}
@@ -144,6 +151,7 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = ta_fCO2, col = "pCO2 from TA"), alp
   theme(legend.position = "bottom")
 
 ```
+
 *`r fig_nums("map-pCo2", "Measured (red) and calculated (blue) pCO2 in atm for the CBA and N112 surveys")`*
 
 ```{r compare-cba-n112}
@@ -174,6 +182,7 @@ ggplot(norway)+geom_point(aes(x = TOC, y = OA))+theme_bw(),
 ggplot(norway)+geom_point(aes(x = TA, y = OA))+theme_bw(), nrow = 2, ncol = 2)
 
 ```
+
 *`r fig_nums("OA", "OA estimated as TA - CA, in eq/L")`*
 
 In our samples, there is no link between organic alkalinity calculated that way and the concentration of TOC. This might result from other sources of alkalinity in our samples.
@@ -232,8 +241,8 @@ norway$fCO2_hruska <- with(norway,H2CO3_hruska/K0)
 
 ```{r fCO2-from-hruska}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calculated from Hruska et al"), alpha = 0.5)+
-  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
-  labs(y = "pCO2, atm", x = "pH", col = "")+
+  geom_point(aes(y = fCO2*1e6, col = "Measured pCO2"), alpha = 0.5)+
+  labs(y = "pCO2, uatm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
   theme_minimal(base_size = 15)+
@@ -271,7 +280,7 @@ norway$DIC_Liu <- with(norway, H2CO3_Liu + HCO3_Liu + CO3_Liu)
 
 ```{r fCO2-from-liu}
 ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_Liu, col = "pCO2 from calculated from Liu et al."), alpha = 0.5)+
-  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
+  geom_point(aes(y = fCO2*1e6, col = "Measured pCO2"), alpha = 0.5)+
   labs(y = "pCO2, atm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
@@ -515,6 +524,8 @@ ggplot(data = nlss, aes(x = pH))+
 
 ## TOC
 
+### Model DIC
+
 ```{r glm-dic-toc, fig.dim = c(10,8), results = T}
 
 dic.toc <- glm(formula = DIC~TOC, data = norway, family = Gamma(link = "identity"))
@@ -552,6 +563,29 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
+```{r autocorrelation-of-residuals}
+library(spdep)
+
+norway.spdf <- SpatialPointsDataFrame(coords = dplyr::select(norway, c("long", "lat")), data = norway)
+k.neigh.w <- knearneigh(norway.spdf, k = 20) %>% knn2nb() %>% nb2listw()
+moran.res <- moran.test(norway$pCO2_pred_res, k.neigh.w, na.action = na.omit, alternative = "two.sided")
+
+moran.toc <- moran.test(norway$TOC, k.neigh.w, na.action = na.omit, alternative = "two.sided")
+moran.fCO2 <- moran.test(norway$fCO2, k.neigh.w, na.action = na.omit, alternative = "two.sided")
+
+ggplot(norway, aes(x = long, y = lat))+geom_point(aes(col = pCO2_pred_res))+
+  scale_color_continuous_diverging(palette = "Blue-Red", mid = 0)+
+  labs(col = "Residuals")+
+  borders(regions = "Norway")+
+    annotate(geom = "label", x = 11, y = 58.5, label = paste("Moran's I of residuals = ", round(moran.res$estimate[1],2), sep = ""))+
+  annotate(geom = "label", x = 6, y = 62.6, label = paste("Moran's I of TOC = ", round(moran.toc$estimate[1],2), sep = ""), fill = "white")+
+  annotate(geom = "label", x = 6, y = 62.3, label = paste("Moran's I of fCO2 = ", round(moran.fCO2$estimate[1],2), sep = ""), fill = "white")+
+  lims(x = c(4.5,13), y = c(58,63))+
+  theme_void()
+  
+
+```
+
 *`r fig_nums("dic-toc", "Predicted vs fitted values, Standardized residuals vs fitted values, and measured (red) calculated (blue) pCO2 vs pH for DIC~TOC")`*
 
 ```{r nlss-dic-toc}
@@ -567,8 +601,9 @@ ggplot(data = nlss, aes(x = pH))+
   theme(legend.position = "top")
 ```
 
-
 *`r fig_nums("dic-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
+
+### Model pCO2
 
 ```{r glm-pCO2-toc, fig.dim = c(10,8), results = T}
 
@@ -605,8 +640,6 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
-
-
 *`r fig_nums("pco2-toc", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) and predicted (blue), pCO2 vs pH for DIC~TOC")`* 
 
 ```{r nlss-pco2-toc}
@@ -624,14 +657,74 @@ ggplot(data = nlss, aes(x = pH))+
 *`r fig_nums("pco2-toc-nls", "Predicted pCO2 in atm vs pH for the Northern Lake Survey")`*
 
 ```{r for-article}
-ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"), alpha = 0.5)+
-  geom_point(aes(y = fCO2, col = "Measured pCO2"), alpha = 0.5)+
+ggplot(norway,aes(x = pH))+geom_point(aes(y = pCO2_pred*1e6, col = "pCO2 predicted with TOC"), alpha = 0.5)+
+  geom_point(aes(y = ta_fCO2*1e6, col = "pCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2*1e6, col = "Measured pCO2"), alpha = 0.5)+
+  labs(y = "pCO2, uatm", x = "pH", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3","orange"))+
+  facet_zoom(x = pH > 5.4, y = ta_fCO2*1e6 < 7500)+
+  theme_bw(base_size = 15)+ 
+  theme(legend.position = "bottom")
+
+ggplot(norway,aes(x = TOC_mg))+geom_point(aes(y = pCO2_pred*1e6, col = "pCO2 predicted with TOC"), alpha = 0.5)+
+  geom_point(aes(y = ta_fCO2*1e6, col = "pCO2 from TA"), alpha = 0.5)+
+  geom_point(aes(y = fCO2*1e6, col = "Measured pCO2"), alpha = 0.5)+
+  labs(y = "pCO2, uatm", x = "TOC, mg/L", col = "")+
+  scale_color_manual(values = c( "firebrick","dodgerblue3","orange"))+
+  facet_zoom(x = TOC_mg < 30, y = ta_fCO2*1e6 < 7500)+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "bottom")
+
+knitr::kable(data.frame("Type" = c("Pearson's r for pCO2 predicted from TOC", "Pearson's r for pCO2 calculated from TA"),
+                  "All dataset" = c(cor(norway$fCO2, norway$pCO2_pred), cor(norway$fCO2, norway$ta_fCO2)),
+                 "TOC < 30 mg/L" = c(cor(subset(norway, TOC_mg < 30)$fCO2, subset(norway, TOC_mg < 30)$pCO2_pred), cor(subset(norway, TOC_mg < 30)$fCO2, subset(norway, TOC_mg < 30)$ta_fCO2)),
+                 "pH < 5.4" = c(cor(subset(norway, pH < 5.4)$fCO2, subset(norway, pH < 5.4)$pCO2_pred), cor(subset(norway, pH < 5.4)$fCO2, subset(norway, pH < 5.4)$ta_fCO2)),
+                 "pH > 5.4" = c(cor(subset(norway, pH > 5.4)$fCO2, subset(norway, pH > 5.4)$pCO2_pred), cor(subset(norway, pH > 5.4)$fCO2, subset(norway, pH > 5.4)$ta_fCO2)),
+                 "pH > 5.4 & TOC < 30 mg/L" = c(cor(subset(norway, pH > 5.4 & TOC_mg < 30)$fCO2, subset(norway, pH > 5.4 & TOC_mg < 30)$pCO2_pred), cor(subset(norway, pH > 5.4 & TOC_mg < 30)$fCO2, subset(norway, pH > 5.4 & TOC_mg < 30)$ta_fCO2))
+                 ), col.names = c("Type","All dataset","TOC < 30 mg/L",  "pH < 5.4", "pH > 5.4",  "pH > 5.4 & TOC < 30 mg/L"), digits = 2) %>%
+  kable_styling(bootstrap_options = "bordered")
+```
+
+### What is the impact of the 3 samples with TOC > 30 mg/L? 
+
+```{r fit-glm-toc-inf-30, eval = T}
+
+df <- filter(norway, TOC_mg < 30)
+pco2.toc2 <- glm(formula = fCO2~TOC+0+offset(fCO2.atm), data = df, family = Gamma(link = "identity"))
+
+pco2.toc2.sum <- summary(pco2.toc2)$coefficients %>% as.data.frame() 
+pco2.toc2.sp <- rownames(pco2.toc2.sum)[which(pco2.toc2.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc2.sum <- pco2.toc2.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc2.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+df$pCO2_pred <- fitted(pco2.toc2)
+df$pCO2_pred_res <- residuals(pco2.toc2)
+pco2.toc2.r2 <- with(summary(pco2.toc), 1 - deviance/null.deviance) %>% round(2)
+pco2.toc2.aic <- AIC(pco2.toc2)
+
+g1 <- ggplot(df)+geom_point(aes(x=fCO2,y=pCO2_pred))+   labs(x = "Measured pCO2, atm", y = "Predicted pCO2, atm")+
+  geom_abline(slope= 1, intercept = 0)+coord_trans(x="log10",y="log10")+
+  annotate(x = 0.5e-3, y = 3e-3, geom = "label", label = paste("R2 = ",pco2.toc2.r2, ""))+
+    theme_minimal()
+
+g2 <- ggplot(df)+geom_point(aes(x=pCO2_pred,y=pCO2_pred_res))+
+     coord_trans(x = "log10")+labs(x = "fitted", y = "Std Residuals")+
+    theme_minimal()
+
+g3 <- ggplot(df,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from model"))+
+  geom_point(aes(y = fCO2, col = "Measured pCO2"))+
   labs(y = "pCO2, atm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
   facet_grid(cols = vars(survey))+
-  theme_bw(base_size = 15)+
+  theme_minimal()+
   theme(legend.position = "bottom")
+
+plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
+
 ```
+
+### Traing on CBA dataset and test on N112 dataset
 
 ```{r glm-pCO2-toc-cba, fig.dim = c(10,8), results = T}
 
@@ -669,6 +762,23 @@ g3 <- ggplot(cba,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from mode
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
+ 
+```{r try-cba-model-on-n112}
+n112 <- filter(norway, survey == "N112_2004")
+n112$pCO2_pred <- predict(pco2.toc.cba, newdata = n112, type = "response")
+
+ggplot(data = n112, aes(x = fCO2*1e6))+
+  geom_point(aes(y = pCO2_pred*1e6, col = "Predicted pCO2 for N112 based on model fitted on CBA"), alpha = 0.5)+
+  geom_abline(slope = 1, intercept = 0, lty = 2)+
+  coord_trans(x="log10",y="log10")+
+  annotate(x = 500, y = 1500, geom = "label", label = paste("Correlation coefficient = ",round(cor(n112$fCO2, n112$pCO2_pred, use = "pairwise.complete"),2)))+
+  labs(x = "Measured pCO2", col = "", y = "pCO2, atm")+
+  scale_color_manual(values = c("dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top")
+```
+
+### Training on N112 dataset and test on CBA
 
 ```{r glm-pCO2-toc-n112, fig.dim = c(10,8), results = T}
 
@@ -705,20 +815,6 @@ g3 <- ggplot(n112,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from mod
   theme(legend.position = "bottom")
 
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
-```
-
-```{r try-cba-model-on-n112}
-n112$pCO2_pred <- predict(pco2.toc.cba, newdata = n112, type = "response")
-
-ggplot(data = n112, aes(x = fCO2))+
-  geom_point(aes(y = pCO2_pred, col = "Predicted pCO2 for N112 based on model fitted on CBA"), alpha = 0.5)+
-  geom_abline(slope = 1, intercept = 0, lty = 2)+
-  coord_trans(x="log10",y="log10")+
-  annotate(x = 0.0005, y = 0.0015, geom = "label", label = paste("r = ",round(cor(n112$fCO2, n112$pCO2_pred, use = "pairwise.complete"),2)))+
-  labs(x = "Measured pCO2", col = "", y = "pCO2, atm")+
-  scale_color_manual(values = c("dodgerblue"))+
-  theme_bw(base_size = 15)+
-  theme(legend.position = "top")
 ```
 
 ```{r try-n112-model-on-cba}
@@ -1671,7 +1767,7 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_calc, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
-*`r fig_nums("dic-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC ~ TOC + TA x Hplus")`*
+*`r fig_nums("dic.toc.tahplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC ~ TOC + TA x Hplus")`*
 
 ```{r nlss-dic-toc-tahplus}
 nlss$dic_pred <- predict(dic.toc.taHplus, newdata = nlss, type = "response")
@@ -1837,7 +1933,7 @@ g3 <- ggplot(norway,aes(x= pH))+geom_point(aes(y = pCO2_pred, col = "pCO2 from m
 plot_grid(ggarrange(g1,g2),g3,nrow = 2,rel_heights = c(2,3))
 ```
 
-*`r fig_nums("dic-ta", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA")`
+*`r fig_nums("dic-toc-ta-invhplus", "Predicted vs fitted values, Standardized residuals vs fitted values,and measured (red) calculated (blue) pCO2 vs pH for DIC~TA")`
 
 ```{r nlss-pco2-toc-tainvhplus}
 
@@ -2062,34 +2158,8 @@ kable(cbind(data.frame(Predictors = c("TA",
 
 # Northern European Lakes Survey
 
-## Boxplots
 
-```{r compare-boxplots, fig.dim = c(10,10)}
-g1 <- ggplot()+geom_boxplot(data = nlss, aes(x="TA\nNorthern European Lakes Survey, 1995", y=TA, col = "NLS_1995"))+
-  geom_boxplot(data = norway, aes(x = "TA\n CBA (2019) and N112 (2004) surveys", y = TA, col = survey))+
-  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
-  labs(x = "", col = "",y = "Total alkalinity, eq/L")+
-  theme_minimal(base_size = 15)+
-  theme(legend.position = "bottom")
-
-g2 <- ggplot()+geom_boxplot(data = nlss, aes(x="TOC\nNorthern European Lakes Survey, 1995", y=TOC, col = "NLS_1995"))+
-  geom_boxplot(data = norway, aes(x = "TOC\n CBA (2019) and N112 (2004) surveys", y = TOC, col = survey))+
-  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
-  labs(x = "", col = "",y = "Total organic carbon, mol/L")+
-  theme_minimal(base_size = 15)+
-  theme(legend.position = "bottom")
-
-g3 <- ggplot()+geom_boxplot(data = nlss, aes(x="pH\nNorthern European Lakes Survey, 1995", y=pH, col = "NLS_1995"))+
-  geom_boxplot(data = norway, aes(x = "pH\n CBA (2019) and N112 (2004) surveys", y = pH, col = survey))+
-  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
-  labs(x = "", col = "",y = "pH")+
-  theme_minimal(base_size = 15)+
-  theme(legend.position = "bottom")
-
-ggarrange(g1,g2,g3, common.legend = T, nrow = 3)
-```
-
-*`r fig_nums("boxplot-compare", "Comparison of the distribution of TA, TOC and pH in the CBA, N112 and NLS surveys")`*
+## Predict pCO2
 
 ```{r nls-pCO2-TA}
 nlss$ta_CO3 <- with(nlss,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
@@ -2106,17 +2176,20 @@ g1 <- ggplot(data = nlss, aes(x = pH))+
 
 print(g1)
 ```
+
 *`r fig_nums("pCO2-from-TA-NLS", "pCO2 calculated from TA in the NLS surveys")`*
 
 ```{r nls-pCO2-toc, fid.dim = c(15,13)}
 
 nlss$pCO2_toc <- predict(pco2.toc, newdata = nlss, type = "response")
+nlss$pCO2_toc.se <- predict(pco2.toc, newdata = nlss, type = "response", se.fit = T)$se.fit
+
 
 g1 <- ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_ta, col = "pCO2 from carbonate equilibrium"), alpha = 0.5)+
-  geom_point(aes(y = pCO2_toc, col = "pCO2 modelled with TOC"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_ta*1e6, col = "pCO2 from carbonate equilibrium"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_toc*1e6, col = "pCO2 modelled with TOC"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", col = "", y = "")+
+  labs(x = "pH", col = "", y = "pCO2, uatm")+
   scale_color_manual(values = c("firebrick","dodgerblue"))+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")+
@@ -2124,18 +2197,67 @@ g1 <- ggplot(data = nlss, aes(x = pH))+
 
 
 g2 <- ggplot(data = nlss, aes(x = pH))+
-  geom_point(aes(y = pCO2_ta, col = "pCO2 from carbonate equilibrium"), alpha = 0.5)+
-  geom_point(aes(y = pCO2_toc, col = "pCO2 modelled with TOC"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_ta*1e6, col = "pCO2 from carbonate equilibrium"), alpha = 0.5)+
+  geom_point(aes(y = pCO2_toc*1e6, col = "pCO2 modelled with TOC"), alpha = 0.5)+
   geom_hline(yintercept = fCO2.atm.1995, lty = 2)+
-  labs(x = "pH", col = "", y = "pCO2, atm")+
+  labs(x = "pH", col = "", y = "pCO2, uatm")+
   scale_color_manual(values = c("firebrick","dodgerblue"))+
-  ylim(0,0.006)+
+  ylim(0,0.006*1e6)+
   theme_bw(base_size = 15)+
   theme(legend.position = "top")
 
 ggarrange(g2,g1, common.legend = T)
 ```
+
 *`r fig_nums("pCO2-TA-TOC-NLS", "pCO2 calculated from TA, compared to pCO2 predicted with TOC, for the NLS surveys")`*
+
+```{r sd-model}
+
+ggplot(nlss)+
+  geom_errorbar(aes(x = TOC_mg, ymin = (pCO2_toc - pCO2_toc.se)*1e6, ymax = (pCO2_toc + pCO2_toc.se)*1e6), col = "grey80")+
+  geom_point(aes(x = TOC_mg, y = pCO2_toc*1e6), col = "firebrick", size = 0.2)+
+  geom_hline(yintercept = fCO2.atm.1995*1e6, col = "pink")+
+  theme_bw()
+
+```
+
+*`r fig_nums("pCO2-TOC-sd", "pCO2 calculated from TOC, with sd")`*
+
+```{r nls-choose-toc, fid.dim = c(10,20)}
+ggarrange(
+ggplot()+
+  geom_point(data = nlss, aes(x = pH, y = pCO2_toc*1e6), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995*1e6, lty = 2)+
+  labs(x = "pH", col = "", y = "pCO2, uatm", title = "pCO2 predicted from TOC for the Northern European Lakes Survey")+
+  scale_color_manual(values = c("firebrick","dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top"),
+
+ggplot()+
+  geom_point(data = nlss, aes(x = TA*1e3, y = pCO2_toc*1e6), alpha = 0.5)+
+  geom_hline(yintercept = fCO2.atm.1995*1e6, lty = 2)+
+  labs(x = "TA, eq/L", col = "", y = "pCO2, uatm", title = "pCO2 predicted from TOC for the Northern European Lakes Survey")+
+  scale_color_manual(values = c("firebrick","dodgerblue"))+
+  theme_bw(base_size = 15)+
+  theme(legend.position = "top"),
+nrow = 2, labels = "AUTO"
+)
+
+```
+
+*`r fig_nums("pco2-NLS-pH-ta", "pCO2 values calculated from TOC for the Northern European Lakes Survey, depending on pH (A) and TA (B)")`*
+
+```{r table-cor-nlss}
+nlss5.4 <- subset(nlss, pH > 5.4)
+knitr::kable(data.frame("Correlation coefficient" = c("Pearson","Spearman"), 
+                        "Full dataset" = c(cor(nlss$pCO2_ta, nlss$pCO2_toc, use = "pairwise.complete"),
+                                       cor(nlss$pCO2_ta, nlss$pCO2_toc, use = "pairwise.complete", method = "spearman")),
+                        "pH > 5.4" = c(cor(nlss5.4$pCO2_ta, nlss5.4$pCO2_toc, use = "pairwise.complete"),
+                                       cor(nlss5.4$pCO2_ta, nlss5.4$pCO2_toc, use = "pairwise.complete", method = "spearman"))
+                        ),
+             digits = 2, col.names = c("Correlation coefficient","Full dataset", "pH > 5.4"), caption = tab_nums("cor-nlss", "Correlation coefficients between pCO2 predicted from TOC and pCO2 calculated from TA for the Northern European Lakes Survey")) %>%
+  kable_styling(bootstrap_options = "bordered")
+```
 
 ```{r map-pco2-nlss}
 ggplot(nlss)+geom_point(aes(x=long, y = lat, col = pCO2_toc*1e6))+
@@ -2144,6 +2266,48 @@ ggplot(nlss)+geom_point(aes(x=long, y = lat, col = pCO2_toc*1e6))+
   labs(col="pCO2, uatm")+
   theme_void()
 ```
+
+*`r fig_nums("map-pco2-NLS", "Map of pCO2 values calculated from TOC for the Northern European Lakes Survey")`*
+
+## Boxplots
+
+```{r compare-boxplots, fig.dim = c(10,10)}
+g1 <- ggplot()+geom_boxplot(data = nlss, aes(x="TA\nNorthern European\nLakes Survey, 1995", y=TA, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "TA\n CBA (2019) and\nN112 (2004) surveys", y = TA, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "Total alkalinity, eq/L")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+g2 <- ggplot()+geom_boxplot(data = nlss, aes(x="TOC\nNorthern European\nLakes Survey, 1995", y=TOC_mg, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "TOC\n CBA (2019) and\nN112 (2004) surveys", y = TOC_mg, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "Total organic carbon, mg/L")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+g3 <- ggplot()+geom_boxplot(data = nlss, aes(x="pH\nNorthern European\nLakes Survey, 1995", y=pH, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "pH\n CBA (2019) and\nN112 (2004) surveys", y = pH, col = survey))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "pH")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+g4 <- ggplot()+
+#    geom_boxplot(data = filter(nlss, pH > 5.4), aes(x="pCO2 TA\nNorthern Europeann\Lakes Survey, 1995", y=pCO2_ta, col = "NLS_1995"))+
+  geom_boxplot(data = norway, aes(x = "pCO2\n CBA (2019) and\nN112 (2004) surveys", y = fCO2*1e6, col = survey))+
+  geom_boxplot(data = nlss, aes(x="pCO2 TOC\nNorthern European\nLakes Survey, 1995", y=pCO2_toc*1e6, col = "NLS_1995"))+
+  scale_color_manual(values = c("firebrick","orange","dodgerblue"))+
+  labs(x = "", col = "",y = "pCO2, uatm")+
+  theme_minimal(base_size = 15)+
+  theme(legend.position = "bottom")
+
+ggarrange(g1,g2,g3,g4, common.legend = T, nrow = 2, ncol = 2)
+```
+
+*`r fig_nums("boxplot-compare", "Comparison of the distribution of TA, TOC, pH and pCO2 (measured or predicted) in the CBA, N112 and NLS surveys")`*
+
+
 # Evasion rate of CO2
 
 ## Theory
@@ -2183,6 +2347,8 @@ $$S_c = 1923.6 - 125.06 \times T + 4.3773 \times T^2 - 0.085681 \times T^3$$
 ## Compute ECO2
 
 We calculate the gas transfer coefficient kCO2, based on the normalised gas transfer coefficient k600 and the Schmidt number. 
+
+### ECO2 for CBA and N112 surveys
 
 ```{r norway-schmidt}
 norway$pCO2_pred <- fitted(pco2.toc)
@@ -2224,238 +2390,121 @@ norway$ECO2_ta <- with(norway, kCO2*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/
 norway$ECO2_ta_low <- with(norway, kCO2_low*(ta_fCO2-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
 ```
 
-```{r a-lot-of-plots}
-
-ggplot(norway, aes(x = TOC * 12.011 / 1e-3)) + geom_point(aes(y = fCO2*1e-6, col = "Measured"), alpha = 0.8, shape = 1) +
-  geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
-  labs(x = "TOC in mg/L", y = "pCO2 in uatm")+
-  facet_zoom(x = TOC < 0.002, y = fCO2 < 4.3e-4)+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
 
 
-ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "Calculated from TA"))+
-  geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"))+
-    labs(x = "Measured pCO2 in uatm", y = "pCO2 in uatm")+
-  geom_abline(slope = 1, intercept = 0)+
-#  facet_zoom(x = TOC < 0.002, y = fCO2 < 4.3e-4)+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+### ECO2 for Northern European Lakes Survey
 
- ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = k600, col = "Vachon and Prairie"))+
+```{r NLSS-schmidt-number}
+
+nlss$Sc <- with(nlss, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
+
+nlss$n <- NA
+for(i in 1:length(nlss$n)){
+  if(nlss$nws_m.s[i] < 3.7 & is.na(nlss$nws_m.s[i]) == F){
+    nlss$n[i] = 2/3
+  }else if(nlss$nws_m.s[i] > 3.7 & is.na(nlss$nws_m.s[i]) == F){
+    nlss$n[i] = 1/2
+  } else if(is.na(nlss$nws_m.s[i]) == T){
+    nlss$n[i] = NA
+  }
+}
+
+
+nlss$k600 <- with(nlss, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake area in km2
+                    
+nlss$kCO2 <- with(nlss, k600*(600/Sc)^(n))*24*1e-2
+
+nlss$k600_low <- with(nlss, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
+nlss$kCO2_low <- with(nlss, k600_low*(600/Sc)^(n))*24*1e-2
+
+nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+nlss$ECO2_toc_low <- with(nlss, kCO2_low*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011)
+
+nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
+```
+
+ *`r fig_nums("summary-eco2-ta","Median of pCO2 and ECO2, pCO2 calculated from TA (excluding samples with pH < 5.4)")`*
+
+### Comparison k600 depending on the method
+
+```{r compare-k600-boxplots}
+
+ggarrange(
+  
+ggplot()+ geom_boxplot(data=norway, aes(x = survey, y = k600_low, fill = "Cole & Caraco"), position = "dodge2") +
+  geom_boxplot(data=nlss, aes(x = "NLSS", y = k600_low, fill = "Cole & Caraco", position = "dodge"))+
+  scale_fill_manual(values = "dodgerblue3")+
+  ylim(2,21)+
+  labs(fill = "", y = "k600 in cm/h", x = "", title = "Cole & Caraco")+
+  theme_minimal()+theme(legend.position = "none"),
+  
+ggplot()+geom_boxplot(data=norway, aes(x = survey, y = k600, fill = "Vachon & Prairie", position = "dodge2"))+
+   geom_boxplot(data=nlss, aes(x = "NLSS", y = k600, fill = "Vachon & Prairie"))+
+  scale_fill_manual(values = "firebrick")+
+  ylim(2,21)+
+  labs(fill = "", y = "k600 in cm/h", x = "", title = "Vachon & Prairie")+
+  theme_minimal()+theme(legend.position = "none"),
+
+common.legend = F, align = "hv"
+
+)
+```
+
+*`r fig_nums("boxplots-k600","Boxplots of the k600 calculated for each survey, low estimate (Cole & Caraco) and high estimate (Vachon & Prairie))")`*
+
+```{r k600-lake-area}
+ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = k600, col = "Vachon and Prairie"))+
           geom_point(aes(y = k600_low, col = "Cole and Caraco")) + 
-          scale_x_continuous(trans = "log10") + theme_bw()
- 
-  ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = ECO2, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
-          geom_point(aes(y = ECO2_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
+          coord_trans(x = "log10") + 
+          labs(x = "Lake area in km2")+
+          scale_x_continuous(breaks = c(0.1, 0.5,1,2.5, 5,10,25,50, 100, 250), minor_breaks = NULL)+
           scale_color_manual(values = c("dodgerblue3","firebrick"))+
-    labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
-          scale_x_continuous(trans = "log10") + theme_bw() +
-    theme(legend.position = "bottom")
-  
-ggplot(norway)+geom_point(aes(x=fCO2, y = pCO2_pred))  
+          theme_bw()
+ 
+```
 
-ggplot(norway, aes(x = fCO2*1e-6)) + geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  labs(x = "TOC in mg/L", y = "pCO2 in uatm")+
-  facet_grid(col = vars(survey))+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+```{r ECO2-nlss}
+ggplot(nlss, aes(x = lake.area)) + 
+          geom_point(aes(y = ECO2_toc, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
+          geom_point(aes(y = ECO2_toc_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
+          scale_color_manual(values = c("dodgerblue3","firebrick"))+
+          labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
+          coord_trans(x = "log10") + 
+          scale_x_continuous(breaks = c(0.1, 0.5,1,2.5, 5,10,25,50, 100, 250), minor_breaks = NULL)+
+          theme_bw() +
+          theme(legend.position = "bottom")
+```
 
-ggplot()+ geom_point(data = subset(norway, TOC < 30/12.011*1e-3), aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(data = subset(norway, TOC > 30/12.011*1e-3), aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
-  facet_zoom(x = fCO2 < 2000e-6, y = ta_fCO2 < 5000e-6)+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+*`r fig_nums("k600-lake-area","Calculated ECO2 depending on lake area (log-scale) with low estimate of k600 (in blue, without lake area) and red (including lake area)")`*
 
-  ggplot(norway)+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-  
-ggplot(subset(norway, TOC < 30 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+## Compare ECO2 from TOC and ECO2 from TA
+ 
+Comparison of the ECO2 obtained by calculation pCO2 from TOC or TA (in that case, we remove samples in which pH < 5.4).  
+ 
+ *`r tab_nums("summary-eco2-toc","Median of pCO2 and ECO2, pCO2 predicted from TOC")`*
+ 
+```{r summary-eco2-toc, results = T}
+no <- norway %>% 
+  dplyr::select(c("survey", "fCO2" ,"pCO2_pred", "ECO2_toc", "ECO2_toc_low")) %>% 
+  mutate(nation = "Norway") %>% 
+  setNames(c("survey","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low","nation"))  %>% 
+  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
 
-ggplot(subset(norway, TOC < 10 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+fns <- nlss %>% as_data_frame() %>%
+  dplyr::select(c("nation", "pCO2_toc", "ECO2_toc", "ECO2_toc_low")) %>% 
+  mutate(fCO2 = NA, survey = "nls_1995") %>% 
+  setNames(c("nation","pCO2_toc","ECO2_high", "ECO2_low","measured_pCO2","survey")) %>% 
+  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
 
-ggplot(subset(norway, TOC > 20 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "TOC > 25 mg/L, spearman")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
+summary_eco2 <- rbind(no,fns) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
+kable(summary_eco2) %>% kable_styling()
+```
 
-
-ggplot(subset(norway, pH < 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 2500, y = 20000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 2500, y = 22000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH < 5.4")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, pH > 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-
-ggplot(subset(norway, pH > 5.4 & TOC < 0.004))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 48 mgC/L")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, pH > 5.4 & TOC < 0.0025))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 30 mgC/L")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, survey == "CBA_2019"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "everything"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "everything"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, pearson correlation coefficient")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, survey == "N112_2004"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 2000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-    geom_text(aes(x = 2000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-  
-
-ggplot(subset(norway, survey == "CBA_2019" & pH < 5.4))+ 
-  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
-  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019 & pH < 5.4")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, survey == "CBA_2019"))+ 
-  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
-  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, spearman correlation coefficient")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, survey == "N112_2004"))+ 
-  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0)+
-  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
-  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(norway)+ 
-  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
-  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
-  geom_abline(slope = 1, intercept = 0, linetype = 3)+
-  geom_smooth(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = survey, group = survey))+
-  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Predicted from TOC"))+
-  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Calculated from TA"))+
-  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot()+geom_point(data = subset(norway, pH < 5.4), aes(x = fCO2, y = pCO2_pred, col = "pH < 5.4 : predicted with TOC"))+
-  geom_point(data = subset(norway, TOC > 30 / 12.011 * 1e-3), aes(x = fCO2, y = ta_fCO2, col = "TOC > 25 : predicted with TA"))+
-   labs(x = "Measured pC02 ", y = "Predicted pCO2", title = "")+
-  geom_abline(slope = 1, intercept = 0, linetype = 3)+
-  geom_hline(yintercept = fCO2.atm.2004)+
-    geom_hline(yintercept = fCO2.atm.2019)+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(norway, aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
-  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
- labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, pH < 5.4), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
-  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
- labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-ggplot(subset(norway, TOC > 15 / 12.011 * 1e-3), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
-  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
- labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
-  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
-  theme_bw()+
-  theme(legend.position = "bottom")
-
-
+ *`r tab_nums("summary-eco2-ta","Median of pCO2 and ECO2, pCO2 calculated from TA (excluding samples with pH < 5.4)")`*
+ 
+```{r density-plots}
 ggarrange(
   plotlist = list(
 ggplot(subset(norway, survey == "CBA_2019"))+geom_density(aes(x = ECO2, fill = "High estimate, measured"), alpha = 0.3, col = NA)+
@@ -2507,75 +2556,10 @@ ggplot(subset(norway, survey == "N112_2004"))+geom_density(aes(x = ECO2_low, fil
   theme_minimal()
 ),
   common.legend = T, legend = "bottom")
-
- 
 ```
-
-```{r NLSS-schmidt-number}
-
-nlss$Sc <- with(nlss, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
-
-nlss$n <- NA
-for(i in 1:length(nlss$n)){
-  if(nlss$nws_m.s[i] < 3.7 & is.na(nlss$nws_m.s[i]) == F){
-    nlss$n[i] = 2/3
-  }else if(nlss$nws_m.s[i] > 3.7 & is.na(nlss$nws_m.s[i]) == F){
-    nlss$n[i] = 1/2
-  } else if(is.na(nlss$nws_m.s[i]) == T){
-    nlss$n[i] = NA
-  }
-}
-
-
-nlss$k600 <- with(nlss, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake area in km2
-                    
-nlss$kCO2 <- with(nlss, k600*(600/Sc)^(n))*24*1e-2
-
-nlss$k600_low <- with(nlss, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
-nlss$kCO2_low <- with(nlss, k600_low*(600/Sc)^(n))*24*1e-2
-
-nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
-nlss$ECO2_toc_low <- with(nlss, kCO2_low*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011)
-
-nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
-nlss$ECO2_ta_low <- with(nlss, kCO2_low*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
-
-
-  ggplot(nlss, aes(x = lake.area)) + geom_point(aes(y = ECO2_toc, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
-          geom_point(aes(y = ECO2_toc_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
-          scale_color_manual(values = c("dodgerblue3","firebrick"))+
-    labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
-          scale_x_continuous(trans = "log10") + theme_bw() +
-    theme(legend.position = "bottom")
-
-  
-```
-
-## Compare ECO2 from TOC and ECO2 from TA
  
-Comparison of the ECO2 obtained by calculation pCO2 from TOC or TA (in that case, we remove samples in which pH < 5.4).  
- 
- *`r tab_nums("summary-eco2-toc","Median of pCO2 and ECO2, pCO2 predicted from TOC")`*
- 
-```{r summary-eco2-toc, results = T}
-no <- norway %>% 
-  dplyr::select(c("survey", "fCO2" ,"pCO2_pred", "ECO2_toc", "ECO2_toc_low")) %>% 
-  mutate(nation = "Norway") %>% 
-  setNames(c("survey","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low","nation"))  %>% 
-  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
+ *`r fig_nums("density-eco2","Comparison of the distribution of low and high estimates of ECO2 for the CBA and N112 surveys")`* 
 
-fns <- nlss %>% as_data_frame() %>%
-  dplyr::select(c("nation", "pCO2_toc", "ECO2_toc", "ECO2_toc_low")) %>% 
-  mutate(fCO2 = NA, survey = "nls_1995") %>% 
-  setNames(c("nation","pCO2_toc","ECO2_high", "ECO2_low","measured_pCO2","survey")) %>% 
-  dplyr::select(c("survey","nation","measured_pCO2","pCO2_toc","ECO2_high","ECO2_low"))
-
-summary_eco2 <- rbind(no,fns) %>% group_by(nation, survey) %>% summarize_all(median, na.rm = T) 
-kable(summary_eco2) %>% kable_styling()
-```
-
- *`r tab_nums("summary-eco2-ta","Median of pCO2 and ECO2, pCO2 calculated from TA (excluding samples with pH < 5.4)")`*
- 
 ```{r summary-eco2_ta, results = T}
 no <- norway %>% 
   dplyr::select(c("survey", "pH", "fCO2", "ta_fCO2", "ECO2_ta", "ECO2_ta_low")) %>% 
@@ -2632,31 +2616,21 @@ tot <- rbind(no2, summary_fen.1) %>% rbind(summary_fen.2)
 
 kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/day","ECO2 from TOC in gC/m2/day","ECO2 from DIC in gC/m2/day","ECO2 from TOC in gC/m2/day")) %>% 
   kable_styling %>% 
-  group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
-  group_rows(group_label= "N112", start_row = 3, end_row = 4) %>% 
-  group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
-  add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) 
+  kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
+  kableExtra::group_rows(group_label= "N112", start_row = 3, end_row = 4) %>% 
+  kableExtra::group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
+  kableExtra::add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) 
 
 kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year","ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year")) %>% 
   kable_styling() %>% 
-  group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
-  group_rows(group_label= "N112", start_row = 3, end_row = 4) %>%
-  group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
-  add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) %>%
+  kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
+  kableExtra::group_rows(group_label= "N112", start_row = 3, end_row = 4) %>%
+  kableExtra::group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
+  kableExtra::add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) %>%
   save_kable(file = "compare.eco2.measured.png",zoom = 5)
 
 ```
-## Monte Carlo for confidence intervals, all nlss
 
-```{r mcuq}
-library(mnonr)
-
-ma1 <- nlss %>% subset(select = c(pCO2_toc,nws_m.s,lake.area)) %>% mardia()
-covma <- cov(subset(nlss,select = c(pCO2_toc,nws_m.s,lake.area)), use = "complete.obs")
-
-new.nlss <- mnonr(n=nrow(nlss), p = 3, ms = ma1$multivariate[1,2], mk = ma1$multivariate[2,2], Sigma = covma)
-
-```
 
 ## Compare total emissions calculated from bins, with total emissions calculated from median and mean
 
@@ -2789,8 +2763,8 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
 
 
 kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","Total lake area in km2","median pCO2, uatm","median kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","median ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","median ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
-  group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
+  kableExtra::add_header_above(c("Lake class" = 2, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
+  kableExtra::group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
 ```
@@ -2917,8 +2891,8 @@ bin_FCO2 <- data.frame(lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10"
 
 
 kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","actual FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y", "actual FCO2, MtCO2/y","mean ECO2, g/m2/day", "FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
-  group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
+  kableExtra::add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 4, "High estimate" = 4, "Hastie et al." = 2)) %>%
+  kableExtra::group_rows(group_label= "All lakes", start_row = 6, end_row = 6) %>%
   column_spec(column = c(5,6,9,10,12), bold = T)
 
 ```
@@ -2927,7 +2901,7 @@ kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uat
 
 We estimated the share of inland waters belonging to a given category of lakes (depending on area in km2) based on the proportion represented by each category in the total of the lakes sampled during the Northern European Lakes Survey. 
 
-The largest lakes of Norway, Sweden and Finland account for a large part of the total inland waters. Therefore, we included them as a separated category. We assumed that all the lakes with an area larger than 100 km2 were samples in the NLS. Therefore, the CO2 efflux for these big lakes were simply added to the efflux calculated for the rest of the inland water.   
+The largest lakes of Norway, Sweden and Finland account for a large part of the total inland waters. Therefore, we included them as a separated category. We assumed that all the lakes with an area larger than 100 km2 were sampled in the NLS. Therefore, the CO2 efflux for these big lakes were simply added to the efflux calculated for the rest of the inland water.   
 
 ```{r lake-area-distribution}
 
@@ -2945,333 +2919,74 @@ ggplot(nlss)+geom_boxplot(aes(x=nation, y = lake.area, col = nation))+coord_tran
 CAN BE RECODED WITH AN EXTRA COLUMN INDICATING LAKE CATEGORY + summarise
 That would help for calculating uncertainty on each resulting number
 
+```{r bin, results = T}
+breaks.lakes <- c(0,0.1,1,10,100,Inf)
 
-```{r bin-area-norway, results = T}
+nlss$lake.category <- cut(nlss$lake.area, breaks.lakes)
 
-nor <- filter(nlss, nation == "Norway")
+nlss$inland.water <- NA
+nlss$inland.water[which(nlss$nation == "Norway")] <- 20221  # km2 , @SSB
+nlss$inland.water[which(nlss$nation == "Sweden")] <- 4014169.92 * 1e-2 # ha to km2, @SCB
+nlss$inland.water[which(nlss$nation == "Finland")] <- 34515 # km2, @Statfi
 
-inland.waters <- 20221 * 1e6 # km2 to m2, @SSB
+nlss$lake.area.under100 <- NA
+nlss$lake.area.under100[which(nlss$nation == "Norway")] <- sum(subset(nlss, nation == "Norway" & lake.area < 100)$lake.area) # nlss area without biggest lakes
+nlss$lake.area.under100[which(nlss$nation == "Sweden")] <- sum(subset(nlss, nation == "Sweden" & lake.area < 100)$lake.area)# nlss area without biggest lakes
+nlss$lake.area.under100[which(nlss$nation == "Finland")] <- sum(subset(nlss, nation == "Finland" & lake.area < 100)$lake.area) # nlss area without biggest lakes
 
-p0 <- mean(nor$pCO2_toc, na.rm = T)*1e6
-k0 <- mean(nor$kCO2, na.rm = T)
-E0 <- mean(nor$ECO2_toc, na.rm = T)*365 # in gC/m2/year
-F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+nlss$lake.area.over100 <- NA
+nlss$lake.area.over100[which(nlss$nation == "Norway")] <- sum(subset(nlss, nation == "Norway" & lake.area > 100)$lake.area) # areas of biggest lakes
+nlss$lake.area.over100[which(nlss$nation == "Sweden")] <- sum(subset(nlss, nation == "Sweden" & lake.area > 100)$lake.area) # areas of biggest lakes
+nlss$lake.area.over100[which(nlss$nation == "Finland")] <- sum(subset(nlss, nation == "Finland" & lake.area > 100)$lake.area) # areas of biggest lakes
 
-k0_low <- mean(nor$kCO2_low, na.rm = T)
-E0_low <- mean(nor$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
-F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+binned.nlss <- nlss %>% group_by(nation, inland.water, lake.area.under100, lake.area.over100, lake.category) %>% 
+                        summarise(nb.lakes = n(),
+                                  cat.lake.area = sum(lake.area),
+                                  prop.cat = ifelse(lake.category != "(100,Inf]", cat.lake.area/lake.area.under100 * 100, NA),
+                                  pCO2 = mean(pCO2_toc * 1e6, na.rm = T),  # in uatm
+                                  pCO2_sd = sd(pCO2_toc * 1e6, na.rm = T),
+                                  kCO2_mean = mean(kCO2, na.rm = T),
+                                  kCO2_sd = sd(kCO2, na.rm = T),
+                                  ECO2 = mean(ECO2_toc * 365, na.rm = T), # in gC/m2/year
+                                  ECO2_sd = sd(ECO2_toc * 365, na.rm = T),
+                                  kCO2_low_mean = mean(kCO2_low, na.rm = T), # in cm/h
+                                  kCO2_low_sd = sd(kCO2_low, na.rm = T),
+                                  ECO2_low = mean(ECO2_toc_low * 365, na.rm = T),
+                                  ECO2_low_sd = sd(ECO2_toc_low * 365, na.rm = T)) %>%
+                          mutate(FCO2 = ifelse(lake.category != "(100,Inf]",
+                                               ECO2*(cat.lake.area/lake.area.under100*inland.water)*1e6/12.011 * 43.99 * 1e-12, #MtCO2/y. ECO2 multiplied by the proportion of lakes belonging to each category in Norway, lake area *1e6 to convert in m2,
+                                               ECO2*lake.area.over100*1e6/12.011 * 43.99 * 1e-12),
+                                 FCO2_low = ifelse(lake.category != "(100,Inf]", 
+                                                   ECO2_low*(cat.lake.area/lake.area.under100*inland.water)*1e6/12.011 * 43.99 * 1e-12,
+                                                   ECO2_low*lake.area.over100*1e6/12.011 * 43.99 * 1e-12)) %>%  #MtCO2/y
+  unique()
 
+knitr::kable(binned.nlss, digits = 2, col.names = c("Nation", 
+                                                    "Inland water (area in km2)",
+                                                    "Area of lakes with A < 100 km2 in the NLS",
+                                                    "Area of lakes with A > 100 km2 in the NLS",
+                                                    "Lake category (area in km2)", 
+                                                    "Number of NLS lakes in the category",
+                                                    "NLS lake area in the category",
+                                                    "Proportion of the category compared to NLS",
+                                                    "mean pCO2 in uatm", 
+                                                    "standard deviation for pCO2", 
+                                                    "mean kCO2 (Vachon and Prairie, high estimate) in cm/h",
+                                                    "standard deviation for kCO2, Vachon and Prairie",
+                                                    "mean ECO2 in gC/m/day (Vachon and Prairie)",
+                                                    "standard deviation ECO2 (Vachon and Prairie)",
+                                                    "mean kCO2 (Cole and Caraco, low estimate) in cm/h",
+                                                    "standard deviation kCO2, Cole and Caraco",
+                                                    "mean ECO2 in gC/m2/day (Cole and Caraco)",
+                                                    "standard deviation ECO2 (Cole and Caraco)",
+                                                    "Estimated total FCO2 (Vachon and Prairie)",
+                                                    "Estimated total FCO2 (Cole and Caraco)")) %>%
+  kable_styling(bootstrap_options = "bordered")
 
-A0 <- sum(subset(nor, lake.area < 100)$lake.area) # exclude big lakes
-
-# Lake size < 0.1 km2
-
-p1 <- nor %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A1 <- nor %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
-A1_inland <- A1/A0*inland.waters
-
-k1 <- with(subset(nor, lake.area < 0.1), mean(kCO2, na.rm = T)) 
-E1 <- with(subset(nor, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-  
-k1_low <- with(subset(nor, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
-E1_low <- with(subset(nor, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
-
-# 0.1 < Lake size < 1 km2
-
-p2 <- nor %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A2 <- nor %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
-A2_inland <- A2/A0*inland.waters
-
-k2 <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
-E2 <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
-
-
-k2_low <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
-E2_low <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
-
-# 1 < Lake size < 10 km2
-
-p3 <- nor %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
-A3 <- nor %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
-A3_inland <- A3/A0*inland.waters
-
-k3 <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
-E3 <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-
-F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
-
-
-k3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
-E3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
-
-# 10 < Lake size < 100 km2
-
-p4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
-A4_inland <- A4/A0*inland.waters
-
-k4 <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
-E4 <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
-
-k4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
-E4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
-
-# Big lakes > 100 km2
-p5 <- nor %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A5 <- nor %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
-
-k5 <- with(subset(nor, lake.area > 100), mean(kCO2, na.rm = T)) 
-E5 <- with(subset(nor, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F5 <- E5*A5/12.011 * 43.99 * 1e-12
-
-k5_low <- with(subset(nor, lake.area > 100), mean(kCO2_low, na.rm = T)) 
-E5_low <- with(subset(nor, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
-
-
-bin_FCO2 <- data.frame(
-            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
-           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
-           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
-           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
-           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
-           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
-           E_high = c(E1,E2,E3,E4, E5,NA, E0),
-           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
-
-
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
-  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
-
+ggplot(nlss)+geom_boxplot(aes(x=lake.category, y = ECO2_toc))+facet_grid(cols = vars(nation))
+ggplot(nlss)+geom_boxplot(aes(x=lake.category, y = ECO2_toc_low))+facet_grid(cols = vars(nation))
 ```
 
-
- *`r tab_nums("summary-FCO2-sweden","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Sweden")`*
- 
-```{r bin-area-sweden, results = T}
-swe <- filter(nlss, nation == "Sweden")
-
-inland.waters <- 4014169.92 * 1e4 # ha to m2, @SCB
-
-p0 <- mean(swe$pCO2_toc, na.rm = T)*1e6
-k0 <- mean(swe$kCO2, na.rm = T)
-E0 <- mean(swe$ECO2_toc, na.rm = T)*365 # in gC/m2/year
-F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-k0_low <- mean(swe$kCO2_low, na.rm = T)
-E0_low <- mean(swe$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
-F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-
-A0 <- sum(subset(swe, lake.area < 100)$lake.area) # exclude big lakes
-
-# Lake size < 0.1 km2
-
-p1 <- swe %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A1 <- swe %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
-A1_inland <- A1/A0*inland.waters
-
-k1 <- with(subset(swe, lake.area < 0.1), mean(kCO2, na.rm = T)) 
-E1 <- with(subset(swe, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-  
-k1_low <- with(subset(swe, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
-E1_low <- with(subset(swe, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
-
-# 0.1 < Lake size < 1 km2
-
-p2 <- swe %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A2 <- swe %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
-A2_inland <- A2/A0*inland.waters
-
-k2 <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
-E2 <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
-
-
-k2_low <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
-E2_low <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
-
-# 1 < Lake size < 10 km2
-
-p3 <- swe %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
-A3 <- swe %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
-A3_inland <- A3/A0*inland.waters
-
-k3 <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
-E3 <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-
-F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
-
-
-k3_low <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
-E3_low <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
-
-# 1 < Lake size < 10 km2
-
-p4 <- swe %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A4 <- swe %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
-A4_inland <- A4/A0*inland.waters
-
-k4 <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
-E4 <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
-
-k4_low <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
-E4_low <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
-
-# Big lakes
-p5 <- swe %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A5 <- swe %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
-
-k5 <- with(subset(swe, lake.area > 100), mean(kCO2, na.rm = T)) 
-E5 <- with(subset(swe, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F5 <- E5*A5/12.011 * 43.99 * 1e-12
-
-k5_low <- with(subset(swe, lake.area > 100), mean(kCO2_low, na.rm = T)) 
-E5_low <- with(subset(swe, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
-
-
-bin_FCO2 <- data.frame(
-            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
-           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
-           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
-           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
-           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
-           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
-           E_high = c(E1,E2,E3,E4, E5,NA, E0),
-           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
-
-
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
-  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
-
-```
-
- *`r tab_nums("summary-FCO2-finland","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Finland")`*
- 
-```{r bin-area-finland, results = T}
-fin <- filter(nlss, nation == "Finland")
-
-inland.waters <- 34515 * 1e6 # km2 to m2, @Statfi
-
-p0 <- mean(fin$pCO2_toc, na.rm = T)*1e6
-k0 <- mean(fin$kCO2, na.rm = T)
-E0 <- mean(fin$ECO2_toc, na.rm = T)*365 # in gC/m2/year
-F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-k0_low <- mean(fin$kCO2_low, na.rm = T)
-E0_low <- mean(fin$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
-F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-
-A0 <- sum(subset(fin, lake.area < 100)$lake.area) # exclude big lakes
-
-# Lake size < 0.1 km2
-
-p1 <- fin %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A1 <- fin %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
-A1_inland <- A1/A0*inland.waters
-
-k1 <- with(subset(fin, lake.area < 0.1), mean(kCO2, na.rm = T)) 
-E1 <- with(subset(fin, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
-
-  
-k1_low <- with(subset(fin, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
-E1_low <- with(subset(fin, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
-
-# 0.1 < Lake size < 1 km2
-
-p2 <- fin %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
-A2 <- fin %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
-A2_inland <- A2/A0*inland.waters
-
-k2 <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
-E2 <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
-
-
-k2_low <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
-E2_low <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
-
-# 1 < Lake size < 10 km2
-
-p3 <- fin %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
-A3 <- fin %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
-A3_inland <- A3/A0*inland.waters
-
-k3 <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
-E3 <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-
-F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
-
-
-k3_low <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
-E3_low <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
-
-# 1 < Lake size < 10 km2
-
-p4 <- fin %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A4 <- fin %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
-A4_inland <- A4/A0*inland.waters
-
-k4 <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
-E4 <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
-
-k4_low <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
-E4_low <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
-
-# Big lakes
-p5 <- fin %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
-A5 <- fin %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
-
-k5 <- with(subset(fin, lake.area > 100), mean(kCO2, na.rm = T)) 
-E5 <- with(subset(fin, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
-F5 <- E5*A5/12.011 * 43.99 * 1e-12
-
-k5_low <- with(subset(fin, lake.area > 100), mean(kCO2_low, na.rm = T)) 
-E5_low <- with(subset(fin, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
-F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
-
-
-bin_FCO2 <- data.frame(
-            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
-           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
-           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
-           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
-           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
-           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
-           E_high = c(E1,E2,E3,E4, E5,NA, E0),
-           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
-
-
-kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
-  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
-  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
-
-```
 
 
 
@@ -3327,6 +3042,7 @@ kable(tibble("Country" = c("All 3", "Norway", "Sweden", "Finland"),
 ```{r early-exit}
 knitr::knit_exit()
 ```
+
 
 ## Summary table
 
@@ -3963,6 +3679,8 @@ ggarrange(n1995_ECO2, n112_ECO2,cba_ECO2, labels = c("1995","2004","2019"), comm
 
 `r knitr::knit_exit()`
 
+# Other stuff
+
 ```{r boxplots-ECO2}
 
 ggplot()+
@@ -4368,5 +4086,556 @@ ggplot(df, aes(x = TOC_mg))+
   theme_minimal()+
     theme(legend.position = "bottom", 
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+
+# deprecated plots 
+
+```{r a-lot-of-plots, eval = F}
+
+ggplot(norway, aes(x = fCO2*1e-6))+geom_point(aes(y = ta_fCO2*1e-6, col = "Calculated from TA"))+
+  geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"))+
+    labs(x = "Measured pCO2 in uatm", y = "pCO2 in uatm")+
+  geom_abline(slope = 1, intercept = 0)+
+#  facet_zoom(x = TOC < 0.002, y = fCO2 < 4.3e-4)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ 
+  ggplot(norway, aes(x = lake.area)) + geom_point(aes(y = ECO2, col = "Vachon and Prairie (including lake area)"), alpha = 0.5)+
+          geom_point(aes(y = ECO2_low, col = "Cole and Caraco (without lake area)"), alpha = 0.5) + 
+          scale_color_manual(values = c("dodgerblue3","firebrick"))+
+    labs(x = "Lare area in km2", y = "ECO2 in gC/m/day", col = "k600 calculated with")+
+          scale_x_continuous(trans = "log10") + theme_bw() +
+    theme(legend.position = "bottom")
+  
+ggplot(norway)+geom_point(aes(x=fCO2, y = pCO2_pred))  
+
+ggplot(norway, aes(x = fCO2*1e-6)) + geom_point(aes(y = pCO2_pred*1e-6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(y = ta_fCO2*1e-6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  labs(x = "TOC in mg/L", y = "pCO2 in uatm")+
+  facet_grid(col = vars(survey))+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot()+ geom_point(data = subset(norway, TOC < 30/12.011*1e-3), aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(data = subset(norway, TOC > 30/12.011*1e-3), aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "With TA as DIC"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  facet_zoom(x = fCO2 < 2000e-6, y = ta_fCO2 < 5000e-6)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+  ggplot(norway)+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+  
+ggplot(subset(norway, TOC < 30 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 6000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 6000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC < 10 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC > 20 / 12.011 * 1e-3))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 22000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 20000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "TOC > 25 mg/L, spearman")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ggplot(subset(norway, pH < 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2500, y = 20000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2500, y = 22000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH < 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH > 5.4))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+
+ggplot(subset(norway, pH > 5.4 & TOC < 0.004))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 48 mgC/L")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH > 5.4 & TOC < 0.0025))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "pH > 5.4 & TOC < 30 mgC/L")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "CBA_2019"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 5000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "everything"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 5000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "everything"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, pearson correlation coefficient")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "N112_2004"))+ geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 2000, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+    geom_text(aes(x = 2000, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+  
+
+ggplot(subset(norway, survey == "CBA_2019" & pH < 5.4))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019 & pH < 5.4")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "CBA_2019"))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "CBA_2019, spearman correlation coefficient")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, survey == "N112_2004"))+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0)+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "spearman"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "N112_2004")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(norway)+ 
+  geom_point(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = "Predicted from TOC"), alpha = 0.8, shape = 1) +
+  geom_point(aes(x = fCO2*1e6, y = ta_fCO2*1e6, col = "Calculated from TA"), alpha = 0.8, shape = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = 3)+
+  geom_smooth(aes(x = fCO2*1e6, y = pCO2_pred*1e6, col = survey, group = survey))+
+  geom_text(aes(x = 1750, y = 10000, label = paste("r = ", round(cor(pCO2_pred, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Predicted from TOC"))+
+  geom_text(aes(x = 1750, y = 12000, label = paste("r = ", round(cor(ta_fCO2, fCO2, use = "pairwise.complete", method = "pearson"),2)), col = "Calculated from TA"))+
+  labs(x = "Measured pC02 in uatm", y = "Predicted pCO2 in uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot()+geom_point(data = subset(norway, pH < 5.4), aes(x = fCO2, y = pCO2_pred, col = "pH < 5.4 : predicted with TOC"))+
+  geom_point(data = subset(norway, TOC > 30 / 12.011 * 1e-3), aes(x = fCO2, y = ta_fCO2, col = "TOC > 25 : predicted with TA"))+
+   labs(x = "Measured pC02 ", y = "Predicted pCO2", title = "")+
+  geom_abline(slope = 1, intercept = 0, linetype = 3)+
+  geom_hline(yintercept = fCO2.atm.2004)+
+    geom_hline(yintercept = fCO2.atm.2019)+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(norway, aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, pH < 5.4), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+
+ggplot(subset(norway, TOC > 15 / 12.011 * 1e-3), aes(x = TOC * 12.011 /1e-3))+geom_point(aes(y = (pCO2_pred-fCO2)*1e6, col = "Diff TOC predicted - measured"), alpha = 0.5)+
+  geom_point(aes(y = (ta_fCO2-fCO2)*1e6, col = "Diff TA predicted - measured"), alpha = 0.5)+
+ labs(x = "TOC in mg/L", y = "Difference predicted - measured pCO2, uatm", title = "")+
+  scale_color_manual(values = c("dodgerblue3","firebrick","orange","pink"))+
+  theme_bw()+
+  theme(legend.position = "bottom")
+```
+
+# deprecated bin calculations
+
+```{r bin-area-norway, results = F}
+
+nor <- filter(nlss, nation == "Norway")
+
+inland.waters <- 20221 * 1e6 # km2 to m2, @SSB
+
+p0 <- mean(nor$pCO2_toc, na.rm = T)*1e6
+k0 <- mean(nor$kCO2, na.rm = T)
+E0 <- mean(nor$ECO2_toc, na.rm = T)*365 # in gC/m2/year
+F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+k0_low <- mean(nor$kCO2_low, na.rm = T)
+E0_low <- mean(nor$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
+F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+
+A0 <- sum(subset(nor, lake.area < 100)$lake.area) # exclude big lakes
+
+# Lake size < 0.1 km2
+
+p1 <- nor %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A1 <- nor %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
+A1_inland <- A1/A0*inland.waters
+
+k1 <- with(subset(nor, lake.area < 0.1), mean(kCO2, na.rm = T)) 
+E1 <- with(subset(nor, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+  
+k1_low <- with(subset(nor, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
+E1_low <- with(subset(nor, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
+
+# 0.1 < Lake size < 1 km2
+
+p2 <- nor %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A2 <- nor %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
+A2_inland <- A2/A0*inland.waters
+
+k2 <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
+E2 <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
+
+
+k2_low <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
+E2_low <- with(subset(nor, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
+
+# 1 < Lake size < 10 km2
+
+p3 <- nor %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
+A3 <- nor %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
+A3_inland <- A3/A0*inland.waters
+
+k3 <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
+E3 <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
+
+
+k3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
+E3_low <- with(subset(nor, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
+
+# 10 < Lake size < 100 km2
+
+p4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A4 <- nor %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
+A4_inland <- A4/A0*inland.waters
+
+k4 <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
+E4 <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
+
+k4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
+E4_low <- with(subset(nor, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
+
+# Big lakes > 100 km2
+p5 <- nor %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A5 <- nor %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
+
+k5 <- with(subset(nor, lake.area > 100), mean(kCO2, na.rm = T)) 
+E5 <- with(subset(nor, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F5 <- E5*A5/12.011 * 43.99 * 1e-12
+
+k5_low <- with(subset(nor, lake.area > 100), mean(kCO2_low, na.rm = T)) 
+E5_low <- with(subset(nor, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
+
+
+bin_FCO2 <- data.frame(
+            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
+           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
+           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
+           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
+           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
+           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
+           E_high = c(E1,E2,E3,E4, E5,NA, E0),
+           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
+
+
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
+  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
+
+```
+
+
+ *`r tab_nums("summary-FCO2-sweden","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Sweden")`*
+ 
+```{r bin-area-sweden, results = T}
+swe <- filter(nlss, nation == "Sweden")
+
+inland.waters <- 4014169.92 * 1e4 # ha to m2, @SCB
+
+p0 <- mean(swe$pCO2_toc, na.rm = T)*1e6
+k0 <- mean(swe$kCO2, na.rm = T)
+E0 <- mean(swe$ECO2_toc, na.rm = T)*365 # in gC/m2/year
+F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+k0_low <- mean(swe$kCO2_low, na.rm = T)
+E0_low <- mean(swe$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
+F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+
+A0 <- sum(subset(swe, lake.area < 100)$lake.area) # exclude big lakes
+
+# Lake size < 0.1 km2
+
+p1 <- swe %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A1 <- swe %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
+A1_inland <- A1/A0*inland.waters
+
+k1 <- with(subset(swe, lake.area < 0.1), mean(kCO2, na.rm = T)) 
+E1 <- with(subset(swe, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+  
+k1_low <- with(subset(swe, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
+E1_low <- with(subset(swe, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
+
+# 0.1 < Lake size < 1 km2
+
+p2 <- swe %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A2 <- swe %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
+A2_inland <- A2/A0*inland.waters
+
+k2 <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
+E2 <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
+
+
+k2_low <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
+E2_low <- with(subset(swe, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
+
+# 1 < Lake size < 10 km2
+
+p3 <- swe %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
+A3 <- swe %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
+A3_inland <- A3/A0*inland.waters
+
+k3 <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
+E3 <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
+
+
+k3_low <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
+E3_low <- with(subset(swe, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
+
+# 1 < Lake size < 10 km2
+
+p4 <- swe %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A4 <- swe %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
+A4_inland <- A4/A0*inland.waters
+
+k4 <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
+E4 <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
+
+k4_low <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
+E4_low <- with(subset(swe, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
+
+# Big lakes
+p5 <- swe %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A5 <- swe %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
+
+k5 <- with(subset(swe, lake.area > 100), mean(kCO2, na.rm = T)) 
+E5 <- with(subset(swe, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F5 <- E5*A5/12.011 * 43.99 * 1e-12
+
+k5_low <- with(subset(swe, lake.area > 100), mean(kCO2_low, na.rm = T)) 
+E5_low <- with(subset(swe, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
+
+
+bin_FCO2 <- data.frame(
+            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
+           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
+           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
+           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
+           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
+           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
+           E_high = c(E1,E2,E3,E4, E5,NA, E0),
+           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
+
+
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
+  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
+
+```
+
+ *`r tab_nums("summary-FCO2-finland","Total efflux of CO2 computed from the mean for each lake category, compared to efflux calculated for all lakes in Finland")`*
+ 
+```{r bin-area-finland, results = T}
+fin <- filter(nlss, nation == "Finland")
+
+inland.waters <- 34515 * 1e6 # km2 to m2, @Statfi
+
+p0 <- mean(fin$pCO2_toc, na.rm = T)*1e6
+k0 <- mean(fin$kCO2, na.rm = T)
+E0 <- mean(fin$ECO2_toc, na.rm = T)*365 # in gC/m2/year
+F0 <- E0*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+k0_low <- mean(fin$kCO2_low, na.rm = T)
+E0_low <- mean(fin$ECO2_toc_low, na.rm = T) *365 # in gC/m2/year
+F0_low <- E0_low*inland.waters/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+
+A0 <- sum(subset(fin, lake.area < 100)$lake.area) # exclude big lakes
+
+# Lake size < 0.1 km2
+
+p1 <- fin %>% subset(lake.area < 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A1 <- fin %>% subset(lake.area < 0.1) %>% pull(lake.area) %>% sum()
+A1_inland <- A1/A0*inland.waters
+
+k1 <- with(subset(fin, lake.area < 0.1), mean(kCO2, na.rm = T)) 
+E1 <- with(subset(fin, lake.area < 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F1 <- E1*A1_inland/12.011 * 43.99 * 1e-12 #MtCO2/t
+
+  
+k1_low <- with(subset(fin, lake.area < 0.1), mean(kCO2_low, na.rm = T)) 
+E1_low <- with(subset(fin, lake.area < 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F1_low <- E1_low*A1_inland/12.011 * 43.99 * 1e-12
+
+# 0.1 < Lake size < 1 km2
+
+p2 <- fin %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(pCO2_toc) %>% mean()*1e6
+A2 <- fin %>% subset(lake.area < 1 & lake.area > 0.1) %>% pull(lake.area) %>% sum()
+A2_inland <- A2/A0*inland.waters
+
+k2 <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(kCO2, na.rm = T)) 
+E2 <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F2 <- E2*A2_inland/12.011 * 43.99 * 1e-12
+
+
+k2_low <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(kCO2_low, na.rm = T)) 
+E2_low <- with(subset(fin, lake.area < 1 & lake.area > 0.1), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F2_low <- E2_low*A2_inland/12.011 * 43.99 * 1e-12
+
+# 1 < Lake size < 10 km2
+
+p3 <- fin %>% subset(lake.area > 1 & lake.area < 10) %>% pull(pCO2_toc) %>% mean()*1e6
+A3 <- fin %>% subset(lake.area > 1 & lake.area < 10) %>% pull(lake.area) %>% sum()
+A3_inland <- A3/A0*inland.waters
+
+k3 <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(kCO2, na.rm = T)) 
+E3 <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+
+F3 <- E3*A3_inland/12.011 * 43.99 * 1e-12
+
+
+k3_low <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(kCO2_low, na.rm = T)) 
+E3_low <- with(subset(fin, lake.area > 1 & lake.area < 10), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F3_low <- E3_low*A3_inland/12.011 * 43.99  * 1e-12
+
+# 1 < Lake size < 10 km2
+
+p4 <- fin %>% subset(lake.area > 10 & lake.area < 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A4 <- fin %>% subset(lake.area > 10 & lake.area < 100) %>% pull(lake.area) %>% sum()
+A4_inland <- A4/A0*inland.waters
+
+k4 <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(kCO2, na.rm = T)) 
+E4 <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F4 <- E4*A4_inland/12.011 * 43.99 * 1e-12
+
+k4_low <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(kCO2_low, na.rm = T)) 
+E4_low <- with(subset(fin, lake.area > 10 & lake.area < 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F4_low <- E4_low*A4_inland/12.011 * 43.99  * 1e-12
+
+# Big lakes
+p5 <- fin %>% subset(lake.area > 100) %>% pull(pCO2_toc) %>% mean()*1e6
+A5 <- fin %>% subset(lake.area > 100) %>% pull(lake.area) %>% sum()*1e6 # km2 to m2
+
+k5 <- with(subset(fin, lake.area > 100), mean(kCO2, na.rm = T)) 
+E5 <- with(subset(fin, lake.area > 100), mean(ECO2_toc*365, na.rm = T)) #gC/m2/y
+F5 <- E5*A5/12.011 * 43.99 * 1e-12
+
+k5_low <- with(subset(fin, lake.area > 100), mean(kCO2_low, na.rm = T)) 
+E5_low <- with(subset(fin, lake.area > 100), mean(ECO2_toc_low*365, na.rm = T)) #gC/m2/y
+F5_low <- E5_low*A5/12.011 * 43.99  * 1e-12
+
+
+bin_FCO2 <- data.frame(
+            lake.size = c("A < 0.1","0.1 < A < 1","1 < A < 10","> 10", "Big lakes (> 100)","Total","All lakes"),
+           pCO2 = c(p1,p2,p3,p4,p5,NA,p0), 
+           kCO2_low = c(k1_low,k2_low,k3_low,k4_low, k5_low,NA,k0_low), 
+           E_low = c(E1_low,E2_low,E3_low,E4_low,E5_low,NA, E0_low),
+           FCO2_low = c(F1_low, F2_low, F3_low, F4_low, F5_low, sum(F1_low, F2_low, F3_low, F4_low, F5_low), F0_low),
+           kCO2_high = c(k1,k2,k3,k4,k5, NA,k0),
+           E_high = c(E1,E2,E3,E4, E5,NA, E0),
+           FCO2_high = c(F1, F2, F3, F4, F5, sum(F1, F2, F3, F4, F5),F0))
+
+
+kable(bin_FCO2, digits = 2, col.names = c("A = lake area in km2","mean pCO2, uatm","mean kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y","kCO2, m2/d","mean ECO2, g/m2/y", "binned FCO2, MtCO2/y")) %>% kable_styling() %>% 
+  add_header_above(c("Lake class" = 1, " " = 1, "Low estimate" = 3, "High estimate" = 3)) %>%
+  group_rows(group_label = "All lakes", start_row = 7, end_row = 7)
 
 ```

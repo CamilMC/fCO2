@@ -1,24 +1,24 @@
 ---
-title: "Data preparation"
-author: "Camille Crapart"
-date: "2023-02-21"
-output: 
-   bookdown::html_document2:
-     code_folding: hide
-     toc: true
-     toc_float: true
-     number_sections: true
-     fig_caption: true
+title Data preparation
+author Camille Crapart
+date 2023-02-21
+output 
+   bookdownhtml_document2
+     code_folding hide
+     toc true
+     toc_float true
+     number_sections true
+     fig_caption true
 
-bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
-link-citations: yes
+bibliography CUsersraineDocumentsUiOBibtexfCO2.bib
+link-citations yes
 ---
 
-html version: [Data preparation](https://camilmc.github.io/fCO2/Data_preparation.html)
+html version [Data preparation](httpscamilmc.github.iofCO2Data_preparation.html)
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache.lazy = F)
-options(knitr.kable.NA="", knitr.table.format = "html")
+knitropts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = center, results = T, collapse = T, cache.lazy = F)
+options(knitr.kable.NA=, knitr.table.format = html)
 ```
 
 ```{r libraries}
@@ -28,20 +28,21 @@ library(AquaEnv)
 library(MASS)
 library(mgcv)
 
+library(sf)
+library(sp)
+library(raster)
+
 library(dplyr)
 library(ggplot2)
 library(colorspace)
 
-library(sf)
-library(sp)
-
-fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
-fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
-fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
-fCO2.atm.1995 <- 360.17 * 1e-6 # 1995
+fCO2.atm.2020 - 411.51  1e-6 # oct 2020
+fCO2.atm.2019 - 408.75  1e-6 # oct 2019
+fCO2.atm.2004 - 374.63  1e-6 # oct 2004
+fCO2.atm.1995 - 360.17  1e-6 # 1995
 ```
 
-Atmospheric concentration of CO2 is retrieved from: <https://climate.nasa.gov/vital-signs/carbon-dioxide/>, dataset on <https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt>
+Atmospheric concentration of CO2 is retrieved from httpsclimate.nasa.govvital-signscarbon-dioxide, dataset on httpsgml.noaa.govwebdataccggtrendsco2co2_mm_mlo.txt
 
 
 # Data from CBA and N112 surveys
@@ -53,40 +54,101 @@ TOC was analysed by infrared CO2 detection after catalytic high temperature comb
 The data is available at @CBA2019. Lake area and catchment area were provided by NIVA. 
 
 ```{r cba-data}
-cba.all <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
+cba.all - readxlread_xlsx(CBA_100Lakes_Master.xlsx)
 
-ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)+labs(y="Lake ID")+theme_bw()
-ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)+labs(y="Lake ID")+theme_bw()
+ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)+labs(y=Lake ID)+theme_bw()
+ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)+labs(y=Lake ID)+theme_bw()
 ggplot(cba.all)+geom_point(aes(x = pH_Kje, y = as.character(Lake_ID)))+
-  geom_vline(xintercept = 5)+labs(x = "pH", y="Lake ID")+theme_bw()
+  geom_vline(xintercept = 5)+labs(x = pH, y=Lake ID)+theme_bw()
 
-bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c("CBA_Lake_ID", "lake_area_km2","basin_area_km2"))
+bdg.niva - readRDS(bdg.niva.rds) %% dplyrselect(c(CBA_Lake_ID, lake_area_km2,basin_area_km2))
 
-cba <- merge(cba.all,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") 
+cba - merge(cba.all,bdg.niva, by.x = Lake_ID, by.y = CBA_Lake_ID) 
 ```
 
-The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling. (Resolution : 1x1 degree \~11.1x11.1 km \<- 123 km2)
+The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling. (Resolution  1x1 degree ~11.1x11.1 km - 123 km2)
 
 
 ```{r cba-windspeed, eval = F}
 
-nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
-nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
-nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
-saveRDS(nws.list.means, "cba.nws.list.mean.rds")
-nws.2019 <- nws.list.means %>% raster::stack() %>% raster::mean()
+nws.files - list.files(path = NWS, pattern = Wind_WFDE5_CRU_2019, full.names = T) 
+nws.list.stacks - lapply(nws.files, rasterstack) %% lapply(rastercrop, c(0,35,55,73))
+nws.list.means - lapply(nws.list.stacks, rastermean, na.rm = T)
+saveRDS(nws.list.means, cba.nws.list.mean.rds)
+nws.2019 - nws.list.means %% rasterstack() %% rastermean()
 
-cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=longlat +datum=WGS84"))
-annual.nws.cba <- raster::extract(nws.2019, cba.spdf, sp = T)
+cba.spdf - SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
+annual.nws.cba - rasterextract(nws.2019, cba.spdf, sp = T)
 
-saveRDS(annual.nws.cba, "annual.nws.cba.rds")
+saveRDS(annual.nws.cba, annual.nws.cba.rds)
+```
+
+```{r cba-se-annual-wind-speed, eval = F}
+
+cba.spdf - SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
+
+
+nws.files - list.files(path = NWSall_2019, full.names = T) 
+nws.stack - nws.files %% rasterstack() 
+nws.cba - extract(nws.stack, cba.spdf, sp = T) 
+nws.cba.df - nws.cba %% as.data.frame()
+nws.cba.df$Long.1 - NULL
+nws.cba.df$Lat.1 - NULL
+names - c(lon, lat, LakeID, substr(names(nws.cba.df)[4114], start = 36, stop = 39))
+names(nws.cba.df) - names
+
+nws.cba.long - nws.cba.df %% tidyrpivot_longer(cols = names(nws.cba.df)[4114], names_to = layer, values_to = nws) %% as.data.frame()
+nws.cba.long$layer - as.numeric(nws.cba.long$layer)
+
+ggplot(filter(nws.cba.long, LakeID %in% c(12147, 13000, 12700, 13453)))+
+  geom_line(aes(x=layer, y = nws, group = as.factor(LakeID), col = as.factor(LakeID)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.cba.long$month - NA
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(1,109))] - 01
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(2,110))] - 02
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(3,111))] - 03
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(4,112))] - 04
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(5,113))] - 05
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(6,114))] - 06
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(7,115))] - 07
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(8,116))] - 08
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(9,117))] - 09
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(10,118))] - 10
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(11,119))] - 11
+nws.cba.long$month[which(nws.cba.long$layer %in% seq(12,120))] - 12
+
+nws.cba.summary - nws.cba.long %% group_by(lon, lat, LakeID, month) %%
+  summarise(nws = mean(nws, na.rm = T)) %% ungroup() %% as.data.frame()
+
+ggplot(filter(nws.cba.summary, , LakeID %in% c(12147, 13000, 12700, 13453)))+
+  geom_line(aes(x=as.factor(month), y = nws, group = as.factor(LakeID), col = as.factor(LakeID)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.cba.df$meanJJA - subset(nws.cba.summary, month %in% c(6,7,8)) %% group_by(lon, lat, LakeID) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.cba.df$meanSON - subset(nws.cba.summary, month %in% c(9,10,11)) %% group_by(lon, lat, LakeID) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.cba.df$mean.annual -nws.cba.summary %% group_by(lon, lat, LakeID) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+ggplot(sample_n(nws.cba.df, 10), aes(x = as.factor(LakeID)))+
+  geom_point(aes(y = meanJJA, col = summer))+
+  geom_point(aes(y = meanSON, col = autumn))+
+  geom_point(aes(y = mean.annual, col = annual))
+
+
+ggplot(nws.cba.df)+geom_boxplot(aes(x = autumn, y = meanSON))+
+  geom_boxplot(aes(x = summer, y = meanJJA))+
+  geom_boxplot(aes(x = annual, y = mean.annual))
 ```
 
 The CBA dataset was then merged with the wind speed. 
 
 ```{r merge-cba}
-annual.nws.cba <- readRDS("annual.nws.cba.rds")@data %>% select(c("Lake_ID","layer")) %>% setNames(c("Lake_ID","nws_m.s"))
-cba <- cba %>%  merge(annual.nws.cba, by = "Lake_ID")
+annual.nws.cba - readRDS(annual.nws.cba.rds)@data %% select(c(Lake_ID,layer)) %% setNames(c(Lake_ID,nws_m.s))
+cba - cba %%  merge(annual.nws.cba, by = Lake_ID)
 ```
 
 ## N112 data
@@ -94,123 +156,185 @@ cba <- cba %>%  merge(annual.nws.cba, by = "Lake_ID")
 This survey was first published in @Larsen2011. 
 
 ```{r N112}
-n112.all <- read.table("Larsen/N112_subset_110909.txt", sep="", header = TRUE,na.strings = c(".", "NA"))
+n112.all - read.table(LarsenN112_subset_110909.txt, sep=, header = TRUE,na.strings = c(., NA))
 
-n112 <- n112.all %>% subset(ykoord > 6e6) %>% subset(is.na(TIC.ug) == F) %>% subset(is.na(alkendpoint) == F)
+n112 - n112.all %% subset(ykoord  6e6) %% subset(is.na(TIC.ug) == F) %% subset(is.na(alkendpoint) == F)
 
-n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+n112.spdf - SpatialPointsDataFrame(coords = n112[,c(xkoord,ykoord)], data = n112[,c(xkoord,ykoord)], proj4string = CRS(+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs))
 119
  
-n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
+n112.spdf.wgs - n112.spdf %% spTransform(CRS(+proj=longlat +datum=WGS84))
 ```
 
 Similarly, the wind speed was aquired from @C3S2020.
 
 ```{r n112-annual-wind-speed, eval = F}
 
-nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2004", full.names = T) 
-nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
-nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
-saveRDS(nws.list.means, "n112.nws.list.mean.rds")
+nws.files - list.files(path = NWS, pattern = Wind_WFDE5_CRU_2004, full.names = T) 
+nws.list.stacks - lapply(nws.files, rasterstack) %% lapply(rastercrop, c(0,35,55,73))
+nws.list.means - lapply(nws.list.stacks, rastermean, na.rm = T)
+saveRDS(nws.list.means, n112.nws.list.mean.rds)
 
-nws.list.mean <- readRDS("n112.nws.list.mean.rds")
-nws.2004 <- nws.list.mean %>% raster::stack() %>% raster::mean()
+nws.list.mean - readRDS(n112.nws.list.mean.rds)
+nws.2004 - nws.list.mean %% rasterstack() %% rastermean()
 
-n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("xkoord","ykoord")], data = n112[,c("xkoord","ykoord","Vatnlnr")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+n112.spdf - SpatialPointsDataFrame(coords = n112[,c(xkoord,ykoord)], data = n112[,c(xkoord,ykoord,Vatnlnr)], proj4string = CRS(+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs))
 
-annual.nws.n112 <- raster::extract(nws.2004, n112.spdf, sp = T)
+annual.nws.n112 - rasterextract(nws.2004, n112.spdf, sp = T)
 
-saveRDS(annual.nws.n112, "annual.nws.n112.rds")
+saveRDS(annual.nws.n112, annual.nws.n112.rds)
+```
+
+
+```{r n112-se-annual-wind-speed, eval = F}
+
+n112.spdf - SpatialPointsDataFrame(coords = n112[,c(xkoord,ykoord)], data = n112[,c(xkoord,ykoord,Vatnlnr)], proj4string = CRS(+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs))
+
+
+nws.files - list.files(path = NWSall_2004, full.names = T) 
+nws.stack - nws.files %% rasterstack() 
+nws.n112 - extract(nws.stack, n112.spdf, sp = T) 
+nws.n112.df - nws.n112 %% as.data.frame()
+nws.n112.df$xkoord.1 - NULL
+nws.n112.df$ykoord.1 - NULL
+names - c(lon, lat, Vatnlnr, substr(names(nws.n112.df)[4123], start = 36, stop = 39))
+names(nws.n112.df) - names
+
+nws.n112.long - nws.n112.df %% tidyrpivot_longer(cols = names(nws.n112.df)[4123], names_to = layer, values_to = nws) %% as.data.frame()
+nws.n112.long$layer - as.numeric(nws.n112.long$layer)
+
+ggplot(filter(nws.n112.long, Vatnlnr %in% c(4, 315, 5731, 25651)))+
+  geom_line(aes(x=layer, y = nws, group = as.factor(Vatnlnr), col = as.factor(Vatnlnr)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.n112.long$month - NA
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(1,109))] - 01
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(2,110))] - 02
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(3,111))] - 03
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(4,112))] - 04
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(5,113))] - 05
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(6,114))] - 06
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(7,115))] - 07
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(8,116))] - 08
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(9,117))] - 09
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(10,118))] - 10
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(11,119))] - 11
+nws.n112.long$month[which(nws.n112.long$layer %in% seq(12,120))] - 12
+
+nws.n112.summary - nws.n112.long %% group_by(lon, lat, Vatnlnr, month) %%
+  summarise(nws = mean(nws, na.rm = T)) %% ungroup() %% as.data.frame()
+
+ggplot(filter(nws.n112.summary, Vatnlnr %in% c(4, 315, 5731, 25651)))+
+  geom_line(aes(x=as.factor(month), y = nws, group = as.factor(Vatnlnr), col = as.factor(Vatnlnr)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.n112.df$meanJJA - subset(nws.n112.summary, month %in% c(6,7,8)) %% group_by(lon, lat, Vatnlnr) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.n112.df$meanSON - subset(nws.n112.summary, month %in% c(9,10,11)) %% group_by(lon, lat, Vatnlnr) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.n112.df$mean.annual -nws.n112.summary %% group_by(lon, lat, Vatnlnr) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+ggplot(sample_n(nws.n112.df, 10), aes(x = as.factor(Vatnlnr)))+
+  geom_point(aes(y = meanJJA, col = summer))+
+  geom_point(aes(y = meanSON, col = autumn))+
+  geom_point(aes(y = mean.annual, col = annual))
+
+
+ggplot(nws.n112.df)+geom_boxplot(aes(x = autumn, y = meanSON))+
+  geom_boxplot(aes(x = summer, y = meanJJA))+
+  geom_boxplot(aes(x = annual, y = mean.annual))
 ```
 
 Then the original dataset was merged with the wind speed. 
 
 ```{r merge-n112}
-annual.nws.n112 <- readRDS("annual.nws.n112.rds")@data %>% dplyr::select(c("Vatnlnr","layer")) %>% setNames(c("Vatnlnr","nws_m.s"))
+annual.nws.n112 - readRDS(annual.nws.n112.rds)@data %% dplyrselect(c(Vatnlnr,layer)) %% setNames(c(Vatnlnr,nws_m.s))
 
-n112 <- merge(n112, annual.nws.n112, by = "Vatnlnr")
+n112 - merge(n112, annual.nws.n112, by = Vatnlnr)
 ```
 
 ## Merge CBA and N112 data
 
-Both dataset were merged in one. Concentration of TOC, TIC and other elements were converted in mol/L. 
+Both dataset were merged in one. Concentration of TOC, TIC and other elements were converted in molL. 
 
 ```{r norway}
-norway <- data.frame(survey = c(rep("CBA_2019", dim(cba)[1]),rep("N112_2004",dim(n112)[1])))
+norway - data.frame(survey = c(rep(CBA_2019, dim(cba)[1]),rep(N112_2004,dim(n112)[1])))
 
-norway$lake.id <- c(cba$Lake_ID,
+norway$lake.id - c(cba$Lake_ID,
                     n112$Vatnlnr)
   
-norway$lake.name <- c(cba$Lake_name,
+norway$lake.name - c(cba$Lake_name,
                       rep(NA,dim(n112)[1]))
 
-norway$TOC <- c(cba$TOC/12.011 * 1e-3, # mg/L to mol/L
-                n112$TOC/12.011 * 1e-3) # mg/L to mol/L
+norway$TOC - c(cba$TOC12.011  1e-3, # mgL to molL
+                n112$TOC12.011  1e-3) # mgL to molL
 
-norway$TIC <- c(rep(NA, dim(cba)[1]),
-                n112$TIC.ug/12.011 * 1e-6) # ug/L to mol/L
+norway$TIC - c(rep(NA, dim(cba)[1]),
+                n112$TIC.ug12.011  1e-6) # ugL to molL
 
-norway$Ca <- c(cba$Ca / 40.78 * 1e-3, #mg/L to mol/L
-                rep(NA, dim(n112)[1])) # ug/L to mol/L
+norway$Ca - c(cba$Ca  40.78  1e-3, #mgL to molL
+                rep(NA, dim(n112)[1])) # ugL to molL
 
-norway$TN <- c(cba$TN / 14 * 1e-3, #mg/L to mol/L
-                n112$TotN / 14 * 1e-6) # ug/L to mol/L
+norway$TN - c(cba$TN  14  1e-3, #mgL to molL
+                n112$TotN  14  1e-6) # ugL to molL
 
-norway$Fe <- c(cba$Fe / 55.845 * 1e-3, #mg/L to mol/L
+norway$Fe - c(cba$Fe  55.845  1e-3, #mgL to molL
                 rep(NA, dim(n112)[1]))
 
-norway$TA <- c(cba$Alkalinity * 1e-3, # convert from meq/L to mol/L
-               n112$alkendpoint * 1e-6) # assumes ueq/L to mol/L,
+norway$TA - c(cba$Alkalinity  1e-3, # convert from meqL to molL
+               n112$alkendpoint  1e-6) # assumes ueqL to molL,
 
-norway$temp_c <- c(cba$T,
+norway$temp_c - c(cba$T,
                    n112$temp.situ)
 
-norway$temp_k <- norway$temp_c + 273.15
+norway$temp_k - norway$temp_c + 273.15
   
-norway$EC <- c(cba$EC_Kje,
-               rep("NA",dim(n112)[1])) %>% as.numeric()
+norway$EC - c(cba$EC_Kje,
+               rep(NA,dim(n112)[1])) %% as.numeric()
 
-norway$IS <- 1.3e-5 * norway$EC
+norway$IS - 1.3e-5  norway$EC
 
-norway$fCO2.atm <- c(rep(fCO2.atm.2019, dim(cba)[1]), 
+norway$fCO2.atm - c(rep(fCO2.atm.2019, dim(cba)[1]), 
                      rep(rep(fCO2.atm.2004,dim(n112)[1])))
 
-norway$pH <- c(cba$pH_Kje,
+norway$pH - c(cba$pH_Kje,
                n112$pH)
 
-norway$Hplus <- 10^(-norway$pH)
+norway$Hplus - 10^(-norway$pH)
 
-norway$CO2 <- c(as.numeric(cba$CO2) * 1e-6, # from umol/L to mol/L
-                n112$co2.umolar * 1e-6) # umol/L to mol/kg_solution
+norway$CO2 - c(as.numeric(cba$CO2)  1e-6, # from umolL to molL
+                n112$co2.umolar  1e-6) # umolL to molkg_solution
                 
-norway$long <- c(cba$Long,
+norway$long - c(cba$Long,
                  n112.spdf.wgs@coords[,1])
 
-norway$lat <- c(cba$Lat,
+norway$lat - c(cba$Lat,
                  n112.spdf.wgs@coords[,2])
 
-norway$lake.area <- c(cba$lake_area_km2,
+norway$lake.area - c(cba$lake_area_km2,
                       n112$lake.area)
 
-norway$catchment.area <- c(cba$basin_area_km2,
+norway$catchment.area - c(cba$basin_area_km2,
                       n112$poly.area)
 
-norway$nws_m.s <- c(cba$nws_m.s,
+norway$nws_m.s - c(cba$nws_m.s,
                     n112$nws_m.s)
 
-norway <- filter(norway, !is.na(TA))
+norway - filter(norway, !is.na(TA))
 ```
 
 We calculated the dissociation constants for the carbonate equilibrium based on @Dickson1979, @Harned1941, @Harned1943 and @Weiss1974.
 
 ```{r constants}
 
-norway$Kw = with(norway, exp(148.9802 - 13847.26/temp_k - 23.6521*log(temp_k))) # Dickson and Riley, 1979
+norway$Kw = with(norway, exp(148.9802 - 13847.26temp_k - 23.6521log(temp_k))) # Dickson and Riley, 1979
 
-#norway$K0 <- with(norway, 10^-((-2622.38/temp_k) + 15.5873 - 0.0178471*temp_k)) #Harned and Davis, 1943
-norway$K0 <- with(norway, exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100))) # Weiss 1974
-norway$K1 <- with(norway, 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k)) # Harned and Davis, 1943
-norway$K2 <- with(norway, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Harned and Scholes, 1941
+#norway$K0 - with(norway, 10^-((-2622.38temp_k) + 15.5873 - 0.0178471temp_k)) #Harned and Davis, 1943
+norway$K0 - with(norway, exp(-58.0931+90.5069100temp_k+22.2940log(temp_k100))) # Weiss 1974
+norway$K1 - with(norway, 10^-((3404.71temp_k)- 14.8435 + 0.032786temp_k)) # Harned and Davis, 1943
+norway$K2 - with(norway, 10^-((2902.39temp_k) - 6.4980 + 0.02379temp_k)) # Harned and Scholes, 1941
 
 ```
 
@@ -221,62 +345,62 @@ Our datasets contain CO2 concentration calculated from total inorganic carbon, f
 The concentration of each carbonate species was calculated based on this value.
 
 ```{r carbonate-speciation-from-measured-CO2}
-norway$H2CO3 <- norway$CO2 # in mol/L
-norway$HCO3 <- with(norway, H2CO3 * K1 / Hplus)
-norway$CO3 <- with(norway, K2 * HCO3 / Hplus)
+norway$H2CO3 - norway$CO2 # in molL
+norway$HCO3 - with(norway, H2CO3  K1  Hplus)
+norway$CO3 - with(norway, K2  HCO3  Hplus)
 
-norway$fCO2 <- with(norway, CO2 / K0)
-norway$dfCO2 <- with(norway, fCO2 - fCO2.atm)
+norway$fCO2 - with(norway, CO2  K0)
+norway$dfCO2 - with(norway, fCO2 - fCO2.atm)
 
-norway$OH <- with(norway, Kw/Hplus)
+norway$OH - with(norway, KwHplus)
 
 # Check
-norway$DIC <- with(norway, H2CO3 + HCO3 + CO3)
-norway$CA <- with(norway,  HCO3 + 2*CO3) 
+norway$DIC - with(norway, H2CO3 + HCO3 + CO3)
+norway$CA - with(norway,  HCO3 + 2CO3) 
 ```
 
 ```{r plot-carbonates}
-ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = "H2CO3", size = DIC))+
-  geom_point(aes(y = HCO3, col = "HCO3", size = DIC))+
-  geom_point(aes(y = CO3, col = "CO3", size = DIC))+
-  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
-  labs(y= "Concentration in mol/L", col = "Carbonate species", size = "DIC in mol/L")+
+ggplot(norway, aes(x = pH))+geom_point(aes(y = H2CO3, col = H2CO3, size = DIC))+
+  geom_point(aes(y = HCO3, col = HCO3, size = DIC))+
+  geom_point(aes(y = CO3, col = CO3, size = DIC))+
+  scale_color_manual(values = c(orange,firebrick,dodgerblue3))+
+  labs(y= Concentration in molL, col = Carbonate species, size = DIC in molL)+
   theme_minimal()
 ```
 
 ```{r plot-fCO2}
 
 ggplot(norway, aes(x = TOC, y = fCO2, col = survey))+
-  geom_hline(yintercept = fCO2.atm.2019, col = "firebrick")+
-  geom_hline(yintercept = fCO2.atm.2004, col = "dodgerblue3")+
-  scale_color_manual(values = c("firebrick","dodgerblue3"))+
-  #coord_trans(x = "log10")+
+  geom_hline(yintercept = fCO2.atm.2019, col = firebrick)+
+  geom_hline(yintercept = fCO2.atm.2004, col = dodgerblue3)+
+  scale_color_manual(values = c(firebrick,dodgerblue3))+
+  #coord_trans(x = log10)+
   geom_point()+
-  labs(y = "pCO2, atm", x = "TOC, mol/L")+
+  labs(y = pCO2, atm, x = TOC, molL)+
   theme_minimal()
 
 ```
 
 ## Carbonate speciation from TA
 
-The concentration of each carbonate species is then calculated based on total alkalinity as a proxy for $HCO_3^- + 2 \times CO_3^{2-}$. The resulting pCO2 is also calculated. 
+The concentration of each carbonate species is then calculated based on total alkalinity as a proxy for $HCO_3^- + 2 times CO_3^{2-}$. The resulting pCO2 is also calculated. 
 
 ```{r carbonate-speciation-from-TA}
 
-norway$ta_CO3 <- with(norway,(TA - OH + Hplus) / (Hplus/K2 +2)) # in mol/L
-norway$ta_HCO3 <- with(norway, ta_CO3*Hplus/K2)
-norway$ta_H2CO3 <- with(norway, ta_HCO3*Hplus/K1)
-norway$ta_fCO2 <- with(norway,ta_H2CO3/K0)
+norway$ta_CO3 - with(norway,(TA - OH + Hplus)  (HplusK2 +2)) # in molL
+norway$ta_HCO3 - with(norway, ta_CO3HplusK2)
+norway$ta_H2CO3 - with(norway, ta_HCO3HplusK1)
+norway$ta_fCO2 - with(norway,ta_H2CO3K0)
 
-norway$ta_DIC <- with(norway, ta_H2CO3 + ta_HCO3 + ta_CO3)
+norway$ta_DIC - with(norway, ta_H2CO3 + ta_HCO3 + ta_CO3)
 ```
 
 ## Save test dataset
 
-The dataset is saved under the name "norway".
+The dataset is saved under the name norway.
 
 ```{r save-norway}
-saveRDS(norway,"norway.rds")
+saveRDS(norway,norway.rds)
 ```
 
 # Northern Lakes Survey
@@ -287,47 +411,107 @@ The dataset from the Northern Europeal Lakes Survey @Henriksen1998 is used as a 
 
 The data is available in the NOFA database [@ninanor], including catchment polygons. 
 
-Measurements methods for the Northern Lakes Survey are detailed in @Henriksen1996. Alkalinity is detailed in Annex 3. "alk_e" is a the variable corresponding to the alkalinity calibrated, taking into account the account the different methods used in Norway, Sweden and Finland. 
+Measurements methods for the Northern Lakes Survey are detailed in @Henriksen1996. Alkalinity is detailed in Annex 3. alk_e is a the variable corresponding to the alkalinity calibrated, taking into account the account the different methods used in Norway, Sweden and Finland. 
 
 
 ```{r load-data, eval = F}
-con <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),user = "camille.crapart", password = "camille",host = "vm-srv-wallace.vm.ntnu.no", dbname = "nofa")
+con - DBIdbConnect(RPostgreSQLPostgreSQL(),user = camille.crapart, password = camille,host = vm-srv-wallace.vm.ntnu.no, dbname = nofa)
 
-ion <- tbl(con, sql("SELECT gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_e_ueq_l,alk_subst,k25_ms_m,ca_ueq_l,mg_ueq_l,na_ueq_l,k_ueq_l,nh4_ueq_l,cl_ueq_l,so4_ueq_l,no3_ueq_l,f_ueq_l,tot_p_ug_l,tot_n_ug_l,toc_mg_l,dist_closest_ebint,dist_2nd_closest_ebint FROM environmental.north_euro_lake_surv_1995 ")) %>% as.data.frame()
-names(ion) <- c("gid", "ebint","nation","date","temp_c","latitude","longitude","ph","alk_ueq","alk","cond","ca","mg","na","k","nh4","cl","so4","no3","f","tp","tn","toc","dist_closest_ebint","dist_2nd_closest_ebint")
-saveRDS(ion,"ion.rds")
+ion - tbl(con, sql(SELECT gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_e_ueq_l,alk_subst,k25_ms_m,ca_ueq_l,mg_ueq_l,na_ueq_l,k_ueq_l,nh4_ueq_l,cl_ueq_l,so4_ueq_l,no3_ueq_l,f_ueq_l,tot_p_ug_l,tot_n_ug_l,toc_mg_l,dist_closest_ebint,dist_2nd_closest_ebint FROM environmental.north_euro_lake_surv_1995 )) %% as.data.frame()
+names(ion) - c(gid, ebint,nation,date,temp_c,latitude,longitude,ph,alk_ueq,alk,cond,ca,mg,na,k,nh4,cl,so4,no3,f,tp,tn,toc,dist_closest_ebint,dist_2nd_closest_ebint)
+saveRDS(ion,ion.rds)
 
-lakes <- st_read(con,query = "SELECT gid, ebint, geom, area, perimtot FROM environmental.ecco_biwa_lakes_v_0_1 WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)")
-saveRDS(lakes,"lakes.rds")
+lakes - st_read(con,query = SELECT gid, ebint, geom, area, perimtot FROM environmental.ecco_biwa_lakes_v_0_1 WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995))
+saveRDS(lakes,lakes.rds)
 
-catchments <- st_read(con,query = "SELECT ebint, geom FROM catchments.lake_catchments WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)") # in UTM33
-saveRDS(catchments,"catchments.rds")
-catchment.poly <- st_transform(catchments, crs = st_crs("EPSG:4326")) # converts in World Geodetic System 1984
-saveRDS(catchment.poly,"catchment.poly.rds")
-catchment.poly.corine <- st_transform(catchment.poly, crs = st_crs("EPSG:3035")) # converts to EU extended referential ETRS89-extended
-saveRDS(catchment.poly.corine, "catchment.poly.corine.rds")
+catchments - st_read(con,query = SELECT ebint, geom FROM catchments.lake_catchments WHERE ebint IN (SELECT ebint FROM environmental.north_euro_lake_surv_1995)) # in UTM33
+saveRDS(catchments,catchments.rds)
+catchment.poly - st_transform(catchments, crs = st_crs(EPSG4326)) # converts in World Geodetic System 1984
+saveRDS(catchment.poly,catchment.poly.rds)
+catchment.poly.corine - st_transform(catchment.poly, crs = st_crs(EPSG3035)) # converts to EU extended referential ETRS89-extended
+saveRDS(catchment.poly.corine, catchment.poly.corine.rds)
 ```
 ## Near surface wind speed
 
 Wind speed data is acquired from the AgERA5 dataset, thqt aggregates hourly data to monthly data from ERA5 reanalysis @C3S2020. Lakes from the NLS survey are larger than for the CBA and N112 survey, in which we considered only the wind speed at the sampling location to calculate the gas transfer velocity. Here, we averaged the wind speed for the year and for the total area of the lakes.
 
 ```{r nws, eval = F}
-lakes <- readRDS("lakes.rds")
+lakes - readRDS(lakes.rds)
 
-nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_1995", full.names = T) 
-nws.list.stacks <- lapply(nws.files, raster::stack) %>% lapply(raster::crop, c(0,35,55,73))
-nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
-saveRDS(nws.list.means, "nlss.nws.list.mean.rds")
+nws.files - list.files(path = NWS, pattern = Wind_WFDE5_CRU_1995, full.names = T) 
+nws.list.stacks - lapply(nws.files, rasterstack) %% lapply(rastercrop, c(0,35,55,73))
+nws.list.means - lapply(nws.list.stacks, rastermean, na.rm = T)
+saveRDS(nws.list.means, nlss.nws.list.mean.rds)
 
-nws.list.mean <- readRDS("nlss.nws.list.mean.rds")
-nws.1995 <- nws.list.mean %>% raster::stack() %>% raster::mean()
+nws.list.mean - readRDS(nlss.nws.list.mean.rds)
+nws.1995 - nws.list.mean %% rasterstack() %% rastermean()
 
-annual.nws.1995 <- raster::extract(nws.1995, lakes,fun = mean, na.rm = T, df = T)
-annual.nws.1995$ebint <- lakes$ebint
+annual.nws.1995 - rasterextract(nws.1995, lakes,fun = mean, na.rm = T, df = T)
+annual.nws.1995$ebint - lakes$ebint
 
-saveRDS(annual.nws.1995, "annual.nws.nls.rds")
+saveRDS(annual.nws.1995, annual.nws.nls.rds)
 ```
+```{r nls-se-annual-wind-speed, eval = F}
+# lakes - readRDS(lakes.rds)
+# 
+# nws.files - list.files(path = NWSall_1995, full.names = T)
+# nws.stack - nws.files %% rasterstack()
+# nws.nls - extract(nws.stack, lakes, fun = mean, sp = T)
+# saveRDS(nws.nls, NWSnws.nls.rds)
 
+nws.nls - readRDS(NWSnws.nls.rds)
+nws.nls.df - nws.nls %% as.data.frame()
+names - c(gid, ebint, area, perimtot, substr(names(nws.nls.df)[5124], start = 36, stop = 39))
+names(nws.nls.df) - names
+
+nws.nls.long - nws.nls.df %% tidyrpivot_longer(cols = names(nws.nls.df)[5124], names_to = layer, values_to = nws) %% as.data.frame()
+nws.nls.long$layer - as.numeric(nws.nls.long$layer)
+
+ggplot(filter(nws.nls.long, gid %in% sample(nws.nls.df$gid, 5)))+
+  geom_line(aes(x=layer, y = nws, group = as.factor(gid), col = as.factor(gid)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.nls.long$month - NA
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(1,109))] - 01
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(2,110))] - 02
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(3,111))] - 03
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(4,112))] - 04
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(5,113))] - 05
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(6,114))] - 06
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(7,115))] - 07
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(8,116))] - 08
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(9,117))] - 09
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(10,118))] - 10
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(11,119))] - 11
+nws.nls.long$month[which(nws.nls.long$layer %in% seq(12,120))] - 12
+
+nws.nls.summary - nws.nls.long %% group_by(gid, ebint, area, perimtot, month) %%
+  summarise(nws = mean(nws, na.rm = T)) %% ungroup() %% as.data.frame()
+
+ggplot(filter(nws.nls.summary, gid %in% sample(nws.nls.df$gid, 5)))+
+  geom_line(aes(x=as.factor(month), y = nws, group = as.factor(gid), col = as.factor(gid)))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 5), 
+        legend.position = bottom)
+
+nws.nls.df$meanJJA - subset(nws.nls.summary, month %in% c(6,7,8)) %% group_by(gid, ebint, area, perimtot) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.nls.df$meanSON - subset(nws.nls.summary, month %in% c(9,10,11)) %% group_by(gid, ebint, area, perimtot) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+nws.nls.df$mean.annual -nws.nls.summary %% group_by(gid, ebint, area, perimtot) %%  summarise(nws = mean(nws, na.rm = T)) %% pull(nws)
+
+ggplot(sample_n(nws.nls.df, 10), aes(x = as.factor(gid)))+
+  geom_point(aes(y = meanJJA, col = summer))+
+  geom_point(aes(y = meanSON, col = autumn))+
+  geom_point(aes(y = mean.annual, col = annual))
+
+
+ggplot(nws.nls.df)+geom_boxplot(aes(x = autumn, y = meanSON))+
+  geom_boxplot(aes(x = summer, y = meanJJA))+
+  geom_boxplot(aes(x = annual, y = mean.annual))+
+  labs(x = season, y = average wind speed in ms)+
+  theme_bw()
+```
 
 ## Merge data for NLS
 
@@ -335,45 +519,45 @@ We merged the different datasets related to the NLS. Lakes with TOC and TP conce
 
 ```{r merge-df, eval = F}
 
-ion <- readRDS("ion.rds")
-lakes <- readRDS("lakes.rds")
-nws <- readRDS("annual.nws.nls.rds") %>% setNames(c("ID","nws_m.s","gid","ebint"))
+ion - readRDS(ion.rds)
+lakes - readRDS(lakes.rds)
+nws - readRDS(annual.nws.nls.rds) %% setNames(c(ID,nws_m.s,gid,ebint))
 
-nls <- merge(ion, lakes, by = "ebint") %>% merge(nws, by= "ebint")
+nls - merge(ion, lakes, by = ebint) %% merge(nws, by= ebint)
 
-nls$uncertain <- ifelse(nls$dist_closest_ebint/nls$dist_2nd_closest_ebint > 0.5, FALSE, TRUE)
-nls$uncertain[which(is.na(nls$uncertain)==TRUE)] <- FALSE
+nls$uncertain - ifelse(nls$dist_closest_ebintnls$dist_2nd_closest_ebint  0.5, FALSE, TRUE)
+nls$uncertain[which(is.na(nls$uncertain)==TRUE)] - FALSE
 
-nls$temp_c[which(is.na(nls$temp_c)==T)] <- 4
+nls$temp_c[which(is.na(nls$temp_c)==T)] - 4
 
-nls <- nls %>% filter(toc >= 0) %>% filter(tp > 0) %>% filter(uncertain == FALSE) 
+nls - nls %% filter(toc = 0) %% filter(tp  0) %% filter(uncertain == FALSE) 
 
-saveRDS(nls,"nls.rds")
+saveRDS(nls,nls.rds)
 ```
 
-A simplified dataframe is created, with a selection of variables matching the variables used in the CBA and N112 survey. TOC and alkalinity are converted in mol/L.
+A simplified dataframe is created, with a selection of variables matching the variables used in the CBA and N112 survey. TOC and alkalinity are converted in molL.
 
 ```{r selected-df}
-nls <- readRDS("nls.rds")
+nls - readRDS(nls.rds)
 
-nlss <- data.frame(lake.id = nls$ebint)
+nlss - data.frame(lake.id = nls$ebint)
 
-nlss$pH <- nls$ph
-nlss$Hplus <- 10^(-nlss$pH)
-nlss$TA <- nls$alk_ueq * 1e-6
-nlss$TOC <- nls$toc / 12.011 * 1e-3
-nlss$nws_m.s <- nls$nws_m.s
+nlss$pH - nls$ph
+nlss$Hplus - 10^(-nlss$pH)
+nlss$TA - nls$alk_ueq  1e-6
+nlss$TOC - nls$toc  12.011  1e-3
+nlss$nws_m.s - nls$nws_m.s
 
-nlss$long <- nls$longitude
-nlss$lat <- nls$latitude
-nlss$fCO2.atm <- fCO2.atm.1995
+nlss$long - nls$longitude
+nlss$lat - nls$latitude
+nlss$fCO2.atm - fCO2.atm.1995
 
-nlss$temp_c <- nls$temp_c
-nlss$temp_k <- nls$temp_c + 273.15
+nlss$temp_c - nls$temp_c
+nlss$temp_k - nls$temp_c + 273.15
 
-nlss$lake.area <- nls$area * 1e-6 # m2 to km2
+nlss$lake.area - nls$area  1e-6 # m2 to km2
 
-nlss$nation <- nls$nation
+nlss$nation - nls$nation
 
 
 ```
@@ -381,29 +565,29 @@ nlss$nation <- nls$nation
 The dissociation constants are calculated as previously. 
 
 ```{r dissociation-constants, eval = F}
-nlss$Kw = with(nlss, exp(148.9802 - 13847.26/temp_k - 23.6521*log(temp_k))) # Dickson and Riley, 1979
+nlss$Kw = with(nlss, exp(148.9802 - 13847.26temp_k - 23.6521log(temp_k))) # Dickson and Riley, 1979
 
-#nlss$K0 <- with(nlss, 10^-((-2622.38/temp_k) + 15.5873 - 0.0178471*temp_k)) #Harned and Davis, 1943
-nlss$K0 <- with(nlss, exp(-58.0931+90.5069*100/temp_k+22.2940*log(temp_k/100))) # Weiss 1974
-nlss$K1 <- with(nlss, 10^-((3404.71/temp_k)- 14.8435 + 0.032786*temp_k)) # Harned and Davis, 1943
-nlss$K2 <- with(nlss, 10^-((2902.39/temp_k) - 6.4980 + 0.02379*temp_k)) # Harned and Scholes, 1941
+#nlss$K0 - with(nlss, 10^-((-2622.38temp_k) + 15.5873 - 0.0178471temp_k)) #Harned and Davis, 1943
+nlss$K0 - with(nlss, exp(-58.0931+90.5069100temp_k+22.2940log(temp_k100))) # Weiss 1974
+nlss$K1 - with(nlss, 10^-((3404.71temp_k)- 14.8435 + 0.032786temp_k)) # Harned and Davis, 1943
+nlss$K2 - with(nlss, 10^-((2902.39temp_k) - 6.4980 + 0.02379temp_k)) # Harned and Scholes, 1941
 
 
-nlss$OH <- with(nlss, Kw/Hplus)
+nlss$OH - with(nlss, KwHplus)
 ```
 
 ## Save NLS
 
-The final dataframe is saved under the name "nlss".
+The final dataframe is saved under the name nlss.
 
 ```{r remove-duplicate}
-duplicated.id <- nlss$lake.id[which(duplicated(nlss$lake.id) == T)]
+duplicated.id - nlss$lake.id[which(duplicated(nlss$lake.id) == T)]
 nlss[nlss$lake.id %in% duplicated.id, ]
-unique.nlss <- nlss %>% group_by(lake.id, nation) %>% summarise_all(median)
+unique.nlss - nlss %% group_by(lake.id, nation) %% summarise_all(median)
 ```
 
 ```{r save-nlss, eval = F}
-saveRDS(unique.nlss, "nlss.rds")
+saveRDS(unique.nlss, nlss.rds)
 
 ```
 
