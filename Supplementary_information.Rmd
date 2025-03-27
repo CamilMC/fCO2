@@ -5,11 +5,10 @@ date: "2023-02-09"
 output: 
    bookdown::html_document2:
      code_folding: hide
-     toc_float: true
+     toc_float: false
      toc: true
      number_sections: true
-     fig_caption: true
-     keep_tex: true
+
 
 bibliography: C:\\Users\\raine\\Documents\\UiO\\Bibtex\\fCO2.bib
 link-citations: yes
@@ -23,8 +22,6 @@ options(knitr.kable.NA = '')
 ```
 
 ```{r libraries}
-
-
 library(ggplot2)
 library(ggforce)
 library(ggpubr)
@@ -150,6 +147,10 @@ ggplot(norway,aes(x= pH))+geom_point(aes(y = ta_fCO2, col = "pCO2 from TA"), alp
   theme_bw(base_size = 15)+
   theme(legend.position = "bottom")
 
+with(norway, cor(ta_fCO2, fCO2, use = "pairwise.complete.obs")^2)
+with(subset(norway, pH > 5.4), cor(ta_fCO2, fCO2, use = "pairwise.complete.obs")^2)
+
+
 ```
 
 *`r fig_nums("map-pCo2", "Measured (red) and calculated (blue) pCO2 in atm for the CBA and N112 surveys")`*
@@ -235,12 +236,15 @@ norway$CO3_hruska <- with(norway,CA_hruska / (Hplus/K2 +2)) # in mol/L
 norway$HCO3_hruska <- with(norway, CO3_hruska*Hplus/K2)
 norway$H2CO3_hruska <- with(norway, HCO3_hruska*Hplus/K1)
 norway$fCO2_hruska <- with(norway,H2CO3_hruska/K0)
+
+with(norway, cor(fCO2_hruska, fCO2, use = "pairwise.complete.obs")^2)
+with(subset(norway, pH > 5.4), cor(fCO2_hruska, fCO2, use = "pairwise.complete.obs")^2)
 ```
 
 *`r fig_nums("OA-Hruska", "OA estimated with triprotic method of Hruska et al., in eq/L")`*
 
 ```{r fCO2-from-hruska}
-ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska, col = "pCO2 from calculated from Hruska et al"), alpha = 0.5)+
+ggplot(norway,aes(x= pH))+geom_point(aes(y = fCO2_hruska*1e6, col = "pCO2 from calculated from Hruska et al"), alpha = 0.5)+
   geom_point(aes(y = fCO2*1e6, col = "Measured pCO2"), alpha = 0.5)+
   labs(y = "pCO2, uatm", x = "pH", col = "")+
   scale_color_manual(values = c( "firebrick","dodgerblue3"))+
@@ -2597,37 +2601,39 @@ no <- norway %>%
 
 medyear <- function(x){median(x, na.rm = T) * 365} # to convert gC/m2/d in gC/m2/year
 avyear <- function(x){mean(x, na.rm = T) * 365}
+sdyear<- function(x){sd(x, na.rm = T) * 365}
 
-summary_eco2.1 <- no %>% group_by(survey) %>% summarize_all(medyear) %>% mutate(fCO2 = fCO2/365*1e6)
+summary_no.1 <- no %>% group_by(survey) %>% summarize_all(medyear) %>% mutate(fCO2 = fCO2/365*1e6) #divide fCO2 by 365 to come back to mean concentration value
+summary_no.2 <- no %>% group_by(survey) %>% summarize_all(avyear) %>% mutate(fCO2 = fCO2/365*1e6) # + convert to uatm
+summary_no.3 <- no %>% group_by(survey) %>% summarize_all(sdyear) %>% mutate(fCO2 = fCO2/365*1e6)
 
-summary_eco2.2 <- no %>% group_by(survey) %>% summarize_all(avyear) %>% mutate(fCO2 = fCO2/365*1e6)
-
-no2 <- rbind(summary_eco2.1, summary_eco2.2) %>% arrange(survey) %>% mutate(survey = c("median","mean","median","mean"))
+no2 <- rbind(summary_no.1, summary_no.2, summary_no.3) %>% arrange(survey) %>% mutate(survey = c("median","mean","standard deviation","median","mean","standard deviation"))
 
 fen <- nlss %>% dplyr::select(c("pCO2_toc","ECO2_toc","ECO2_toc_low")) %>% 
   mutate(ECO2 = NA, ECO2_low = NA, fCO2 = pCO2_toc/365*1e6, survey = NA) %>%
-  dplyr::select(c("survey","fCO2", "ECO2", "ECO2_toc", "ECO2_low","ECO2_toc_low"))
+  dplyr::select(c("survey","fCO2", "ECO2", "ECO2_toc", "ECO2_low","ECO2_toc_low")) 
 fen$lake.id <- NULL
 
 summary_fen.1 <- fen %>% group_by(survey) %>% summarize_all(medyear) %>% mutate(survey= "median")
 summary_fen.2 <- fen %>% group_by(survey) %>% summarize_all(avyear) %>% mutate(survey= "mean")
+summary_fen.3 <- fen %>% group_by(survey) %>% summarize_all(sdyear) %>% mutate(survey= "standard deviation")
 
-tot <- rbind(no2, summary_fen.1) %>% rbind(summary_fen.2)
+tot <- rbind(no2, summary_fen.1) %>% rbind(summary_fen.2) %>% rbind(summary_fen.3)
 
 kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/day","ECO2 from TOC in gC/m2/day","ECO2 from DIC in gC/m2/day","ECO2 from TOC in gC/m2/day")) %>% 
   kable_styling %>% 
-  kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
-  kableExtra::group_rows(group_label= "N112", start_row = 3, end_row = 4) %>% 
-  kableExtra::group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
+  kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 3) %>%
+  kableExtra::group_rows(group_label= "N112", start_row = 4, end_row = 6) %>% 
+  kableExtra::group_rows(group_label= "NLS", start_row = 7, end_row = 9) %>% 
   kableExtra::add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) 
 
-kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year","ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year")) %>% 
-  kable_styling() %>% 
-  kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 2) %>%
-  kableExtra::group_rows(group_label= "N112", start_row = 3, end_row = 4) %>%
-  kableExtra::group_rows(group_label= "NLS", start_row = 5, end_row = 6) %>% 
-  kableExtra::add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) %>%
-  save_kable(file = "compare.eco2.measured.png",zoom = 5)
+# kable(tot, digits = 2, col.names = c(" ","pCO2, uatm", "ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year","ECO2 from DIC in gC/m2/year","ECO2 from TOC in gC/m2/year")) %>% 
+#   kable_styling() %>% 
+#   kableExtra::group_rows(group_label= "CBA", start_row = 1, end_row = 3) %>%
+#   kableExtra::group_rows(group_label= "N112", start_row = 4, end_row = 6) %>%
+#   kableExtra::group_rows(group_label= "NLS", start_row = 7, end_row = 9) %>% 
+#   kableExtra::add_header_above(c(" " = 2, "High estimates" = 2, "Low estimates" = 2)) %>%
+#   save_kable(file = "compare.eco2.measured.png",zoom = 5)
 
 ```
 
@@ -2954,10 +2960,10 @@ binned.nlss <- nlss %>% group_by(nation, inland.water, lake.area.under100, lake.
                                   ECO2_low = mean(ECO2_toc_low * 365, na.rm = T),
                                   ECO2_low_sd = sd(ECO2_toc_low * 365, na.rm = T)) %>%
                           mutate(FCO2 = ifelse(lake.category != "(100,Inf]",
-                                               ECO2*(cat.lake.area/lake.area.under100*inland.water)*1e6/12.011 * 43.99 * 1e-12, #MtCO2/y. ECO2 multiplied by the proportion of lakes belonging to each category in Norway, lake area *1e6 to convert in m2,
+                                               ECO2*(cat.lake.area/lake.area.under100*(inland.water-lake.area.over100))*1e6/12.011 * 43.99 * 1e-12, #MtCO2/y. ECO2 multiplied by the proportion of lakes belonging to each category in Norway, lake area *1e6 to convert in m2,
                                                ECO2*lake.area.over100*1e6/12.011 * 43.99 * 1e-12),
                                  FCO2_low = ifelse(lake.category != "(100,Inf]", 
-                                                   ECO2_low*(cat.lake.area/lake.area.under100*inland.water)*1e6/12.011 * 43.99 * 1e-12,
+                                                   ECO2_low*(cat.lake.area/lake.area.under100*(inland.water-lake.area.over100))*1e6/12.011 * 43.99 * 1e-12,
                                                    ECO2_low*lake.area.over100*1e6/12.011 * 43.99 * 1e-12)) %>%  #MtCO2/y
   unique()
 
@@ -3176,10 +3182,11 @@ rownames(summary.df) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA", 
 
 colnames(summary.df) <- c("Min", "Median","Max","Mean","Sd")
 
-knitr::kable(summary.df, digits = 2, caption = "All pCO2") %>% kable_styling(full_width= T, font_size = 14) %>% 
-  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
-  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
-  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+knitr::kable(summary.df, digits = 2, caption = "All pCO2") %>% 
+  kable_styling(full_width= T, font_size = 14) %>%
+  kableExtra::group_rows(group_label = "ECO2 from measured pCO2", start_row = 1, end_row = 2) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TA", start_row = 3, end_row = 7) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TOC", start_row = 8, end_row = 12) %>% 
   column_spec(column = c(3,5), bold = T) 
 
 
@@ -3190,9 +3197,9 @@ rownames(summary.df2) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA",
 colnames(summary.df2) <- c("Min", "Median","Max","Mean","Sd")
 
 knitr::kable(summary.df2, digits = 2, caption = "Excluding pCO2_ta < 0") %>% kable_styling(full_width= T, font_size = 14) %>% 
-  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
-  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
-  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  kableExtra::group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
   column_spec(column = c(3,5), bold = T) 
 
 summary.df3 <- rbind(summary3_n112, summary3_cba, summary3_nlss_ta, summary3_sweden_1995_ta, summary3_finland_1995_ta, summary3_norway_1995_ta, summary3_snorway_1995_ta, summary3_nlss_toc, summary2_sweden_1995_toc, summary2_finland_1995_toc, summary2_norway_1995_toc, summary2_snorway_1995_toc) %>% as.data.frame()
@@ -3202,9 +3209,9 @@ rownames(summary.df3) <- c("N112, 2004", "CBA, 2019","Northern Lake Survey, TA",
 colnames(summary.df3) <- c("Min", "Median","Max","Mean","Sd")
 
 knitr::kable(summary.df3, digits = 2, caption = "Excluding pH < 5.4") %>% kable_styling(full_width= T, font_size = 14) %>% 
-  group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
-  group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
-  group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
+  kableExtra::group_rows(group_label = "ECO2 from measured pCO2", start_row = 1,end_row=2) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TA", start_row = 3,end_row=7) %>%
+  kableExtra::group_rows(group_label = "ECO2 computed with TOC", start_row = 8,end_row=12) %>% 
   column_spec(column = c(3,5), bold = T) 
 ```
 
@@ -3681,7 +3688,7 @@ ggarrange(n1995_ECO2, n112_ECO2,cba_ECO2, labels = c("1995","2004","2019"), comm
 
 # Other stuff
 
-```{r boxplots-ECO2}
+```{r boxplots-ECO2, eval = F}
 
 ggplot()+
   geom_boxplot(aes(x = "2004", y = subset(norway, survey == "N112_2004")$ECO2, col = "2004"))+

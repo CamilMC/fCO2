@@ -1,0 +1,189 @@
+---
+title: "Reviews"
+author: "Camille Crapart"
+date: "2025-03-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, message = F, warning = F, results = F)
+options(knitr.kable.NA = '')
+```
+
+```{r libraries}
+library(ggplot2)
+library(ggforce)
+library(ggpubr)
+library(cowplot)
+library(gridExtra)
+library(colorspace)
+
+library(gamlss)
+
+library(kableExtra)
+
+library(rsq)
+
+library(sp)
+
+library(dplyr)
+
+fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
+fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
+fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
+fCO2.atm.1995 <- 360.17 * 1e-6
+```
+
+```{r fig-num-function}
+library(captioner)
+fig_nums <- captioner() 
+tab_nums <- captioner(prefix = "Table")
+```
+
+
+
+# Import data
+
+```{r wind-era5}
+era5 <- raster("ERA5/e0447a439ddf720395d0bd6a97fb247f.nc") 
+u10 <- raster("ERA5/e0447a439ddf720395d0bd6a97fb247f.nc", varname = "u10", level = 1)
+
+
+```
+
+
+The data was prepared in [Data preparation](https://camilmc.github.io/fCO2/Data_preparation.html)
+
+```{r import-data}
+cba_no_area <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
+bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c(CBA_Lake_ID, lake_area_km2, basin_area_km2))
+cba <- merge(cba_no_area,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") %>%
+  dplyr::select(c(Lake_ID, Long, Lat, Altitude, CBA_date, T, pH, TOC, DOC, pH_Kje, Alkalinity, CO2, p_CO2, lake_area_km2, basin_area_km2))
+
+nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
+nws.raster.crop <- lapply(nws.files, raster) %>% lapply(raster::crop, c(0,35,55,73)) # test with head
+
+#nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
+nws.mean <- nws.raster.crop %>% raster::stack() %>% raster::mean(na.rm = T)
+nws.xiu <- lapply(nws.raster.crop, FUN = function(r1){(r1 - nws.mean)^2})
+
+raster.sum <- function(x) {sum(x)}
+nws.sum <- nws.xiu %>% raster::stack() %>% raster.sum()
+
+sd.function <- function(x) {sqrt(sum(x)/length(nws.raster.crop))}
+nws.sd <- nws.xiu %>% raster::stack() %>% sd.function()
+
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=longlat +datum=WGS84"))
+nws.mean.cba <- raster::extract(nws.mean, cba.spdf, sp = T)
+nws.mean.cba.df <- nws.mean.cba@data %>% setNames(c("Long","Lat","Lake_ID","nws_mean"))
+
+nws.sd.cba <- raster::extract(nws.sd, cba.spdf, sp = T)
+nws.sd.cba.df <- nws.sd.cba@data %>% setNames(c("Long","Lat","Lake_ID","nws_sd"))
+
+cba.wind <- cba %>% merge(nws.mean.cba.df, by = intersect(names(cba), names(nws.mean.cba.df)))%>%
+  merge(nws.sd.cba.df, by = intersect(names(cba), names(nws.sd.cba.df)))
+
+
+  
+cba.wind$k600vp <- with(cba.wind, 2.51+1.48*nws_mean+0.39*nws_mean*log10(lake_area_km2)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
+cba.wind$k600cc <- with(cba.wind, 2.07+0.25*nws_mean^1.7) # lake area in km2. Cole & Caraco 1998
+cba.wind$k600mci <- with(cba.wind, 2+1.5*nws_mean) # @MacIntyre2020
+
+
+cba.wind$k600vp_mcmean <- NA
+cba.wind$k600vp_mcsd <- NA
+cba.wind$k600cc_mcmean <- NA
+cba.wind$k600cc_mcsd <- NA
+cba.wind$k600mci_mcmean <- NA
+cba.wind$k600mci_mcsd <- NA
+
+
+for(i in 1:dim(cba.wind)[1]){
+  lake_area_i <- cba.wind$lake_area_km2[i]
+  
+  nwsm_i <- cba.wind$nws_mean[i]
+  nwss_i <- cba.wind$nws_sd[i]
+  nws <- runif(100000, nwsm_i - nwss_i, nwsm_i + nwss_i) 
+  
+  k600vp <- 2.51+1.48*nws+0.39*nws*log10(lake_area_i)
+  k600vp_mi <- mean(k600vp)
+  k600vp_sdi <- sd(k600vp)
+  
+  cba.wind$k600vp_mcmean[i] <- k600vp_mi
+  cba.wind$k600vp_mcsd[i] <- k600vp_sdi
+  
+  k600cc <- 2.07+0.25*nws^1.7
+  k600cc_mi <- mean(k600cc)
+  k600cc_sdi <- sd(k600cc)
+  
+  cba.wind$k600cc_mcmean[i] <- k600cc_mi
+  cba.wind$k600cc_mcsd[i] <- k600cc_sdi
+  
+  k600mci <- 2+1.5*nws
+  k600mci_mi <- mean(k600mci)
+  k600mci_sdi <- sd(k600mci)
+  
+  cba.wind$k600mci_mcmean[i] <- k600vp_mi
+  cba.wind$k600mci_mcsd[i] <- k600vp_sdi
+}
+
+
+
+```
+
+
+```{r import-data}
+norway <- readRDS("norway.rds")
+nlss <- readRDS("nlss.rds")
+
+norway$TOC_mg <- norway$TOC*12.011*1e3
+norway$TOC_umol <- norway$TOC*1e6
+norway$TA_ueq <- norway$TA * 1e6
+norway$CA_ueq <- norway$CA * 1e6
+norway$DIC_mg <- norway$DIC*12.011*1e3
+norway$DIC_umol <- norway$DIC * 1e6
+norway$CA_ueq <- norway$CA * 1e6
+norway$Hplus_umol <- norway$Hplus *1e6
+```
+
+
+
+@MacIntyre2020: modelled k600 with surface renewal model is close to $k600 = 2.0 + 1.5U_{10}$
+
+```{r k600-VP}
+norway$Sc <- with(norway, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
+norway$k600_vp <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
+norway$k600_cc <- with(norway, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
+norway$k600_mci <- with(norway, 2+1.5*nws_m.s) # @MacIntyre2020
+
+
+ggplot(norway,aes(x = log10(lake.area)))+geom_line(aes(y = k600_cc, col = "Cole & Caraco"))+
+  geom_line(aes(y = k600_cc, col = "Cole & Caraco"))+
+  geom_line(aes(y = k600_vp, col = "Vachon & Prairie"))+
+  geom_line(aes(y = k600_mci, col = "MacIntyre"))
+
+ggplot(norway,aes(x = nws_m.s))+geom_line(aes(y = k600_cc, col = "Cole & Caraco"))+
+  geom_line(aes(y = k600_cc, col = "Cole & Caraco"))+
+  geom_line(aes(y = k600_vp, col = "Vachon & Prairie"))+
+  geom_line(aes(y = k600_mci, col = "MacIntyre"))
+
+```
+
+```{r test-monte-carlo}
+M = 100000
+C = runif(M, 12.0096, 12.0116)
+H = runif(M, 1.00784, 1.00811)
+O = runif(M, 15.99903, 15.99977)
+MW = 6*C + 6*H + O
+MW.val = mean(MW)
+MW.unc = sd(MW)
+MW.Unc = (quantile(MW,probs = 0.975) - quantile(MW, probs = 0.025))/2.0
+k = MW.Unc / MW.unc  
+
+x = seq(from = MW.val - 4 * MW.unc, to = MW.val + 4*MW.unc, by = 8 * MW.unc / 100)
+hx = dnorm(x, MW.val, MW.unc)
+plot(density(MW), xlab = "Molar mass g/mol", ylab = "Density mol/g", main = "", xlim = c(min(x), max(x)), ylim = c(0,max(hx)))
+lines(x, hx, lwd = 2, lty = 2, col = "red")
+  
+```
+

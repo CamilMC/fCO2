@@ -17,8 +17,8 @@ link-citations yes
 html version [Data preparation](httpscamilmc.github.iofCO2Data_preparation.html)
 
 ```{r setup, include=FALSE}
-knitropts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = center, results = T, collapse = T, cache.lazy = F)
-options(knitr.kable.NA=, knitr.table.format = html)
+knitr::opts_chunk$set(echo = T, message = T, warning = F, error = F, fig.align = "center", results = T, collapse = T, cache.lazy = F)
+options(knitr.kable.NA="", knitr.table.format = "html")
 ```
 
 ```{r libraries}
@@ -36,10 +36,10 @@ library(dplyr)
 library(ggplot2)
 library(colorspace)
 
-fCO2.atm.2020 - 411.51  1e-6 # oct 2020
-fCO2.atm.2019 - 408.75  1e-6 # oct 2019
-fCO2.atm.2004 - 374.63  1e-6 # oct 2004
-fCO2.atm.1995 - 360.17  1e-6 # 1995
+fCO2.atm.2020 <- 411.51 * 1e-6 # oct 2020
+fCO2.atm.2019 <- 408.75 * 1e-6 # oct 2019
+fCO2.atm.2004 <- 374.63 * 1e-6 # oct 2004
+fCO2.atm.1995 <- 360.17 * 1e-6 # 1995
 ```
 
 Atmospheric concentration of CO2 is retrieved from httpsclimate.nasa.govvital-signscarbon-dioxide, dataset on httpsgml.noaa.govwebdataccggtrendsco2co2_mm_mlo.txt
@@ -54,16 +54,16 @@ TOC was analysed by infrared CO2 detection after catalytic high temperature comb
 The data is available at @CBA2019. Lake area and catchment area were provided by NIVA. 
 
 ```{r cba-data}
-cba.all - readxlread_xlsx(CBA_100Lakes_Master.xlsx)
+cba.all <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 
-ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)+labs(y=Lake ID)+theme_bw()
-ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)+labs(y=Lake ID)+theme_bw()
+ggplot(cba.all)+geom_point(aes(x = TOC, y = as.character(Lake_ID)))+geom_vline(xintercept = 45)+labs(y=Lake_ID)+theme_bw()
+ggplot(cba.all)+geom_point(aes(x = Alkalinity, y = as.character(Lake_ID)))+geom_vline(xintercept = 0.7)+labs(y=Lake_ID)+theme_bw()
 ggplot(cba.all)+geom_point(aes(x = pH_Kje, y = as.character(Lake_ID)))+
-  geom_vline(xintercept = 5)+labs(x = pH, y=Lake ID)+theme_bw()
+  geom_vline(xintercept = 5)+labs(x = pH, y=Lake_ID)+theme_bw()
 
-bdg.niva - readRDS(bdg.niva.rds) %% dplyrselect(c(CBA_Lake_ID, lake_area_km2,basin_area_km2))
+bdg.niva <- readRDS(bdg.niva.rds) %% dplyrselect(c(CBA_Lake_ID, lake_area_km2,basin_area_km2))
 
-cba - merge(cba.all,bdg.niva, by.x = Lake_ID, by.y = CBA_Lake_ID) 
+cba <- merge(cba.all,bdg.niva, by.x = Lake_ID, by.y = CBA_Lake_ID) 
 ```
 
 The wind speep raster was downloaded from @C3S2020. Given the resolution of the raster compared to the area of the studied lakes, we used the wind speed at 10 m from the surface at the coordinates of the sampling. (Resolution  1x1 degree ~11.1x11.1 km - 123 km2)
@@ -71,34 +71,34 @@ The wind speep raster was downloaded from @C3S2020. Given the resolution of the 
 
 ```{r cba-windspeed, eval = F}
 
-nws.files - list.files(path = NWS, pattern = Wind_WFDE5_CRU_2019, full.names = T) 
-nws.list.stacks - lapply(nws.files, rasterstack) %% lapply(rastercrop, c(0,35,55,73))
-nws.list.means - lapply(nws.list.stacks, rastermean, na.rm = T)
+nws.files <- list.files(path = NWS, pattern = Wind_WFDE5_CRU_2019, full.names = T) 
+nws.list.stacks <- lapply(nws.files, rasterstack) %% lapply(rastercrop, c(0,35,55,73))
+nws.list.means <- lapply(nws.list.stacks, rastermean, na.rm = T)
 saveRDS(nws.list.means, cba.nws.list.mean.rds)
-nws.2019 - nws.list.means %% rasterstack() %% rastermean()
+nws.2019 <- nws.list.means %% rasterstack() %% rastermean()
 
-cba.spdf - SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
-annual.nws.cba - rasterextract(nws.2019, cba.spdf, sp = T)
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
+annual.nws.cba <- rasterextract(nws.2019, cba.spdf, sp = T)
 
 saveRDS(annual.nws.cba, annual.nws.cba.rds)
 ```
 
 ```{r cba-se-annual-wind-speed, eval = F}
 
-cba.spdf - SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c(Long,Lat)], data = cba[,c(Long,Lat,Lake_ID)], proj4string = CRS(+proj=longlat +datum=WGS84))
 
 
-nws.files - list.files(path = NWSall_2019, full.names = T) 
-nws.stack - nws.files %% rasterstack() 
-nws.cba - extract(nws.stack, cba.spdf, sp = T) 
-nws.cba.df - nws.cba %% as.data.frame()
+nws.files <- list.files(path = NWSall_2019, full.names = T) 
+nws.stack <- nws.files %% rasterstack() 
+nws.cba <- extract(nws.stack, cba.spdf, sp = T) 
+nws.cba.df <- nws.cba %% as.data.frame()
 nws.cba.df$Long.1 - NULL
 nws.cba.df$Lat.1 - NULL
-names - c(lon, lat, LakeID, substr(names(nws.cba.df)[4114], start = 36, stop = 39))
+names <- c(lon, lat, LakeID, substr(names(nws.cba.df)[4114], start = 36, stop = 39))
 names(nws.cba.df) - names
 
-nws.cba.long - nws.cba.df %% tidyrpivot_longer(cols = names(nws.cba.df)[4114], names_to = layer, values_to = nws) %% as.data.frame()
-nws.cba.long$layer - as.numeric(nws.cba.long$layer)
+nws.cba.long <- nws.cba.df %% tidyrpivot_longer(cols = names(nws.cba.df)[4114], names_to = layer, values_to = nws) %% as.data.frame()
+nws.cba.long$layer <- as.numeric(nws.cba.long$layer)
 
 ggplot(filter(nws.cba.long, LakeID %in% c(12147, 13000, 12700, 13453)))+
   geom_line(aes(x=layer, y = nws, group = as.factor(LakeID), col = as.factor(LakeID)))+
