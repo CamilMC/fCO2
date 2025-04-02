@@ -2421,7 +2421,7 @@ nlss$kCO2 <- with(nlss, k600*(600/Sc)^(n))*24*1e-2
 nlss$k600_low <- with(nlss, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
 nlss$kCO2_low <- with(nlss, k600_low*(600/Sc)^(n))*24*1e-2
 
-nlss$ECO2_toc <- with(nlss, kCO2*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
+
 nlss$ECO2_toc_low <- with(nlss, kCO2_low*(pCO2_toc-fCO2.atm)*K0*1e3 * 12.011)
 
 nlss$ECO2_ta <- with(nlss, kCO2*(pCO2_ta-fCO2.atm)*K0*1e3 * 12.011) # in gC/m2/day
