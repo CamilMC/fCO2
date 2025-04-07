@@ -41,32 +41,41 @@ tab_nums <- captioner(prefix = "Table")
 ```
 
 
+# Test Monte-Carlo
 
-# Import data
+```{r test-monte-carlo}
+M = 100000
+C = runif(M, 12.0096, 12.0116)
+H = runif(M, 1.00784, 1.00811)
+O = runif(M, 15.99903, 15.99977)
+MW = 6*C + 6*H + O
+MW.val = mean(MW)
+MW.unc = sd(MW)
+MW.Unc = (quantile(MW,probs = 0.975) - quantile(MW, probs = 0.025))/2.0
+k = MW.Unc / MW.unc  
 
-```{r wind-era5}
-era5 <- raster("ERA5/e0447a439ddf720395d0bd6a97fb247f.nc") 
-u10 <- raster("ERA5/e0447a439ddf720395d0bd6a97fb247f.nc", varname = "u10", level = 1)
-
-
+x = seq(from = MW.val - 4 * MW.unc, to = MW.val + 4*MW.unc, by = 8 * MW.unc / 100)
+hx = dnorm(x, MW.val, MW.unc)
+plot(density(MW), xlab = "Molar mass g/mol", ylab = "Density mol/g", main = "", xlim = c(min(x), max(x)), ylim = c(0,max(hx)))
+lines(x, hx, lwd = 2, lty = 2, col = "red")
 ```
 
-## CBA data
 
+# CBA CO2 fluxes
 
 ```{r import-data}
 cba_no_area <- readxl::read_xlsx("CBA_100Lakes_Master.xlsx")
 bdg.niva <- readRDS("bdg.niva.rds") %>% dplyr::select(c(CBA_Lake_ID, lake_area_km2, basin_area_km2))
 cba <- merge(cba_no_area,bdg.niva, by.x = "Lake_ID", by.y = "CBA_Lake_ID") %>%
-  dplyr::select(c(Lake_ID, Long, Lat, Altitude, CBA_date, T, TOC, DOC, pH_Kje, Alkalinity, CO2, p_CO2, lake_area_km2, basin_area_km2))
+  dplyr::select(c(Lake_ID, Long, Lat, Altitude, CBA_date, T, TOC, DOC, pH_Kje, Alkalinity, CO2, p_CO2, lake_area_km2, basin_area_km2)) %>%
+  rename(TA = Alkalinity, temp_c = T, pH = pH_Kje, CO2_umol = CO2)
 
 
 # units
 cba$TOC_molL <- cba$TOC/12.011*1e-3 #from mg/L to mol/L
-cba$TA_molL <- cba$Alkalinity*1e-3 # convert from meq/L to mol/L
-cba$temp_K <- cba$T + 273.15
+cba$TA_molL <- cba$TA*1e-3 # convert from meq/L to mol/L
+cba$temp_K <- cba$temp_c + 273.15
 cba$pCO2_atm  <- 408.75 * 1e-6 # oct 2019
-cba$pH <- cba$pH_Kje # keep the pH measured in Chemistry (not bio)
 cba$Hplus <- 10^(-cba$pH)
 cba$H2CO3 <- as.numeric(cba$CO2)*1e-6 #from umol/L to mol/L
 
@@ -85,10 +94,12 @@ cba$DIC <- with(cba, H2CO3 + HCO3 + CO3)
 
 #pCO2
 cba$pCO2 <- with(cba, H2CO3 / K0)
+
+cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=longlat +datum=WGS84"))
 ```
 
 
-```{r wind-speed}
+```{r wind-speed-nws, eval = F}
 nws.files <- list.files(path = "NWS", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
 nws.raster.crop <- lapply(nws.files, raster) %>% lapply(raster::crop, c(0,35,55,73)) # test with head
 
@@ -113,50 +124,36 @@ cba.wind <- cba %>% merge(nws.mean.cba.df, by = intersect(names(cba), names(nws.
   merge(nws.sd.cba.df, by = intersect(names(cba), names(nws.sd.cba.df)))
 ```
 
-```{r wind-speed-10-years-mean-cba}
+```{r wind-speed-10-years-mean-cba, eval = T}
+sd.function <- function(x) {sqrt(sum(x)/120)}
 
+u10.2019 <- raster::stack("ERA5/u10_2014_2023.nc")
+u10.2019.mean <- u10.2019 %>% mean(na.rm = T)
+u10.2019.sd <- (u10.2019 - u10.2019.mean)^2 %>% stack %>% sd.function()
 
+v10.2019 <- raster::stack("ERA5/v10_2014_2023.nc")
+v10.2019.mean <- v10.2019 %>% mean(na.rm = T)
+v10.2019.sd <- (v10.2019 - v10.2019.mean)^2 %>% stack %>% sd.function()
 
+wind.2019.mean <- sqrt(u10.2019^2 + v10.2019^2) %>% mean()
+wind.2019.sd <- (sqrt(u10.2019^2 + v10.2019^2) - wind.2019.mean)^2 %>% stack %>% sd.function()
 
-u10.2019 <- raster("ERA5/u10_2014_2023.nc") 
-u10.2019.mean <- u10.2019 %>% stack %>% mean
+wind.2019.cba <- raster::extract(wind.2019.mean, cba.spdf, sp = T)
+wind.2019.cba.df <- wind.2019.cba@data %>% setNames(c("Long","Lat","Lake_ID","wind_mean"))
 
-u10.2019.sd <- lapply(u10.2019, FUN = function(r1){sum((r1-u10.2019.mean)^2)/length(u10.2019)}) # mauvais resultat
-  
-  
-v10.2019 <- raster("ERA5/v10_2014_2023.nc")
+wind.2019.sd.cba <- raster::extract(wind.2019.sd, cba.spdf, sp = T)
+wind.2019.sd.cba.df <- wind.2019.sd.cba@data %>% setNames(c("Long","Lat","Lake_ID","wind_sd"))
 
-nws.files <- list.files(path = "ERA", pattern = "Wind_WFDE5_CRU_2019", full.names = T) 
-nws.raster.crop <- lapply(nws.files, raster) %>% lapply(raster::crop, c(0,35,55,73)) # test with head
-
-#nws.list.means <- lapply(nws.list.stacks, raster::mean, na.rm = T)
-nws.mean <- nws.raster.crop %>% raster::stack() %>% raster::mean(na.rm = T)
-nws.xiu <- lapply(nws.raster.crop, FUN = function(r1){(r1 - nws.mean)^2})
-
-raster.sum <- function(x) {sum(x)}
-nws.sum <- nws.xiu %>% raster::stack() %>% raster.sum()
-
-sd.function <- function(x) {sqrt(sum(x)/length(nws.raster.crop))}
-nws.sd <- nws.xiu %>% raster::stack() %>% sd.function()
-
-cba.spdf <- SpatialPointsDataFrame(coords = cba[,c("Long","Lat")], data = cba[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=longlat +datum=WGS84"))
-nws.mean.cba <- raster::extract(nws.mean, cba.spdf, sp = T)
-nws.mean.cba.df <- nws.mean.cba@data %>% setNames(c("Long","Lat","Lake_ID","nws_mean"))
-
-nws.sd.cba <- raster::extract(nws.sd, cba.spdf, sp = T)
-nws.sd.cba.df <- nws.sd.cba@data %>% setNames(c("Long","Lat","Lake_ID","nws_sd"))
-
-cba.wind <- cba %>% merge(nws.mean.cba.df, by = intersect(names(cba), names(nws.mean.cba.df)))%>%
-  merge(nws.sd.cba.df, by = intersect(names(cba), names(nws.sd.cba.df)))
+cba.wind <- cba %>% merge(wind.2019.cba.df, by = intersect(names(cba), names(wind.2019.cba.df)))%>%
+  merge(wind.2019.sd.cba.df, by = intersect(names(cba), names(wind.2019.cba.df)))
 ```
 
-
 ```{r k600-monte-carlo-cba}
-cba.wind$Sc <- with(cba.wind, 1923.6-125.06*T+4.3733*T^2-0.086781*T^3)
+cba.wind$Sc <- with(cba.wind, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3)
 
-cba.wind$k600vp <- with(cba.wind, 2.51+1.48*nws_mean+0.39*nws_mean*log10(lake_area_km2)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
-cba.wind$k600cc <- with(cba.wind, 2.07+0.25*nws_mean^1.7) # lake area in km2. Cole & Caraco 1998
-cba.wind$k600mci <- with(cba.wind, 2+1.5*nws_mean) # @MacIntyre2020
+cba.wind$k600vp <- with(cba.wind, 2.51+1.48*wind_mean+0.39*wind_mean*log10(lake_area_km2)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
+cba.wind$k600cc <- with(cba.wind, 2.07+0.25*wind_mean^1.7) # lake area in km2. Cole & Caraco 1998
+cba.wind$k600mci <- with(cba.wind, 2+1.5*wind_mean) # @MacIntyre2020
 
 
 cba.wind$k600vp_mcmean <- NA
@@ -174,14 +171,14 @@ for(i in 1:dim(cba.wind)[1]){
   K0_i <- cba.wind$K0[i]
 
   
-  nwsm_i <- cba.wind$nws_mean[i]
-  nwss_i <- cba.wind$nws_sd[i]
-  nws <- runif(100000, nwsm_i - nwss_i, nwsm_i + nwss_i) 
+  windm_i <- cba.wind$wind_mean[i]
+  windsd_i <- cba.wind$wind_sd[i]
+  wind <- runif(100000, windm_i - windsd_i, windm_i + windsd_i) 
   
   
   # k600 from Vachon & Prairie
   
-  k600vp <- 2.51+1.48*nws+0.39*nws*log10(lake_area_i)
+  k600vp <- 2.51+1.48*wind+0.39*wind*log10(lake_area_i)
   k600vp_mi <- mean(k600vp)
   k600vp_sdi <- sd(k600vp)
   
@@ -189,7 +186,7 @@ for(i in 1:dim(cba.wind)[1]){
   cba.wind$k600vp_mcsd[i] <- k600vp_sdi
 
   
-  ECO2vp <- k600vp*(600/Sc_i)^1/2*24*1e-2*(pCO2_i - pCO2.atm.2019)*K0_i*1e3*12.011 # gC/m2/day
+  ECO2vp <- k600vp*(600/Sc_i)^(1/2)*24*1e-2*(pCO2_i - pCO2.atm.2019)*K0_i*1e3*12.011 # gC/m2/day
   ECO2vp_mi <- mean(ECO2vp)
   ECO2vp_sdi <- sd(ECO2vp)
   
@@ -198,7 +195,7 @@ for(i in 1:dim(cba.wind)[1]){
   
   # k600 from Cole and Caraco
   
-  k600cc <- 2.07+0.25*nws^1.7
+  k600cc <- 2.07+0.25*wind^1.7
   k600cc_mi <- mean(k600cc)
   k600cc_sdi <- sd(k600cc)
 
@@ -214,7 +211,7 @@ for(i in 1:dim(cba.wind)[1]){
   
   # k600 from MacIntyre
   
-  k600mci <- 2+1.5*nws
+  k600mci <- 2+1.5*wind
   k600mci_mi <- mean(k600mci)
   k600mci_sdi <- sd(k600mci)
   
@@ -235,15 +232,272 @@ ggplot(cba.wind)+
   geom_point(aes(y = ECO2vp_mcmean, x = as.character(Lake_ID), col = "Vachon & Prairie"))+
   geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, x = as.character(Lake_ID), col = "Vachon & Prairie"))+
   geom_point(aes(y = ECO2cc_mcmean, x = as.character(Lake_ID), col = "Cole & Caraco"))+
-  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, x = as.character(Lake_ID), col = "Cole & Caraco"))
-                          
-ggplot(cba.wind)+geom_point(aes(y = ECO2vp_mcmean, x = Lat))
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, x = as.character(Lake_ID), col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, x = as.character(Lake_ID), col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, x = as.character(Lake_ID), col = "MacIntyre"))+
+  theme_minimal()
+  
+ggplot(cba.wind, aes(x = TOC))+
+  geom_point(aes(y = ECO2vp_mcmean, col = "Vachon & Prairie"))+
+  geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, col = "Vachon & Prairie"))+
+  geom_point(aes(y = ECO2cc_mcmean, col = "Cole & Caraco"))+
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, col = "MacIntyre"))+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(x = "TOC, mg/L", y = "CO2 evasion in gC/m2/day", col = "")+
+  scale_x_log10()+
+  scale_y_log10()+
+  theme_minimal()
 
+ggplot(cba.wind, aes(x = lake_area_km2))+
+  geom_point(aes(y = ECO2vp_mcmean, col = "Vachon & Prairie"))+
+  geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, col = "Vachon & Prairie"))+
+  geom_point(aes(y = ECO2cc_mcmean, col = "Cole & Caraco"))+
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, col = "MacIntyre"))+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(x = "Lake area, km2", y = "CO2 evasion in gC/m2/day", col = "")+
+  scale_x_log10()+
+  theme_minimal()
+
+
+ggplot(cba.wind, aes(x = ECO2cc_mcmean, y = ECO2mci_mcmean))+
+  geom_point()+geom_abline(slope = 1, intercept = 0)
+
+```
+
+
+# N112
+
+
+```{r import-data-n112}
+n112.all <- read.table("Larsen/N112_subset_110909.txt", sep = " ", header = TRUE, na.strings = c(".", NA))
+
+n112 <- n112.all %>% subset(ykoord > 6e6) %>% subset(is.na(TIC.ug) == F) %>% subset(is.na(alkendpoint) == F) %>% 
+  select(c("xkoord", "ykoord","Vatnlnr","lake.area","poly.area", "TOC", "alkendpoint","temp.situ","pH","co2.umolar","co2.uatm")) %>%
+  rename(Long = xkoord, Lat = ykoord, Lake_ID = Vatnlnr, lake_area_km2 = lake.area, basin_area_km2 = poly.area, TA = alkendpoint, temp_c = temp.situ, CO2_umol = co2.umolar)
+
+# units
+n112$TOC_molL <- n112$TOC/12.011*1e-3 #from mg/L to mol/L
+n112$TA_molL <- n112$TA*1e-3 # convert from meq/L to mol/L
+n112$temp_K <- n112$temp_c + 273.15
+n112$pCO2_atm  <- 374.63 * 1e-6 # oct 2004
+n112$Hplus <- 10^(-n112$pH)
+n112$H2CO3 <- as.numeric(n112$CO2_umol)*1e-6 #from umol/L to mol/L
+
+# Constants
+
+n112$Kw <- with(n112, exp(148.9802 - 13847.26*temp_K - 23.6521*log(temp_K))) # Dickson and Riley, 1979
+
+n112$K0 <- with(n112, exp(-58.0931+90.5069*100/temp_K+22.2940*log(temp_K/100))) # Weiss 1974
+n112$K1 <- with(n112, 10^-((3404.71/temp_K)- 14.8435 + 0.032786*temp_K)) # Harned and Davis, 1943
+n112$K2 <- with(n112, 10^-((2902.39/temp_K) - 6.4980 + 0.02379*temp_K)) # Harned and Scholes, 1941
+
+# DIC
+n112$HCO3 <- with(n112, H2CO3 * K1 / Hplus)
+n112$CO3 <- with(n112, K2 * HCO3 / Hplus)
+n112$DIC <- with(n112, H2CO3 + HCO3 + CO3)
+
+#pCO2
+n112$pCO2 <- with(n112, H2CO3 / K0)
+
+n112.spdf <- SpatialPointsDataFrame(coords = n112[,c("Long","Lat")], data = n112[,c("Long","Lat","Lake_ID")], proj4string = CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"))
+
+n112.spdf.wgs <- n112.spdf %>% spTransform(CRS("+proj=longlat +datum=WGS84"))
+```
+
+```{r wind-speed-10-years-mean-n112, eval = 2}
+sd.function <- function(x) {sqrt(sum(x)/120)}
+
+u10.2004 <- raster::stack("ERA5/u10_1999_2008.nc")
+u10.2004.mean <- u10.2004 %>% mean(na.rm = T)
+u10.2004.sd <- (u10.2004 - u10.2004.mean)^2 %>% stack %>% sd.function()
+
+v10.2004 <- raster::stack("ERA5/v10_1999_2008.nc")
+v10.2004.mean <- v10.2004 %>% mean(na.rm = T)
+v10.2004.sd <- (v10.2004 - v10.2004.mean)^2 %>% stack %>% sd.function()
+
+wind.2004.mean <- sqrt(u10.2004^2 + v10.2004^2) %>% mean()
+wind.2004.sd <- (sqrt(u10.2004^2 + v10.2004^2) - wind.2004.mean)^2 %>% stack %>% sd.function()
+
+wind.2004.n112 <- raster::extract(wind.2004.mean, n112.spdf, sp = T)
+wind.2004.n112.df <- wind.2004.n112@data %>% setNames(c("Long","Lat","Lake_ID","wind_mean"))
+
+wind.2004.sd.n112 <- raster::extract(wind.2004.sd, n112.spdf, sp = T)
+wind.2004.sd.n112.df <- wind.2004.sd.n112@data %>% setNames(c("Long","Lat","Lake_ID","wind_sd"))
+
+n112.wind <- n112 %>% merge(wind.2004.n112.df, by = intersect(names(n112), names(wind.2004.n112.df)))%>%
+  merge(wind.2004.sd.n112.df, by = intersect(names(n112), names(wind.2004.n112.df)))
+```
+
+
+```{r k600-monte-carlo-n112}
+n112.wind$Sc <- with(n112.wind, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3)
+
+n112.wind$k600vp <- with(n112.wind, 2.51+1.48*wind_mean+0.39*wind_mean*log10(lake_area_km2)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
+n112.wind$k600cc <- with(n112.wind, 2.07+0.25*wind_mean^1.7) # lake area in km2. Cole & Caraco 1998
+n112.wind$k600mci <- with(n112.wind, 2+1.5*wind_mean) # @MacIntyre2020
+
+
+cba.wind$k600vp_mcmean <- NA
+cba.wind$k600vp_mcsd <- NA
+cba.wind$k600cc_mcmean <- NA
+cba.wind$k600cc_mcsd <- NA
+cba.wind$k600mci_mcmean <- NA
+cba.wind$k600mci_mcsd <- NA
+
+
+for(i in 1:dim(n112.wind)[1]){
+  lake_area_i <- n112.wind$lake_area_km2[i]
+  Sc_i <- n112.wind$Sc[i]
+  pCO2_i <- n112.wind$pCO2[i]
+  K0_i <- n112.wind$K0[i]
+
+  
+  windm_i <- n112.wind$wind_mean[i]
+  windsd_i <- n112.wind$wind_sd[i]
+  wind <- runif(100000, windm_i - windsd_i, windm_i + windsd_i) 
+  
+  
+  # k600 from Vachon & Prairie
+  
+  k600vp <- 2.51+1.48*wind+0.39*wind*log10(lake_area_i)
+  k600vp_mi <- mean(k600vp)
+  k600vp_sdi <- sd(k600vp)
+  
+  n112.wind$k600vp_mcmean[i] <- k600vp_mi
+  n112.wind$k600vp_mcsd[i] <- k600vp_sdi
+
+  
+  ECO2vp <- k600vp*(600/Sc_i)^(1/2)*24*1e-2*(pCO2_i - pCO2.atm.2019)*K0_i*1e3*12.011 # gC/m2/day
+  ECO2vp_mi <- mean(ECO2vp)
+  ECO2vp_sdi <- sd(ECO2vp)
+  
+  n112.wind$ECO2vp_mcmean[i] <- ECO2vp_mi
+  n112.wind$ECO2vp_mcsd[i] <- ECO2vp_sdi
+  
+  # k600 from Cole and Caraco
+  
+  k600cc <- 2.07+0.25*wind^1.7
+  k600cc_mi <- mean(k600cc)
+  k600cc_sdi <- sd(k600cc)
+
+  n112.wind$k600cc_mcmean[i] <- k600cc_mi
+  n112.wind$k600cc_mcsd[i] <- k600cc_sdi
+  
+  ECO2cc <- k600cc*(600/Sc_i)^1/2*24*1e-2*(pCO2_i - pCO2.atm.2019)*K0_i*1e3*12.011 # gC/m2/day
+  ECO2cc_mi <- mean(ECO2cc)
+  ECO2cc_sdi <- sd(ECO2cc)
+  
+  n112.wind$ECO2cc_mcmean[i] <- ECO2cc_mi
+  n112.wind$ECO2cc_mcsd[i] <- ECO2cc_sdi
+  
+  # k600 from MacIntyre
+  
+  k600mci <- 2+1.5*wind
+  k600mci_mi <- mean(k600mci)
+  k600mci_sdi <- sd(k600mci)
+  
+  n112.wind$k600mci_mcmean[i] <- k600vp_mi
+  n112.wind$k600mci_mcsd[i] <- k600vp_sdi
+  
+  ECO2mci <- k600mci*(600/Sc_i)^1/2*24*1e-2*(pCO2_i - pCO2.atm.2019)*K0_i*1e3*12.011 # gC/m2/day
+  ECO2mci_mi <- mean(ECO2mci)
+  ECO2mci_sdi <- sd(ECO2mci)
+  
+  n112.wind$ECO2mci_mcmean[i] <- ECO2mci_mi
+  n112.wind$ECO2mci_mcsd[i] <- ECO2mci_sdi
+  
+}
+
+
+ggplot(n112.wind)+
+  geom_point(aes(y = ECO2vp_mcmean, x = as.character(Lake_ID), col = "Vachon & Prairie"))+
+  geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, x = as.character(Lake_ID), col = "Vachon & Prairie"))+
+  geom_point(aes(y = ECO2cc_mcmean, x = as.character(Lake_ID), col = "Cole & Caraco"))+
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, x = as.character(Lake_ID), col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, x = as.character(Lake_ID), col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, x = as.character(Lake_ID), col = "MacIntyre"))+  
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(x = "TOC, mg/L", y = "CO2 evasion in gC/m2/day", col = "")+
+  theme_minimal()
+  
+ggplot(n112.wind, aes(x = TOC))+
+  geom_point(aes(y = ECO2vp_mcmean, col = "Vachon & Prairie"))+
+  geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, col = "Vachon & Prairie"))+
+  geom_point(aes(y = ECO2cc_mcmean, col = "Cole & Caraco"))+
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, col = "MacIntyre"))+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(x = "TOC, mg/L", y = "CO2 evasion in gC/m2/day", col = "")+
+  scale_x_log10()+
+  scale_y_log10()+
+  theme_minimal()
+
+ggplot(n112.wind, aes(x = lake_area_km2))+
+  geom_point(aes(y = ECO2vp_mcmean, col = "Vachon & Prairie"))+
+  geom_errorbar(aes(ymin = ECO2vp_mcmean - ECO2vp_mcsd, ymax = ECO2vp_mcmean + ECO2vp_mcsd, col = "Vachon & Prairie"))+
+  geom_point(aes(y = ECO2cc_mcmean, col = "Cole & Caraco"))+
+  geom_errorbar(aes(ymin = ECO2cc_mcmean - ECO2cc_mcsd, ymax = ECO2cc_mcmean + ECO2cc_mcsd, col = "Cole & Caraco"))+
+  geom_point(aes(y = ECO2mci_mcmean, col = "MacIntyre"))+
+  geom_errorbar(aes(ymin = ECO2mci_mcmean - ECO2mci_mcsd, ymax = ECO2mci_mcmean + ECO2mci_mcsd, col = "MacIntyre"))+
+  scale_color_manual(values = c("orange","firebrick","dodgerblue3"))+
+  labs(x = "Lake area, km2", y = "CO2 evasion in gC/m2/day", col = "")+
+  scale_x_log10()+
+  theme_minimal()
+
+
+ggplot(n112.wind, aes(x = ECO2cc_mcmean, y = ECO2mci_mcmean))+
+  geom_point()+geom_abline(slope = 1, intercept = 0)
+
+```
+
+
+# Predict pCO2 from TOC
+
+
+```{r glm-pCO2-cba}
+pco2.toc.cba <- glm(formula = pCO2~TOC+0+offset(pCO2_atm), data = cba.wind, family = Gamma(link = "identity"))
+
+pco2.toc.cba.sum <- summary(pco2.toc.cba)$coefficients %>% as.data.frame() 
+pco2.toc.cba.sp <- rownames(pco2.toc.cba.sum)[which(pco2.toc.cba.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.cba.sum <- pco2.toc.cba.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.cba.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+n112.wind$pCO2_pred <- predict(pco2.toc.cba, newdata = n112.wind, type = "response")
+
+ggplot(n112.wind) + geom_point(aes(x = pCO2*1e6, y = pCO2_pred*1e6))+
+    geom_text(x = 500, y = 2000,label = paste0('r2 = ', round((cor(n112.wind$pCO2,n112.wind$pCO2_pred))^2,2)))+
+  labs(x = "pCO2 measured, atm", y = "pCO2 predicted, atm")+
+  geom_abline(slope = 1, intercept = 0, col = "darkblue")+
+  theme_minimal()
+```
+
+```{r glm-pCO2-n112}
+pco2.toc.n112 <- glm(formula = pCO2~TOC+0+offset(pCO2_atm), data = n112.wind, family = Gamma(link = "identity"))
+
+pco2.toc.n112.sum <- summary(pco2.toc.n112)$coefficients %>% as.data.frame() 
+pco2.toc.n112.sp <- rownames(pco2.toc.n112.sum)[which(pco2.toc.n112.sum$`Pr(>|t|)` < 0.05)] %>% paste(collapse = ", ")
+pco2.toc.n112.sum <- pco2.toc.n112.sum %>% format(scientific = T, digits = 2)
+
+kable(pco2.toc.n112.sum, digits = 2) %>% kable_styling(bootstrap_options = "bordered")
+
+cba.wind$pCO2_pred <- predict(pco2.toc.n112, newdata = cba.wind, type = "response")
+
+ggplot(cba.wind) + geom_point(aes(x = pCO2*1e6, y = pCO2_pred*1e6))+
+    geom_text(x = 500, y = 7500,label = paste0('r2 = ', round((cor(cba.wind$pCO2,cba.wind$pCO2_pred))^2,3)))+
+  labs(x = "pCO2 measured, atm", y = "pCO2 predicted, atm")+
+  geom_abline(slope = 1, intercept = 0, col = "darkblue")+
+  theme_minimal()
 ```
 
 # NLSS
 
-```{r import-data}
+```{r import-data-nlss, eval = F}
 norway <- readRDS("norway.rds")
 nlss <- readRDS("nlss.rds")
 
@@ -261,7 +515,7 @@ norway$Hplus_umol <- norway$Hplus *1e6
 
 @MacIntyre2020: modelled k600 with surface renewal model is close to $k600 = 2.0 + 1.5U_{10}$
 
-```{r k600-VP}
+```{r k600-VP, eval = F}
 norway$Sc <- with(norway, 1923.6-125.06*temp_c+4.3733*temp_c^2-0.086781*temp_c^3) #@wanningkhof
 norway$k600_vp <- with(norway, 2.51+1.48*nws_m.s+0.39*nws_m.s*log10(lake.area)) # lake.area already in km2, in cm/h. Vachon and Prairie 2013
 norway$k600_cc <- with(norway, 2.07+0.25*nws_m.s^1.7) # lake area in km2. Cole & Caraco 1998
@@ -280,21 +534,5 @@ ggplot(norway,aes(x = nws_m.s))+geom_line(aes(y = k600_cc, col = "Cole & Caraco"
 
 ```
 
-```{r test-monte-carlo}
-M = 100000
-C = runif(M, 12.0096, 12.0116)
-H = runif(M, 1.00784, 1.00811)
-O = runif(M, 15.99903, 15.99977)
-MW = 6*C + 6*H + O
-MW.val = mean(MW)
-MW.unc = sd(MW)
-MW.Unc = (quantile(MW,probs = 0.975) - quantile(MW, probs = 0.025))/2.0
-k = MW.Unc / MW.unc  
 
-x = seq(from = MW.val - 4 * MW.unc, to = MW.val + 4*MW.unc, by = 8 * MW.unc / 100)
-hx = dnorm(x, MW.val, MW.unc)
-plot(density(MW), xlab = "Molar mass g/mol", ylab = "Density mol/g", main = "", xlim = c(min(x), max(x)), ylim = c(0,max(hx)))
-lines(x, hx, lwd = 2, lty = 2, col = "red")
-  
-```
 
